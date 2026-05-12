@@ -239,14 +239,24 @@ function SalaryEstimate({ estimate, targetRange }) {
   );
 }
 
+// Belt-and-suspenders: even with the normalizer in data-loader.js, never let
+// an upstream shape drift crash the panel. Coerce to string at render time.
+function safeRubricText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  try { return JSON.stringify(value); } catch { return ""; }
+}
+
 // ─── Rubric justif (3 lines, one per axis) ─────────────────
 function RubricBlock({ offer }) {
+  const items = Array.isArray(offer.rubric_justif) ? offer.rubric_justif : [];
   return (
     <ul className="jr-rubric">
-      {offer.rubric_justif.map((r, i) => (
+      {items.map((r, i) => (
         <li key={i} className="jr-rubric-row">
-          <span className="jr-rubric-axis">{r.axis}</span>
-          <span className="jr-rubric-text">{r.text}</span>
+          <span className="jr-rubric-axis">{safeRubricText(r && r.axis)}</span>
+          <span className="jr-rubric-text">{safeRubricText(r && r.text)}</span>
         </li>
       ))}
     </ul>
@@ -429,11 +439,11 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
         </div>
         <p className="jr-row-pitch">{offer.pitch}</p>
         <div className="jr-row-justif">
-          {offer.rubric_justif.map((r, i) => (
+          {(Array.isArray(offer.rubric_justif) ? offer.rubric_justif : []).map((r, i) => (
             <span key={i} className="jr-row-justif-item">
-              <span className="jr-row-justif-axis">{r.axis}</span>
+              <span className="jr-row-justif-axis">{safeRubricText(r && r.axis)}</span>
               <span className="jr-row-justif-dot">·</span>
-              <span className="jr-row-justif-text">{r.text}</span>
+              <span className="jr-row-justif-text">{safeRubricText(r && r.text)}</span>
             </span>
           ))}
         </div>

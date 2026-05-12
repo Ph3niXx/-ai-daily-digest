@@ -1490,14 +1490,86 @@
     return Math.max(0, Math.round((today - d) / 86400000));
   }
 
+  // The Cowork routine that writes jobs.rubric_justif has drifted into ~17
+  // distinct shapes (legacy strings, FR variants, short-form `sen/sec/imp`,
+  // structured `{max, just, score}` axes, single-line `redflag`/`reason`/…).
+  // This normalizer collapses everything into [{axis: string, text: string}]
+  // with strings guaranteed — otherwise React crashes when an object slips
+  // through to a text node (the 2026-05 incident).
+  function pickAxisText(value){
+    if (value == null) return "";
+    if (typeof value === "string") return value;
+    if (typeof value === "number" || typeof value === "boolean") return String(value);
+    if (typeof value === "object") {
+      // Structured axis: { score, max, just } or { score, just } or { text, just } …
+      const justif = value.just || value.justification || value.text || value.reason || value.note || "";
+      const score  = value.score;
+      const max    = value.max;
+      const hasScore = Number.isFinite(Number(score));
+      const hasMax   = Number.isFinite(Number(max));
+      const prefix = hasScore && hasMax ? `${score}/${max}` : (hasScore ? String(score) : "");
+      if (justif && prefix) return `${prefix} — ${justif}`;
+      if (justif)           return String(justif);
+      if (prefix)           return prefix;
+      // Last-resort: never return the object itself (would crash React).
+      return "";
+    }
+    return "";
+  }
   function transformJobRubric(rubric){
     if (!rubric) return [];
-    if (Array.isArray(rubric)) return rubric;
-    return [
-      { axis: "Séniorité", text: rubric.seniority || "" },
-      { axis: "Secteur",   text: rubric.sector    || "" },
-      { axis: "Impact",    text: rubric.impact    || "" },
-    ].filter(r => r.text);
+
+    // Array shape — validate every item before passing through.
+    if (Array.isArray(rubric)) {
+      return rubric
+        .map((r, i) => {
+          if (!r || typeof r !== "object") return null;
+          const axis = typeof r.axis === "string" ? r.axis : `Axe ${i + 1}`;
+          const text = pickAxisText(r.text != null ? r.text : r);
+          return text ? { axis, text } : null;
+        })
+        .filter(Boolean);
+    }
+
+    if (typeof rubric !== "object") return [];
+
+    // Object shape — try the 3 canonical axes (with FR + short variants).
+    const out = [];
+    const seniority = rubric.seniority ?? rubric.seniorite ?? rubric.sen;
+    const sector    = rubric.sector    ?? rubric.secteur   ?? rubric.sec;
+    const impact    = rubric.impact    ?? rubric.imp;
+    const bonus     = rubric.bonus;
+
+    const senText = pickAxisText(seniority);
+    const secText = pickAxisText(sector);
+    const impText = pickAxisText(impact);
+    const bonText = pickAxisText(bonus);
+
+    if (senText) out.push({ axis: "Séniorité", text: senText });
+    if (secText) out.push({ axis: "Secteur",   text: secText });
+    if (impText) out.push({ axis: "Impact",    text: impText });
+    if (bonText) out.push({ axis: "Bonus",     text: bonText });
+
+    if (out.length) return out;
+
+    // Fallback shapes — single-axis annotations the Cowork routine uses for
+    // rejected / archived / low-signal offers (redflag, reject, note, gap, …).
+    const fallback =
+      rubric.verdict && rubric.reason ? { axis: rubric.verdict, text: rubric.reason } :
+      rubric.redflag                  ? { axis: "Red flag", text: rubric.redflag } :
+      rubric.red_flag                 ? { axis: "Red flag", text: rubric.red_flag } :
+      rubric.reject                   ? { axis: "Rejet",    text: rubric.reject } :
+      rubric.gap                      ? { axis: "Gap",      text: rubric.gap } :
+      rubric.note                     ? { axis: "Note",     text: rubric.note } :
+      rubric.reason                   ? { axis: "Raison",   text: rubric.reason } :
+      null;
+
+    if (fallback) {
+      const text = pickAxisText(fallback.text);
+      if (text) return [{ axis: String(fallback.axis), text }];
+    }
+
+    return [];
   }
 
   function transformJobIntel(intel){
