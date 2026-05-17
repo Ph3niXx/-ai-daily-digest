@@ -11,6 +11,6 @@
     "start": "symphony"
   },
   "dependencies": {
-    "symphony-core": "git+file://C:/Users/johnb/projects/symphony-core#v1.0.1"
+    "symphony-core": "git+file://C:/Users/johnb/projects/symphony-core#v1.0.2"
   }
 }
