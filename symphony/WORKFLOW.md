@@ -33,7 +33,10 @@ prompts:
     - Si tu modifies un panel (cockpit/panel-*.jsx ou cockpit/home.jsx) : mets à jour le `docs/specs/tab-<slug>.md` correspondant **dans le même commit** (cf. CLAUDE.md → règle cardinale specs)
     - Si tu touches `index.html` ou `cockpit/**` : lance `node scripts/sync-sw.mjs` pour régénérer le service worker (ou laisse la CI `sw-sync` le faire)
     - Si tu touches sql/, pipelines/, .github/workflows/*-sync.yml, ou cockpit/lib/{bootstrap,data-loader,supabase,auth}.js : mets à jour `docs/architecture/` (pipelines.yaml, dependencies.yaml, flows/) dans le même commit
-    - CI bloquantes à respecter : `validate-spec`, `validate-arch`, `lint-specs` (les autres sont warning-only mais à regarder)
+    - Si tu ajoutes un nouveau secret GitHub Actions : mets à jour `docs/secrets.md` (section domaine + règle de maintenance)
+    - Si tu instrumentes un nouvel event télémétrie (`track('xxx', payload)`) : ajoute l'entrée dans `docs/telemetry.md` AVANT le commit
+    - Si tu ajoutes un nouveau fichier de doc longue, garde `CLAUDE.md` ≤ 200 lignes (règles + pointeurs uniquement, jamais d'inventaires) — sinon CI `lint-claude-md` (warning au départ, bloquant après mesure)
+    - CI bloquantes à respecter : `validate-spec`, `validate-arch`, `lint-specs` (les autres sont warning-only mais à regarder — `lint-claude-md` y rejoindra `arch-drift-check`, `spec-drift-check`, `sw-sync`)
     - Commit clair (`feat(US-XXX): …` ou `fix(US-XXX): …`)
 ---
 
@@ -60,20 +63,22 @@ Stack :
 ## Règles cardinales (à NE PAS oublier)
 
 1. **Specs (docs/specs/tab-<slug>.md)** — toute modif fonctionnelle d'un onglet (`cockpit/panel-*.jsx`, `cockpit/home.jsx`, pipelines qui changent la source de données, migrations qui changent les colonnes) impose une mise à jour du spec correspondant **dans le même commit**. La CI `lint-specs` est **bloquante** sur le vocabulaire produit dans les sections `## Fonctionnalités` et `## Parcours utilisateur` (pas de noms de fichiers, props, colonnes DB, endpoints, jargon `Tier 1/2`, `bootTier`, etc.).
-2. **Architecture (docs/architecture/)** — toute modif sur les chemins watchés (sql/, pipelines/, .github/workflows/*-sync.yml, cockpit/lib/bootstrap|data-loader|supabase|auth.js, cockpit/panel-*.jsx ajouté/supprimé, jarvis/server.py et observers) impose une mise à jour de `pipelines.yaml`, `dependencies.yaml`, `flows/<domaine>.yaml` (cf. CLAUDE.md → tableau « Checklist par type de modification »).
+2. **Architecture (docs/architecture/)** — toute modif sur les chemins watchés (sql/, pipelines/, .github/workflows/*-sync.yml, cockpit/lib/bootstrap|data-loader|supabase|auth.js, cockpit/panel-*.jsx ajouté/supprimé, jarvis/server.py et observers) impose une mise à jour de `pipelines.yaml`, `dependencies.yaml`, `flows/<domaine>.yaml` (cf. `docs/architecture/README.md` → tableau « Checklist : modifier un type d'objet »).
 3. **Service worker (sw.js)** — ne jamais éditer `STATIC[]` ni `CACHE` à la main. Après toute modif de `index.html` ou de `cockpit/**` : `node scripts/sync-sw.mjs` (ou laisse la GH Action `sw-sync` auto-commit sur la PR).
 4. **Sécurité** : pas de clé Supabase service_role en dur dans `index.html` / `cockpit/`. Les pipelines backend utilisent toujours `SUPABASE_SERVICE_KEY` (jamais la publishable).
 5. **CSP** : si tu ajoutes un nouveau domaine externe (script ou connect), update la balise `Content-Security-Policy` dans `index.html`.
 
 ## Lecture du code (discipline tokens)
 
-CLAUDE.md fait ~600 lignes et c'est riche. **Ne le lis pas en entier à chaque dispatch** — utilise `Grep` pour la section qui concerne ton US (specs, archi, pipeline X, panel Y…).
+CLAUDE.md fait **~100 lignes** depuis le slim down 2026-05-18 — tu peux le lire en entier sans souci, il pointe vers la doc longue dans `docs/`. **Pour les fichiers longs** (`docs/specs/MAINTENANCE.md`, `jarvis/README.md`, `docs/architecture/repo-structure.md`, `cockpit/app.jsx`, `cockpit/home.jsx`), utilise `Grep` ciblé.
 
 - `Grep` d'abord (nom de panel, nom de table, nom de pipeline, nom de composant)
 - `Read` ciblé ensuite avec `offset`/`limit` (max **300 lignes** par lecture)
-- Le fichier `cockpit/app.jsx` et `cockpit/home.jsx` sont les hubs front — `Grep` ciblé recommandé
 - Pour comprendre quel panel touche quelle table : `docs/architecture/dependencies.yaml::panels[]` (source de vérité)
 - Pour comprendre quel pipeline alimente quelle table : `docs/architecture/pipelines.yaml`
+- Pour la matrice secrets / pipelines : `docs/secrets.md`
+- Pour les events télémétrie déjà instrumentés : `docs/telemetry.md`
+- Pour le module Jarvis (vision, stack, observers, tables, troubleshooting) : `jarvis/README.md`
 
 ## Tests et validation
 

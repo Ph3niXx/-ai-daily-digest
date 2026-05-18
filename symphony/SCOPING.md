@@ -25,8 +25,9 @@ Avant de rédiger, lis (avec `Grep` ciblé, pas en entier) :
 3. **`docs/specs/tab-<slug>.md`** — si l'US concerne un onglet existant, lis son spec produit.
 4. **`docs/architecture/dependencies.yaml`** — mapping panel↔tables↔pipelines, écritures front (panels[].writes).
 5. **`docs/architecture/pipelines.yaml`** — si l'US touche un pipeline.
-6. **Code concerné** — `Grep` ciblé (panel-X.jsx, pipelines/X_sync.py, jarvis/X.py, sql/X.sql). Ne lis pas `cockpit/app.jsx` ou `CLAUDE.md` en entier.
-7. **`git log --oneline -20`** — historique récent pour éviter le scope qui chevauche un travail en cours.
+6. **Code concerné** — `Grep` ciblé (panel-X.jsx, pipelines/X_sync.py, jarvis/X.py, sql/X.sql). Ne lis pas `cockpit/app.jsx`, `docs/specs/MAINTENANCE.md`, `jarvis/README.md` ou `docs/architecture/repo-structure.md` en entier. (`CLAUDE.md` fait ~100 lignes depuis le slim down 2026-05-18, OK de le lire en entier.)
+7. **Si l'US touche aux secrets ou à la télémétrie** : `docs/secrets.md` / `docs/telemetry.md`.
+8. **`git log --oneline -20`** — historique récent pour éviter le scope qui chevauche un travail en cours.
 
 ## Format de sortie imposé
 
@@ -53,7 +54,7 @@ La nouvelle description Linear doit suivre **strictement** ce template Markdown 
 
 ## Pistes d'implémentation
 
-{Fichiers probablement touchés (ex: `cockpit/panel-X.jsx`, `pipelines/Y_sync.py`, `sql/NNN_xxx.sql`, `jarvis/observers/Z.py`). Spec à mettre à jour : `docs/specs/tab-<slug>.md`. Archi à mettre à jour : `pipelines.yaml` / `dependencies.yaml` / `flows/<domaine>.yaml` (selon le tableau de CLAUDE.md). Patterns existants à réutiliser. Pas de code, juste des pointeurs.}
+{Fichiers probablement touchés (ex: `cockpit/panel-X.jsx`, `pipelines/Y_sync.py`, `sql/NNN_xxx.sql`, `jarvis/observers/Z.py`). Spec à mettre à jour : `docs/specs/tab-<slug>.md`. Archi à mettre à jour : `pipelines.yaml` / `dependencies.yaml` / `flows/<domaine>.yaml` (selon le tableau de `docs/architecture/README.md`). Secrets / télémétrie : `docs/secrets.md` / `docs/telemetry.md` si concernés. Patterns existants à réutiliser. Pas de code, juste des pointeurs.}
 
 ## Points d'attention (optionnel)
 
@@ -84,7 +85,7 @@ mcp__linear-server__save_issue(id="{{ issue.identifier }}", description="<le mar
 
 - ❌ Modifier des fichiers du dépôt (`cockpit/`, `pipelines/`, `sql/`, `docs/`, etc.)
 - ❌ Faire un `git commit` ou `git push`
-- ❌ Lire `CLAUDE.md` ou `cockpit/app.jsx` en entier sans ciblage
+- ❌ Lire `cockpit/app.jsx`, `jarvis/README.md`, `docs/specs/MAINTENANCE.md`, ou `docs/architecture/repo-structure.md` en entier sans ciblage (`CLAUDE.md` fait ~100 lignes, OK en entier)
 - ❌ Réécrire / résumer la demande initiale (préserve-la verbatim)
 - ❌ Inventer des critères d'acceptation non déduits du contexte
 - ❌ Transitionner l'issue Linear (rôle de Symphony)
