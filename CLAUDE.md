@@ -1,6 +1,6 @@
 # AI Cockpit — CLAUDE.md
 
-> **Maintenance de ce fichier** — 200 lignes max. Contient uniquement des **règles** et des **pointeurs**, jamais d'inventaires (tables, pipelines, secrets, events) qui vivent dans `docs/`. Avant d'ajouter une section : "est-ce que ça pourrait vivre dans un fichier de `docs/` ?" Si oui, déplace-le et garde ici une ligne `Sujet → docs/x.md`. Phase 2 : CI `lint-claude-md` viendra durcir cette règle. Slim down initial : 611 → 100 lignes (2026-05-18).
+> **Maintenance de ce fichier** — 200 lignes max. Contient uniquement des **règles** et des **pointeurs**, jamais d'inventaires (tables, pipelines, secrets, events) qui vivent dans `docs/`. Avant d'ajouter une section : "est-ce que ça pourrait vivre dans un fichier de `docs/` ?" Si oui, déplace-le et garde ici une ligne `Sujet → docs/x.md`. CI `lint-claude-md` ([scripts/lint_claude_md.py](scripts/lint_claude_md.py), [workflow](.github/workflows/lint-claude-md.yml)) — warning-only au départ, bloquant après ~2-3 semaines de mesure. Slim down initial : 611 → 100 lignes (2026-05-18).
 
 ## Vue d'ensemble
 
