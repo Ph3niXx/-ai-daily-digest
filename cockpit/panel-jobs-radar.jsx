@@ -11,16 +11,33 @@
 
 const { useState: useStateJr, useMemo: useMemoJr, useEffect: useEffectJr, useRef: useRefJr } = React;
 
-// ─── Supabase write (status + user_notes only — scan is source of truth elsewhere) ───
+// ─── Supabase write (user-editable fields: status, user_notes, user_verdict*) ───
 async function patchJobSupabase(id, patch) {
   const safe = {};
   if ("status" in patch) safe.status = patch.status;
   if ("user_notes" in patch) safe.user_notes = patch.user_notes;
+  if ("user_verdict" in patch) safe.user_verdict = patch.user_verdict;
+  if ("user_verdict_reason" in patch) safe.user_verdict_reason = patch.user_verdict_reason;
+  if ("user_verdict_at" in patch) safe.user_verdict_at = patch.user_verdict_at;
   if (!Object.keys(safe).length) return;
   if (!window.sb || !window.sb.patchJSON || !window.SUPABASE_URL) return;
   const url = window.SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(id);
   const r = await window.sb.patchJSON(url, safe);
   if (!r.ok) throw new Error("PATCH " + r.status);
+}
+
+// ─── Upsert d'une clé user_profile (réutilise le pattern du panel Profil) ───
+async function upsertUserProfile(key, value) {
+  if (!window.sb || !window.SUPABASE_URL) throw new Error("supabase indisponible");
+  const url = window.SUPABASE_URL + "/rest/v1/user_profile?on_conflict=key";
+  const body = [{ key, value, updated_at: new Date().toISOString() }];
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { ...window.sb.headers, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("upsert " + res.status);
+  return res.json();
 }
 
 const CAT_LABEL = {
@@ -148,6 +165,95 @@ function JrNotesEditor({ offer, onSave, onCancel }) {
   );
 }
 
+// ─── Vote 👍/👎 + raison (calibrage) ──────────────────────
+const VERDICT_REASONS = {
+  down: ["trop junior", "run/BAU", "secteur", "boîte", "lieu/remote", "bof"],
+  up:   ["scope parfait", "secteur", "la boîte", "coup de cœur"],
+};
+
+function JrVote({ offer, onVote, compact = false }) {
+  const verdict = offer.user_verdict || null;
+  const [expanded, setExpanded] = useStateJr(false);
+  const [precise, setPrecise]   = useStateJr(false);
+  const [draft, setDraft]       = useStateJr("");
+
+  const currentChip = (offer.user_verdict_reason || "").split(" — ")[0];
+
+  const clickThumb = (v) => {
+    if (verdict === v) {
+      onVote(offer.id, { user_verdict: null, user_verdict_reason: null, user_verdict_at: null });
+      setExpanded(false); setPrecise(false); setDraft("");
+    } else {
+      onVote(offer.id, { user_verdict: v, user_verdict_reason: null, user_verdict_at: new Date().toISOString() }, v === "up" ? "Noté 👍" : "Noté 👎");
+      setExpanded(true); setPrecise(false); setDraft("");
+    }
+  };
+  const pickReason = (r) => {
+    const next = (r === currentChip) ? null : r;
+    onVote(offer.id, { user_verdict_reason: next });
+  };
+  const saveFree = () => {
+    const t = draft.trim();
+    const composed = currentChip ? (t ? `${currentChip} — ${t}` : currentChip) : t;
+    onVote(offer.id, { user_verdict_reason: composed || null });
+    setPrecise(false);
+  };
+
+  return (
+    <div className={`jr-vote ${compact ? "jr-vote--compact" : ""}`}>
+      <div className="jr-vote-thumbs">
+        <button
+          className={`jr-vote-btn ${verdict === "up" ? "is-up" : ""}`}
+          onClick={(e) => { e.stopPropagation(); clickThumb("up"); }}
+          aria-pressed={verdict === "up"} title="J'aime cette offre">
+          <Icon name="thumbs_up" size={compact ? 13 : 15} stroke={2} />
+        </button>
+        <button
+          className={`jr-vote-btn ${verdict === "down" ? "is-down" : ""}`}
+          onClick={(e) => { e.stopPropagation(); clickThumb("down"); }}
+          aria-pressed={verdict === "down"} title="Pas pour moi">
+          <Icon name="thumbs_down" size={compact ? 13 : 15} stroke={2} />
+        </button>
+        {verdict && (
+          <button className="jr-vote-why" onClick={(e) => { e.stopPropagation(); setExpanded(x => !x); }}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Masquer les raisons" : "Préciser la raison"}>
+            {currentChip ? currentChip : "pourquoi ?"}
+          </button>
+        )}
+      </div>
+
+      {verdict && expanded && (
+        <div className="jr-vote-reasons">
+          {VERDICT_REASONS[verdict].map(r => (
+            <button
+              key={r}
+              className={`jr-vote-chip ${currentChip === r ? "is-active" : ""}`}
+              onClick={(e) => { e.stopPropagation(); pickReason(r); }}>
+              {r}
+            </button>
+          ))}
+          {!precise ? (
+            <button className="jr-vote-chip jr-vote-chip--more" onClick={(e) => { e.stopPropagation(); setPrecise(true); setDraft(""); }}>
+              préciser…
+            </button>
+          ) : (
+            <span className="jr-vote-free">
+              <input
+                className="jr-vote-free-input" autoFocus value={draft}
+                placeholder="en un mot ou deux"
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveFree(); if (e.key === "Escape") setPrecise(false); }}
+                onClick={(e) => e.stopPropagation()} />
+              <button className="jr-vote-free-ok" onClick={(e) => { e.stopPropagation(); saveFree(); }}>OK</button>
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Score chip (big number, band color, decomposition on hover) ───
 function ScoreChip({ offer, big = false }) {
   const band = scoreBand(offer.score_total);
@@ -264,7 +370,7 @@ function RubricBlock({ offer }) {
 }
 
 // ─── Hot lead card (big, intel déplié) ────────────────────
-function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, openMenu, onMenuToggle, notesEditing }) {
+function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, openMenu, onMenuToggle, notesEditing }) {
   const intel = offer.intel;
   const isNotesOpen = notesEditing === offer.id;
   const targetRange = (window.PROFILE_DATA && window.PROFILE_DATA._values && window.PROFILE_DATA._values.target_salary_range) || null;
@@ -380,6 +486,7 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
 
       {/* Actions footer */}
       <footer className="jr-hot-foot">
+        <JrVote offer={offer} onVote={onVote} />
         <div className="jr-cv-reco">
           <span className={`jr-cv-badge jr-cv-badge--${offer.cv_recommended}`}>
             CV {offer.cv_recommended.toUpperCase()}
@@ -412,7 +519,7 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
 }
 
 // ─── List row (mid + low, dense) ──────────────────────────
-function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, openMenu, onMenuToggle, notesEditing }) {
+function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, openMenu, onMenuToggle, notesEditing }) {
   const band = scoreBand(offer.score_total);
   const isNotesOpen = notesEditing === offer.id;
   return (
@@ -471,6 +578,7 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
       </div>
 
       <div className="jr-row-actions">
+        <JrVote offer={offer} onVote={onVote} compact />
         <JrActionsMenu
           offer={offer}
           open={openMenu === offer.id}
@@ -484,6 +592,80 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
         </button>
       </div>
     </article>
+  );
+}
+
+// ─── Encart calibrage — profil de préférences (rules éditable / observed RO) ───
+function JrCalibrage() {
+  const PF = (window.PROFILE_DATA && window.PROFILE_DATA._values) || {};
+  const [open, setOpen]       = useStateJr(false);
+  const [editing, setEditing] = useStateJr(false);
+  const [draft, setDraft]     = useStateJr(PF.job_pref_rules || "");
+  const [saving, setSaving]   = useStateJr(false);
+  const observed = PF.job_pref_observed || "";
+  const rules = PF.job_pref_rules || "";
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await upsertUserProfile("job_pref_rules", draft);
+      if (window.PROFILE_DATA) {
+        window.PROFILE_DATA._values = { ...window.PROFILE_DATA._values, job_pref_rules: draft };
+      }
+      if (window.track) window.track("profile_field_saved", { key: "job_pref_rules" });
+      // setEditing(false) déclenche le re-render qui relit `rules` depuis le
+      // PROFILE_DATA fraîchement muté ci-dessus (pas de state local pour rules).
+      setEditing(false);
+    } catch (e) {
+      alert("Échec de la sauvegarde : " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="jr-calib">
+      <button className="jr-calib-head" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-controls="jr-calib-body">
+        <span className="jr-calib-kicker">
+          <Icon name="sliders" size={13} stroke={2} />
+          Calibrage · ce que le radar a compris de tes goûts
+        </span>
+        <Icon name={open ? "chevron_up" : "chevron_down"} size={16} stroke={2} />
+      </button>
+
+      {open && (
+        <div className="jr-calib-body" id="jr-calib-body">
+          <div className="jr-calib-block">
+            <div className="jr-section-kicker">Tes règles <span className="jr-calib-lock">verrouillé</span></div>
+            {!editing ? (
+              <div className="jr-calib-rules">
+                <p className="jr-calib-text">{rules || "Aucune règle. Écris ici ce que tu cherches (ou évites) — le scan en tiendra compte dès demain."}</p>
+                <button className="jr-btn jr-btn--ghost jr-btn--sm" onClick={() => { setDraft(rules); setEditing(true); }}>
+                  {rules ? "Modifier" : "Écrire mes règles"}
+                </button>
+              </div>
+            ) : (
+              <div className="jr-calib-editor">
+                <textarea className="jr-calib-input" rows={4} autoFocus value={draft}
+                  placeholder="Ex : je ne veux pas de RTE en grand groupe. Je priorise l'AI tooling early-stage. J'ignore < 95k."
+                  onChange={(e) => setDraft(e.target.value)} />
+                <div className="jr-calib-actions">
+                  <button className="jr-btn jr-btn--ghost jr-btn--sm" onClick={() => setEditing(false)} disabled={saving}>Annuler</button>
+                  <button className="jr-btn jr-btn--primary jr-btn--sm" onClick={save} disabled={saving}>{saving ? "…" : "Enregistrer"}</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="jr-calib-block">
+            <div className="jr-section-kicker">Observé par le radar <span className="jr-calib-auto">auto</span></div>
+            <p className="jr-calib-text jr-calib-text--observed">
+              {observed || "Pas encore assez de votes pour inférer un profil. Note quelques offres 👍/👎 — le radar synthétise après quelques retours."}
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -617,15 +799,22 @@ function PanelJobsRadar({ data, onNavigate }) {
     toastTimer.current = setTimeout(() => setToast(null), 2400);
   };
 
-  const updateJob = (id, patch, toastMsg) => {
+  // Mécanique commune : optimistic state + mirror global + PATCH + toast.
+  const persistJobPatch = (id, patch, toastMsg) => {
     setOffers(prev => prev.map(o => o.id === id ? { ...o, ...patch } : o));
-    // Mirror the change into the global so other views / re-mounts see it
     try {
       if (window.JOBS_DATA && Array.isArray(window.JOBS_DATA.offers)) {
         const idx = window.JOBS_DATA.offers.findIndex(o => o.id === id);
         if (idx >= 0) window.JOBS_DATA.offers[idx] = { ...window.JOBS_DATA.offers[idx], ...patch };
       }
     } catch {}
+    patchJobSupabase(id, patch)
+      .then(() => { if (toastMsg) showToast(toastMsg, "ok"); })
+      .catch(() => showToast("Erreur de sync — changement local uniquement", "error"));
+  };
+
+  // status / notes — event jobs_action (inchangé).
+  const updateJob = (id, patch, toastMsg) => {
     try {
       const key = Object.keys(patch)[0];
       window.track && window.track("jobs_action", {
@@ -634,9 +823,23 @@ function PanelJobsRadar({ data, onNavigate }) {
         value: String(patch[key] ?? "").slice(0, 64),
       });
     } catch {}
-    patchJobSupabase(id, patch)
-      .then(() => { if (toastMsg) showToast(toastMsg, "ok"); })
-      .catch(() => showToast("Erreur de sync — changement local uniquement", "error"));
+    persistJobPatch(id, patch, toastMsg);
+  };
+
+  // vote 👍/👎 (+ raison) — event jobs_feedback, porte le score au moment du vote.
+  const voteJob = (id, patch, toastMsg) => {
+    const offer = offers.find(o => o.id === id);
+    const verdict = ("user_verdict" in patch) ? patch.user_verdict : (offer && offer.user_verdict);
+    const reason  = ("user_verdict_reason" in patch) ? patch.user_verdict_reason : (offer && offer.user_verdict_reason);
+    try {
+      window.track && window.track("jobs_feedback", {
+        verdict: String(verdict ?? "").slice(0, 8),
+        reason: String(reason ?? "").slice(0, 64),
+        job_id: String(id).slice(0, 64),
+        score_at_vote: offer ? offer.score_total : null,
+      });
+    } catch {}
+    persistJobPatch(id, patch, toastMsg);
   };
 
   const applyToJob = (offer) => {
@@ -660,6 +863,7 @@ function PanelJobsRadar({ data, onNavigate }) {
     onEditNotes: startEditNotes,
     onSaveNotes: saveNotes,
     onCancelNotes: cancelEditNotes,
+    onVote: voteJob,
     openMenu,
     onMenuToggle: setOpenMenu,
     notesEditing,
@@ -740,6 +944,9 @@ function PanelJobsRadar({ data, onNavigate }) {
 
       {/* ─── SCAN BANNER ─── */}
       <ScanBanner scan={scan} />
+
+      {/* ─── CALIBRAGE ─── */}
+      <JrCalibrage />
 
       {/* ─── HOT LEADS HERO ─── */}
       {hotLeads.length > 0 && (

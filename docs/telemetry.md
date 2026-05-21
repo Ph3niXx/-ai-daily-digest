@@ -15,13 +15,14 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `link_clicked` | `{url, section}` | Event delegation globale `a[target="_blank"]` dans `app.jsx` |
 | `pipeline_triggered` | `{pipeline, mode}` | `cockpit/panel-jarvis.jsx` avant `jarvisSend()` |
 | `error_shown` | `{context, message}` | Wrapper `showError()` dans `cockpit/lib/` |
-| `profile_field_saved` | `{key}` | `cockpit/panel-profile.jsx` après PATCH |
+| `profile_field_saved` | `{key}` | `cockpit/panel-profile.jsx` après PATCH + `cockpit/panel-jobs-radar.jsx::JrCalibrage` (édition de job_pref_rules) |
 | `profile_payload_copied` | `{size}` | `cockpit/panel-profile.jsx` export |
 | `skill_radar_bumped` | `{axis, delta}` | `cockpit/panel-radar.jsx` après bump manuel |
 | `challenge_completed` | `{challenge_id, mode}` | `cockpit/panel-challenges.jsx` post-submit |
 | `idea_moved` | `{id, from_status, to_status}` | `cockpit/panel-ideas.jsx` drag&drop |
 | `wiki_shared` | `{slug}` | `cockpit/panel-wiki.jsx` partage |
 | `jobs_action` | `{action, job_id}` | `cockpit/panel-jobs-radar.jsx` toggle |
+| `jobs_feedback` | `{verdict, reason, job_id, score_at_vote}` | `cockpit/panel-jobs-radar.jsx::voteJob()` — 👍/👎 + raison. `score_at_vote` mesure le désaccord avec le score (doit décroître). |
 | `history_pin_toggled` | `{iso, pinned}` | `cockpit/panel-history.jsx::handleTogglePin()` |
 | `review_action` | `{action, id}` | `cockpit/panel-review.jsx::markReadAndAdvance()` |
 | `hero_delta_shown` | `{newSinceVisit, hours}` | `cockpit/home.jsx` useEffect quand le hero bascule en mode "nouveautés depuis Xh" |
