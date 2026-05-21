@@ -308,6 +308,11 @@ tables:
     owner_pipeline: cowork_external
     rls: public  # using(true), update whitelist status + user_notes + user_verdict*
     domain: business
+    columns_notable:
+      - name: closed_at
+        type: timestamptz
+        writer: cowork_external  # posé quand LinkedIn marque "ne recrute plus"
+        reader: front  # masquage feed + filtre Clôturées (migration 015)
 
   - name: learning_recommendations
     owner_pipeline: weekly_analysis
