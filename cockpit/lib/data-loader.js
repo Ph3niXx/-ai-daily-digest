@@ -1649,6 +1649,7 @@
       user_verdict: row.user_verdict || null,
       user_verdict_reason: row.user_verdict_reason || "",
       user_verdict_at: row.user_verdict_at || null,
+      closed_at: row.closed_at || null,
     };
   }
 
