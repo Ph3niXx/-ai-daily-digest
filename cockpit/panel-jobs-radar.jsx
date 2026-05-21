@@ -165,89 +165,124 @@ function JrNotesEditor({ offer, onSave, onCancel }) {
   );
 }
 
-// ─── Vote 👍/👎 + raison (calibrage) ──────────────────────
+// ─── Vote 👍/👎 + raisons (popover multi-sélection) ───────
 const VERDICT_REASONS = {
-  down: ["trop junior", "run/BAU", "secteur", "boîte", "lieu/remote", "bof"],
+  down: ["trop junior", "run/BAU", "secteur", "boîte", "lieu/remote"],
   up:   ["scope parfait", "secteur", "la boîte", "coup de cœur"],
 };
 
+// Sérialisation dans la colonne texte unique user_verdict_reason :
+//   "raison1 · raison2 [ — texte libre ]". Le ` — ` (présent ou non)
+//   sépare les raisons du texte libre ; les raisons sont jointes par ` · `.
+function jrParseReason(raw) {
+  const s = raw || "";
+  const i = s.indexOf(" — ");
+  const reasonsPart = i >= 0 ? s.slice(0, i) : s;
+  const free = i >= 0 ? s.slice(i + 3) : "";
+  const reasons = reasonsPart.trim() ? reasonsPart.split(" · ").map(x => x.trim()).filter(Boolean) : [];
+  return { reasons, free };
+}
+function jrComposeReason(reasons, free) {
+  const f = (free || "").trim();
+  if (!reasons.length && !f) return null;
+  return reasons.join(" · ") + (f ? " — " + f : "");
+}
+
 function JrVote({ offer, onVote, compact = false }) {
   const verdict = offer.user_verdict || null;
-  const [expanded, setExpanded] = useStateJr(false);
-  const [precise, setPrecise]   = useStateJr(false);
-  const [draft, setDraft]       = useStateJr("");
+  const parsed = jrParseReason(offer.user_verdict_reason);
+  const selected = parsed.reasons;            // source de vérité = l'offre (optimistic)
+  const [open, setOpen] = useStateJr(false);
+  const [draft, setDraft] = useStateJr(parsed.free);
+  const ref = useRefJr(null);
 
-  const currentChip = (offer.user_verdict_reason || "").split(" — ")[0];
+  // Ferme le popover au clic extérieur / Escape (même pattern que JrActionsMenu)
+  useEffectJr(() => {
+    if (!open) return;
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDoc); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+
+  const isOn = (r) => selected.includes(r);
 
   const clickThumb = (v) => {
     if (verdict === v) {
       onVote(offer.id, { user_verdict: null, user_verdict_reason: null, user_verdict_at: null });
-      setExpanded(false); setPrecise(false); setDraft("");
+      setOpen(false); setDraft("");
     } else {
       onVote(offer.id, { user_verdict: v, user_verdict_reason: null, user_verdict_at: new Date().toISOString() }, v === "up" ? "Noté 👍" : "Noté 👎");
-      setExpanded(true); setPrecise(false); setDraft("");
+      setDraft(""); setOpen(true);
     }
   };
-  const pickReason = (r) => {
-    const next = (r === currentChip) ? null : r;
-    onVote(offer.id, { user_verdict_reason: next });
+  const toggleReason = (r) => {
+    const next = isOn(r) ? selected.filter(x => x !== r) : [...selected, r];
+    onVote(offer.id, { user_verdict_reason: jrComposeReason(next, draft) });
   };
-  const saveFree = () => {
-    const t = draft.trim();
-    const composed = currentChip ? (t ? `${currentChip} — ${t}` : currentChip) : t;
-    onVote(offer.id, { user_verdict_reason: composed || null });
-    setPrecise(false);
+  const commitFree = () => {
+    onVote(offer.id, { user_verdict_reason: jrComposeReason(selected, draft) });
   };
 
   return (
-    <div className={`jr-vote ${compact ? "jr-vote--compact" : ""}`}>
-      <div className="jr-vote-thumbs">
-        <button
-          className={`jr-vote-btn ${verdict === "up" ? "is-up" : ""}`}
-          onClick={(e) => { e.stopPropagation(); clickThumb("up"); }}
-          aria-pressed={verdict === "up"} title="J'aime cette offre">
-          <Icon name="thumbs_up" size={compact ? 13 : 15} stroke={2} />
-        </button>
-        <button
-          className={`jr-vote-btn ${verdict === "down" ? "is-down" : ""}`}
-          onClick={(e) => { e.stopPropagation(); clickThumb("down"); }}
-          aria-pressed={verdict === "down"} title="Pas pour moi">
-          <Icon name="thumbs_down" size={compact ? 13 : 15} stroke={2} />
-        </button>
+    <div className={`jr-vote ${compact ? "jr-vote--compact" : ""}`} ref={ref}>
+      <div className="jr-vote-row">
+        <div className="jr-vote-thumbs">
+          <button
+            className={`jr-vote-btn ${verdict === "up" ? "is-up" : ""}`}
+            onClick={(e) => { e.stopPropagation(); clickThumb("up"); }}
+            aria-pressed={verdict === "up"} title="J'aime cette offre">
+            <Icon name="thumbs_up" size={compact ? 13 : 15} stroke={2} />
+          </button>
+          <button
+            className={`jr-vote-btn ${verdict === "down" ? "is-down" : ""}`}
+            onClick={(e) => { e.stopPropagation(); clickThumb("down"); }}
+            aria-pressed={verdict === "down"} title="Pas pour moi">
+            <Icon name="thumbs_down" size={compact ? 13 : 15} stroke={2} />
+          </button>
+        </div>
+
+        {verdict && selected.length > 0 && (
+          <span className="jr-vote-tags">
+            {selected.map(r => <span key={r} className="jr-vote-tag">{r}</span>)}
+          </span>
+        )}
+
         {verdict && (
-          <button className="jr-vote-why" onClick={(e) => { e.stopPropagation(); setExpanded(x => !x); }}
-            aria-expanded={expanded}
-            aria-label={expanded ? "Masquer les raisons" : "Préciser la raison"}>
-            {currentChip ? currentChip : "pourquoi ?"}
+          <button
+            className="jr-vote-why"
+            onClick={(e) => { e.stopPropagation(); setOpen(o => !o); }}
+            aria-expanded={open} aria-controls={`jr-pop-${offer.id}`}
+            aria-label={open ? "Fermer les raisons" : "Choisir une raison"}>
+            <Icon name={open ? "chevron_up" : "chevron_down"} size={13} stroke={2} />
+            <span>{selected.length ? "raison" : "pourquoi ?"}</span>
           </button>
         )}
       </div>
 
-      {verdict && expanded && (
-        <div className="jr-vote-reasons">
+      {verdict && open && (
+        <div className="jr-vote-pop" id={`jr-pop-${offer.id}`} role="group" aria-label="Raisons du vote">
+          <div className="jr-vote-pop-head">Pourquoi ? (plusieurs possibles)</div>
           {VERDICT_REASONS[verdict].map(r => (
             <button
               key={r}
-              className={`jr-vote-chip ${currentChip === r ? "is-active" : ""}`}
-              onClick={(e) => { e.stopPropagation(); pickReason(r); }}>
-              {r}
+              className={`jr-vote-opt ${isOn(r) ? "is-on" : ""}`}
+              role="checkbox" aria-checked={isOn(r)}
+              onClick={(e) => { e.stopPropagation(); toggleReason(r); }}>
+              <span className="jr-vote-box"><Icon name="check" size={11} stroke={3} /></span>
+              <span>{r}</span>
             </button>
           ))}
-          {!precise ? (
-            <button className="jr-vote-chip jr-vote-chip--more" onClick={(e) => { e.stopPropagation(); setPrecise(true); setDraft(""); }}>
-              préciser…
-            </button>
-          ) : (
-            <span className="jr-vote-free">
-              <input
-                className="jr-vote-free-input" autoFocus value={draft}
-                placeholder="en un mot ou deux"
-                onChange={(e) => setDraft(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") saveFree(); if (e.key === "Escape") setPrecise(false); }}
-                onClick={(e) => e.stopPropagation()} />
-              <button className="jr-vote-free-ok" onClick={(e) => { e.stopPropagation(); saveFree(); }}>OK</button>
-            </span>
-          )}
+          <div className="jr-vote-pop-sep" />
+          <input
+            className="jr-vote-free-input"
+            value={draft}
+            placeholder="préciser (optionnel)…"
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commitFree}
+            onKeyDown={(e) => { if (e.key === "Enter") { commitFree(); setOpen(false); } if (e.key === "Escape") setOpen(false); }}
+            onClick={(e) => e.stopPropagation()} />
         </div>
       )}
     </div>
