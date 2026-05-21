@@ -151,6 +151,93 @@ function JrNotesEditor({ offer, onSave, onCancel }) {
   );
 }
 
+// ─── Vote 👍/👎 + raison (calibrage) ──────────────────────
+const VERDICT_REASONS = {
+  down: ["trop junior", "run/BAU", "secteur", "boîte", "lieu/remote", "bof"],
+  up:   ["scope parfait", "secteur", "la boîte", "coup de cœur"],
+};
+
+function JrVote({ offer, onVote, compact = false }) {
+  const verdict = offer.user_verdict || null;
+  const [expanded, setExpanded] = useStateJr(false);
+  const [precise, setPrecise]   = useStateJr(false);
+  const [draft, setDraft]       = useStateJr("");
+
+  const currentChip = (offer.user_verdict_reason || "").split(" — ")[0];
+
+  const clickThumb = (v) => {
+    if (verdict === v) {
+      onVote(offer.id, { user_verdict: null, user_verdict_reason: null, user_verdict_at: null });
+      setExpanded(false); setPrecise(false);
+    } else {
+      onVote(offer.id, { user_verdict: v, user_verdict_at: new Date().toISOString() }, v === "up" ? "Noté 👍" : "Noté 👎");
+      setExpanded(true);
+    }
+  };
+  const pickReason = (r) => {
+    const next = (r === currentChip) ? null : r;
+    onVote(offer.id, { user_verdict_reason: next });
+  };
+  const saveFree = () => {
+    const t = draft.trim();
+    const composed = currentChip ? (t ? `${currentChip} — ${t}` : currentChip) : t;
+    onVote(offer.id, { user_verdict_reason: composed || null });
+    setPrecise(false);
+  };
+
+  return (
+    <div className={`jr-vote ${compact ? "jr-vote--compact" : ""}`}>
+      <div className="jr-vote-thumbs">
+        <button
+          className={`jr-vote-btn ${verdict === "up" ? "is-up" : ""}`}
+          onClick={(e) => { e.stopPropagation(); clickThumb("up"); }}
+          aria-pressed={verdict === "up"} title="J'aime cette offre">
+          <Icon name="thumbs_up" size={compact ? 13 : 15} stroke={2} />
+        </button>
+        <button
+          className={`jr-vote-btn ${verdict === "down" ? "is-down" : ""}`}
+          onClick={(e) => { e.stopPropagation(); clickThumb("down"); }}
+          aria-pressed={verdict === "down"} title="Pas pour moi">
+          <Icon name="thumbs_down" size={compact ? 13 : 15} stroke={2} />
+        </button>
+        {verdict && (
+          <button className="jr-vote-why" onClick={(e) => { e.stopPropagation(); setExpanded(x => !x); }}>
+            {currentChip ? currentChip : "pourquoi ?"}
+          </button>
+        )}
+      </div>
+
+      {verdict && expanded && (
+        <div className="jr-vote-reasons">
+          {VERDICT_REASONS[verdict].map(r => (
+            <button
+              key={r}
+              className={`jr-vote-chip ${currentChip === r ? "is-active" : ""}`}
+              onClick={(e) => { e.stopPropagation(); pickReason(r); }}>
+              {r}
+            </button>
+          ))}
+          {!precise ? (
+            <button className="jr-vote-chip jr-vote-chip--more" onClick={(e) => { e.stopPropagation(); setPrecise(true); setDraft(""); }}>
+              préciser…
+            </button>
+          ) : (
+            <span className="jr-vote-free">
+              <input
+                className="jr-vote-free-input" autoFocus value={draft}
+                placeholder="en un mot ou deux"
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") saveFree(); if (e.key === "Escape") setPrecise(false); }}
+                onClick={(e) => e.stopPropagation()} />
+              <button className="jr-vote-free-ok" onClick={(e) => { e.stopPropagation(); saveFree(); }}>OK</button>
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Score chip (big number, band color, decomposition on hover) ───
 function ScoreChip({ offer, big = false }) {
   const band = scoreBand(offer.score_total);
@@ -267,7 +354,7 @@ function RubricBlock({ offer }) {
 }
 
 // ─── Hot lead card (big, intel déplié) ────────────────────
-function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, openMenu, onMenuToggle, notesEditing }) {
+function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, openMenu, onMenuToggle, notesEditing }) {
   const intel = offer.intel;
   const isNotesOpen = notesEditing === offer.id;
   const targetRange = (window.PROFILE_DATA && window.PROFILE_DATA._values && window.PROFILE_DATA._values.target_salary_range) || null;
@@ -383,6 +470,7 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
 
       {/* Actions footer */}
       <footer className="jr-hot-foot">
+        <JrVote offer={offer} onVote={onVote} />
         <div className="jr-cv-reco">
           <span className={`jr-cv-badge jr-cv-badge--${offer.cv_recommended}`}>
             CV {offer.cv_recommended.toUpperCase()}
@@ -415,7 +503,7 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
 }
 
 // ─── List row (mid + low, dense) ──────────────────────────
-function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, openMenu, onMenuToggle, notesEditing }) {
+function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, openMenu, onMenuToggle, notesEditing }) {
   const band = scoreBand(offer.score_total);
   const isNotesOpen = notesEditing === offer.id;
   return (
@@ -474,6 +562,7 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
       </div>
 
       <div className="jr-row-actions">
+        <JrVote offer={offer} onVote={onVote} compact />
         <JrActionsMenu
           offer={offer}
           open={openMenu === offer.id}
@@ -684,6 +773,7 @@ function PanelJobsRadar({ data, onNavigate }) {
     onEditNotes: startEditNotes,
     onSaveNotes: saveNotes,
     onCancelNotes: cancelEditNotes,
+    onVote: voteJob,
     openMenu,
     onMenuToggle: setOpenMenu,
     notesEditing,

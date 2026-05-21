@@ -56,6 +56,8 @@ const ICON_PATHS = {
   x: <path d="M5 5l14 14M19 5L5 19"/>,
   envelope: <><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 7 9-7"/></>,
   flag: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22V3"/></>,
+  thumbs_up: <><path d="M7 10v11M3 11l4-1v10H3zM11 10V7a3 3 0 0 1 3-3l1 3-1.5 3H18a2 2 0 0 1 2 2l-1 7a2 2 0 0 1-2 2h-6a2 2 0 0 1-2-2v-9z"/></>,
+  thumbs_down: <><path d="M17 14V3m4 10l-4 1V4h4zM13 14v3a3 3 0 0 1-3 3l-1-3 1.5-3H6a2 2 0 0 1-2-2l1-7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v9z"/></>,
 };
 
 function Icon({ name, size = 16, stroke = 1.75, style, className }) {
