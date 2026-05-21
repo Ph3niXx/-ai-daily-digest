@@ -1646,6 +1646,9 @@
       first_seen_date: row.first_seen_date,
       last_seen_date: row.last_seen_date,
       user_notes: row.user_notes || "",
+      user_verdict: row.user_verdict || null,
+      user_verdict_reason: row.user_verdict_reason || "",
+      user_verdict_at: row.user_verdict_at || null,
     };
   }
 
