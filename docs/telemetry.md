@@ -15,7 +15,7 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `link_clicked` | `{url, section}` | Event delegation globale `a[target="_blank"]` dans `app.jsx` |
 | `pipeline_triggered` | `{pipeline, mode}` | `cockpit/panel-jarvis.jsx` avant `jarvisSend()` |
 | `error_shown` | `{context, message}` | Wrapper `showError()` dans `cockpit/lib/` |
-| `profile_field_saved` | `{key}` | `cockpit/panel-profile.jsx` après PATCH |
+| `profile_field_saved` | `{key}` | `cockpit/panel-profile.jsx` après PATCH + `cockpit/panel-jobs-radar.jsx::JrCalibrage` (édition de job_pref_rules) |
 | `profile_payload_copied` | `{size}` | `cockpit/panel-profile.jsx` export |
 | `skill_radar_bumped` | `{axis, delta}` | `cockpit/panel-radar.jsx` après bump manuel |
 | `challenge_completed` | `{challenge_id, mode}` | `cockpit/panel-challenges.jsx` post-submit |

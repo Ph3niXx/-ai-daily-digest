@@ -613,6 +613,8 @@ function JrCalibrage() {
         window.PROFILE_DATA._values = { ...window.PROFILE_DATA._values, job_pref_rules: draft };
       }
       if (window.track) window.track("profile_field_saved", { key: "job_pref_rules" });
+      // setEditing(false) déclenche le re-render qui relit `rules` depuis le
+      // PROFILE_DATA fraîchement muté ci-dessus (pas de state local pour rules).
       setEditing(false);
     } catch (e) {
       alert("Échec de la sauvegarde : " + e.message);
@@ -623,7 +625,7 @@ function JrCalibrage() {
 
   return (
     <section className="jr-calib">
-      <button className="jr-calib-head" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+      <button className="jr-calib-head" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-controls="jr-calib-body">
         <span className="jr-calib-kicker">
           <Icon name="sliders" size={13} stroke={2} />
           Calibrage · ce que le radar a compris de tes goûts
@@ -632,7 +634,7 @@ function JrCalibrage() {
       </button>
 
       {open && (
-        <div className="jr-calib-body">
+        <div className="jr-calib-body" id="jr-calib-body">
           <div className="jr-calib-block">
             <div className="jr-section-kicker">Tes règles <span className="jr-calib-lock">verrouillé</span></div>
             {!editing ? (
