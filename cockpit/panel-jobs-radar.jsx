@@ -11,7 +11,7 @@
 
 const { useState: useStateJr, useMemo: useMemoJr, useEffect: useEffectJr, useRef: useRefJr } = React;
 
-// ─── Supabase write (status + user_notes only — scan is source of truth elsewhere) ───
+// ─── Supabase write (user-editable fields: status, user_notes, user_verdict*) ───
 async function patchJobSupabase(id, patch) {
   const safe = {};
   if ("status" in patch) safe.status = patch.status;
@@ -168,10 +168,10 @@ function JrVote({ offer, onVote, compact = false }) {
   const clickThumb = (v) => {
     if (verdict === v) {
       onVote(offer.id, { user_verdict: null, user_verdict_reason: null, user_verdict_at: null });
-      setExpanded(false); setPrecise(false);
+      setExpanded(false); setPrecise(false); setDraft("");
     } else {
-      onVote(offer.id, { user_verdict: v, user_verdict_at: new Date().toISOString() }, v === "up" ? "Noté 👍" : "Noté 👎");
-      setExpanded(true);
+      onVote(offer.id, { user_verdict: v, user_verdict_reason: null, user_verdict_at: new Date().toISOString() }, v === "up" ? "Noté 👍" : "Noté 👎");
+      setExpanded(true); setPrecise(false); setDraft("");
     }
   };
   const pickReason = (r) => {
@@ -201,7 +201,9 @@ function JrVote({ offer, onVote, compact = false }) {
           <Icon name="thumbs_down" size={compact ? 13 : 15} stroke={2} />
         </button>
         {verdict && (
-          <button className="jr-vote-why" onClick={(e) => { e.stopPropagation(); setExpanded(x => !x); }}>
+          <button className="jr-vote-why" onClick={(e) => { e.stopPropagation(); setExpanded(x => !x); }}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Masquer les raisons" : "Préciser la raison"}>
             {currentChip ? currentChip : "pourquoi ?"}
           </button>
         )}
