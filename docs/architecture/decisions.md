@@ -86,6 +86,12 @@ Format court : **Contexte** (pourquoi se pose la question) → **Décision** (ce
 - **Décision** : budget mensuel hard à 3 € (Claude Haiku weekly + Jarvis cloud occasionnel). `CostTracker` dans `weekly_analysis.py` arrête le pipeline si le budget hebdo dépasse 1 $. Panel Stacks agrège les coûts réels + projection 7j.
 - **Conséquences** : les analyses hebdo peuvent s'arrêter avant d'être complètes certains runs ; on est forcé à écrire des prompts compacts ; Gemini free tier reste la cheville ouvrière.
 
+## ADR-16 · 2026-05-21 · Calibrage Jobs Radar par feedback utilisateur
+
+- **Contexte** : le scoring Cowork (0-10) est calculé sans retour utilisateur — après 2 mois d'usage, le radar remonte des offres systématiquement mal scorées (trop junior, mauvais secteur). On veut un signal de calibrage sans créer un nouveau pipeline.
+- **Décision** : signal 👍/👎 + raison persisté sur 3 nouvelles colonnes de la table `jobs` (`user_verdict` text, `user_verdict_reason` text, `user_verdict_at` timestamptz — migration 014, `sql/014_jobs_feedback.sql`). Héritage du verdict sur republication LinkedIn dans la même fenêtre 180j (extension du trigger `jobs_inherit_user_status`). Préférences utilisateur découpées en deux clés `user_profile` : `job_pref_rules` (règles verouillées par l'utilisateur, non écrasables) et `job_pref_observed` (profil inféré et maintenu par la routine Cowork à chaque run). La synthèse feedback → ajustement score s'exécute à l'intérieur du run Cowork quotidien existant, sans nouveau pipeline. Pas de second score : le verdict ajuste directement `score_total` au prochain scan. Effet asynchrone : un vote aujourd'hui influe sur le scan du lendemain.
+- **Conséquences** : trois colonnes nullable sur `jobs` (whitelist front élargie) ; routine Cowork versionnée à mettre à jour (`docs/cowork-routines/jobs-radar.md`) pour lire `job_pref_rules` + `job_pref_observed` + les verdicts récents avant scoring ; `user_profile` gagne deux clés JSONB structurées à documenter dans la spec profil ; fenêtre d'héritage passée de 30j (archived) à 180j pour couvrir les verdicts.
+
 ## ADR-15 · 2026-Q2 · Maintenance archi versionnée avec CI arch-drift
 
 - **Contexte** : la doc archi dérive toujours plus vite que le code. On ne veut pas reproduire l'erreur des specs onglets.

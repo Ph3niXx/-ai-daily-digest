@@ -128,8 +128,11 @@ panels:
 
   - id: jobs
     file: cockpit/panel-jobs-radar.jsx
-    reads: [jobs, job_scans]
-    writes: [jobs]  # status + user_notes (whitelist)
+    reads:
+      - jobs
+      - job_scans
+      - user_profile  # job_pref_rules (règles utilisateur verrouillées), job_pref_observed (profil inféré par Cowork) — Lot 2/3
+    writes: [jobs]  # status + user_notes + user_verdict + user_verdict_reason + user_verdict_at (whitelist)
     realtime:
       channel: jobs_radar_sub
       tables: [jobs, job_scans]
@@ -303,7 +306,7 @@ tables:
 
   - name: jobs
     owner_pipeline: cowork_external
-    rls: public  # using(true), update whitelist status + user_notes
+    rls: public  # using(true), update whitelist status + user_notes + user_verdict*
     domain: business
 
   - name: learning_recommendations
