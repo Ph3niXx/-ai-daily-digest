@@ -16,6 +16,9 @@ async function patchJobSupabase(id, patch) {
   const safe = {};
   if ("status" in patch) safe.status = patch.status;
   if ("user_notes" in patch) safe.user_notes = patch.user_notes;
+  if ("user_verdict" in patch) safe.user_verdict = patch.user_verdict;
+  if ("user_verdict_reason" in patch) safe.user_verdict_reason = patch.user_verdict_reason;
+  if ("user_verdict_at" in patch) safe.user_verdict_at = patch.user_verdict_at;
   if (!Object.keys(safe).length) return;
   if (!window.sb || !window.sb.patchJSON || !window.SUPABASE_URL) return;
   const url = window.SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(id);
@@ -617,15 +620,22 @@ function PanelJobsRadar({ data, onNavigate }) {
     toastTimer.current = setTimeout(() => setToast(null), 2400);
   };
 
-  const updateJob = (id, patch, toastMsg) => {
+  // Mécanique commune : optimistic state + mirror global + PATCH + toast.
+  const persistJobPatch = (id, patch, toastMsg) => {
     setOffers(prev => prev.map(o => o.id === id ? { ...o, ...patch } : o));
-    // Mirror the change into the global so other views / re-mounts see it
     try {
       if (window.JOBS_DATA && Array.isArray(window.JOBS_DATA.offers)) {
         const idx = window.JOBS_DATA.offers.findIndex(o => o.id === id);
         if (idx >= 0) window.JOBS_DATA.offers[idx] = { ...window.JOBS_DATA.offers[idx], ...patch };
       }
     } catch {}
+    patchJobSupabase(id, patch)
+      .then(() => { if (toastMsg) showToast(toastMsg, "ok"); })
+      .catch(() => showToast("Erreur de sync — changement local uniquement", "error"));
+  };
+
+  // status / notes — event jobs_action (inchangé).
+  const updateJob = (id, patch, toastMsg) => {
     try {
       const key = Object.keys(patch)[0];
       window.track && window.track("jobs_action", {
@@ -634,9 +644,23 @@ function PanelJobsRadar({ data, onNavigate }) {
         value: String(patch[key] ?? "").slice(0, 64),
       });
     } catch {}
-    patchJobSupabase(id, patch)
-      .then(() => { if (toastMsg) showToast(toastMsg, "ok"); })
-      .catch(() => showToast("Erreur de sync — changement local uniquement", "error"));
+    persistJobPatch(id, patch, toastMsg);
+  };
+
+  // vote 👍/👎 (+ raison) — event jobs_feedback, porte le score au moment du vote.
+  const voteJob = (id, patch, toastMsg) => {
+    const offer = offers.find(o => o.id === id);
+    const verdict = ("user_verdict" in patch) ? patch.user_verdict : (offer && offer.user_verdict);
+    const reason  = ("user_verdict_reason" in patch) ? patch.user_verdict_reason : (offer && offer.user_verdict_reason);
+    try {
+      window.track && window.track("jobs_feedback", {
+        verdict: String(verdict ?? "").slice(0, 8),
+        reason: String(reason ?? "").slice(0, 64),
+        job_id: String(id).slice(0, 64),
+        score_at_vote: offer ? offer.score_total : null,
+      });
+    } catch {}
+    persistJobPatch(id, patch, toastMsg);
   };
 
   const applyToJob = (offer) => {

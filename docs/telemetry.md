@@ -22,6 +22,7 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `idea_moved` | `{id, from_status, to_status}` | `cockpit/panel-ideas.jsx` drag&drop |
 | `wiki_shared` | `{slug}` | `cockpit/panel-wiki.jsx` partage |
 | `jobs_action` | `{action, job_id}` | `cockpit/panel-jobs-radar.jsx` toggle |
+| `jobs_feedback` | `{verdict, reason, job_id, score_at_vote}` | `cockpit/panel-jobs-radar.jsx::voteJob()` — 👍/👎 + raison. `score_at_vote` mesure le désaccord avec le score (doit décroître). |
 | `history_pin_toggled` | `{iso, pinned}` | `cockpit/panel-history.jsx::handleTogglePin()` |
 | `review_action` | `{action, id}` | `cockpit/panel-review.jsx::markReadAndAdvance()` |
 | `hero_delta_shown` | `{newSinceVisit, hours}` | `cockpit/home.jsx` useEffect quand le hero bascule en mode "nouveautés depuis Xh" |
