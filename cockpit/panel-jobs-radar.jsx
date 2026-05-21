@@ -26,6 +26,20 @@ async function patchJobSupabase(id, patch) {
   if (!r.ok) throw new Error("PATCH " + r.status);
 }
 
+// ─── Upsert d'une clé user_profile (réutilise le pattern du panel Profil) ───
+async function upsertUserProfile(key, value) {
+  if (!window.sb || !window.SUPABASE_URL) throw new Error("supabase indisponible");
+  const url = window.SUPABASE_URL + "/rest/v1/user_profile?on_conflict=key";
+  const body = [{ key, value, updated_at: new Date().toISOString() }];
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { ...window.sb.headers, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=representation" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error("upsert " + res.status);
+  return res.json();
+}
+
 const CAT_LABEL = {
   produit: "Produit",
   rte:     "RTE",
@@ -581,6 +595,78 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
   );
 }
 
+// ─── Encart calibrage — profil de préférences (rules éditable / observed RO) ───
+function JrCalibrage() {
+  const PF = (window.PROFILE_DATA && window.PROFILE_DATA._values) || {};
+  const [open, setOpen]       = useStateJr(false);
+  const [editing, setEditing] = useStateJr(false);
+  const [draft, setDraft]     = useStateJr(PF.job_pref_rules || "");
+  const [saving, setSaving]   = useStateJr(false);
+  const observed = PF.job_pref_observed || "";
+  const rules = PF.job_pref_rules || "";
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await upsertUserProfile("job_pref_rules", draft);
+      if (window.PROFILE_DATA) {
+        window.PROFILE_DATA._values = { ...window.PROFILE_DATA._values, job_pref_rules: draft };
+      }
+      if (window.track) window.track("profile_field_saved", { key: "job_pref_rules" });
+      setEditing(false);
+    } catch (e) {
+      alert("Échec de la sauvegarde : " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="jr-calib">
+      <button className="jr-calib-head" onClick={() => setOpen(o => !o)} aria-expanded={open}>
+        <span className="jr-calib-kicker">
+          <Icon name="sliders" size={13} stroke={2} />
+          Calibrage · ce que le radar a compris de tes goûts
+        </span>
+        <Icon name={open ? "chevron_up" : "chevron_down"} size={16} stroke={2} />
+      </button>
+
+      {open && (
+        <div className="jr-calib-body">
+          <div className="jr-calib-block">
+            <div className="jr-section-kicker">Tes règles <span className="jr-calib-lock">verrouillé</span></div>
+            {!editing ? (
+              <div className="jr-calib-rules">
+                <p className="jr-calib-text">{rules || "Aucune règle. Écris ici ce que tu cherches (ou évites) — le scan en tiendra compte dès demain."}</p>
+                <button className="jr-btn jr-btn--ghost jr-btn--sm" onClick={() => { setDraft(rules); setEditing(true); }}>
+                  {rules ? "Modifier" : "Écrire mes règles"}
+                </button>
+              </div>
+            ) : (
+              <div className="jr-calib-editor">
+                <textarea className="jr-calib-input" rows={4} autoFocus value={draft}
+                  placeholder="Ex : je ne veux pas de RTE en grand groupe. Je priorise l'AI tooling early-stage. J'ignore < 95k."
+                  onChange={(e) => setDraft(e.target.value)} />
+                <div className="jr-calib-actions">
+                  <button className="jr-btn jr-btn--ghost jr-btn--sm" onClick={() => setEditing(false)} disabled={saving}>Annuler</button>
+                  <button className="jr-btn jr-btn--primary jr-btn--sm" onClick={save} disabled={saving}>{saving ? "…" : "Enregistrer"}</button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="jr-calib-block">
+            <div className="jr-section-kicker">Observé par le radar <span className="jr-calib-auto">auto</span></div>
+            <p className="jr-calib-text jr-calib-text--observed">
+              {observed || "Pas encore assez de votes pour inférer un profil. Note quelques offres 👍/👎 — le radar synthétise après quelques retours."}
+            </p>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 // ─── Scan banner (tendances, signal CV, actions du jour) ───
 function ScanBanner({ scan }) {
   const { volumes_7d, ratios_category } = scan.tendances;
@@ -856,6 +942,9 @@ function PanelJobsRadar({ data, onNavigate }) {
 
       {/* ─── SCAN BANNER ─── */}
       <ScanBanner scan={scan} />
+
+      {/* ─── CALIBRAGE ─── */}
+      <JrCalibrage />
 
       {/* ─── HOT LEADS HERO ─── */}
       {hotLeads.length > 0 && (

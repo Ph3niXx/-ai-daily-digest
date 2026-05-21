@@ -58,6 +58,7 @@ const ICON_PATHS = {
   flag: <><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22V3"/></>,
   thumbs_up: <><path d="M7 10v11M3 11l4-1v10H3zM11 10V7a3 3 0 0 1 3-3l1 3-1.5 3H18a2 2 0 0 1 2 2l-1 7a2 2 0 0 1-2 2h-6a2 2 0 0 1-2-2v-9z"/></>,
   thumbs_down: <><path d="M17 14V3m4 10l-4 1V4h4zM13 14v3a3 3 0 0 1-3 3l-1-3 1.5-3H6a2 2 0 0 1-2-2l1-7a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v9z"/></>,
+  sliders: <><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></>,
 };
 
 function Icon({ name, size = 16, stroke = 1.75, style, className }) {
