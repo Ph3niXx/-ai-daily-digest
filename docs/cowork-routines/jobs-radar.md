@@ -356,6 +356,14 @@ Mapping des champs :
   à 2, status = 'new' quand même, company = nom du cabinet + flag
   implicite dans company_stage = 'grand_groupe' par défaut
 
+DÉTECTION CLÔTURE : quand tu fetch la page d'une offre (scoring d'une
+nouvelle, ou re-fetch d'une offre revue), si la page affiche « Les
+candidatures ne sont plus acceptées » / « No longer accepting
+applications », pose :
+   UPDATE jobs SET closed_at = now()
+   WHERE linkedin_job_id = X AND closed_at IS NULL;
+Ne touche pas status / user_notes / user_verdict*.
+
 ÉTAPE 6 — INSERT dans job_scans
 
 Après traitement de toutes les offres, INSERT une ligne dans
@@ -431,6 +439,20 @@ rubric_justif. Ne touche PAS status, user_notes, user_verdict*,
 intel. Borne-toi au stock actif (jamais archived/snoozed/applied)
 pour rester dans le budget temps (15 min).
 
+ÉTAPE 8 — Passe de fraîcheur (offres clôturées)
+
+Re-vérifie un lot borné d'offres actives pour repérer les clôturées
+qui ont disparu de la recherche :
+   SELECT id, url, linkedin_job_id FROM jobs
+   WHERE closed_at IS NULL AND status IN ('new','to_apply')
+   ORDER BY last_seen_date ASC
+   LIMIT 25;
+Pour chaque URL, visite la page ; si « ne sont plus acceptées » →
+   UPDATE jobs SET closed_at = now() WHERE id = <id>;
+Borne à 25/run pour tenir le budget 15 min (les plus anciennes
+d'abord = les plus susceptibles d'être mortes). Si le run est déjà
+long, réduire ce lot.
+
 GARDE-FOUS D'EXÉCUTION
 
 - **Budget temps total** : 15 min max. Si > 15 min sur le scan
@@ -479,6 +501,7 @@ Supabase.
 
 ## Dernière MAJ
 
+2026-05-21 — détection des offres clôturées : `closed_at` posée à la lecture de "ne sont plus acceptées" (opportuniste Étape 5 + passe de fraîcheur Étape 8, 25 actives les plus anciennes/run).
 2026-05-21 — calibrage par feedback : Étape 0 (synthèse job_pref_observed depuis les votes user_verdict + signaux implicites, sans jamais toucher job_pref_rules), injection du profil dans le scoring (Étape 3), recalibrage hebdo du stock actif (Étape 7, dimanche). Voir docs/superpowers/plans/2026-05-21-jobs-radar-calibrage-feedback.md.
 
 2026-04-30 — ajout d'un safety net DB (trigger `jobs_inherit_user_status`, migration `sql/013_jobs_inherit_status.sql`) qui hérite automatiquement du `status` archived/snoozed quand LinkedIn republie une offre déjà décidée. Documenté dans les garde-fous d'exécution. Le prompt Cowork lui-même n'a pas besoin d'être touché — l'UPSERT actuel reste correct, le trigger se déclenche en amont.
