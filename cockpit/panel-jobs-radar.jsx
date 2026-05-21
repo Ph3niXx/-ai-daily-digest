@@ -73,6 +73,8 @@ function scoreBand(score) {
   if (score >= 5) return "mid";
   return "low";
 }
+// Une offre clôturée est "morte" et masquée — sauf si déjà postulée (reste dans le pipeline applied).
+function jrIsDead(o) { return !!o.closed_at && o.status !== "applied"; }
 
 function dayLabel(n) {
   if (n === 0) return "aujourd'hui";
@@ -913,7 +915,7 @@ function PanelJobsRadar({ data, onNavigate }) {
 
   // Split hot leads vs rest
   const hotLeads = useMemoJr(() =>
-    offers.filter(o => o.score_total >= 7 && o.status !== "archived" && o.status !== "snoozed")
+    offers.filter(o => o.score_total >= 7 && o.status !== "archived" && o.status !== "snoozed" && !jrIsDead(o))
           .sort((a, b) => b.score_total - a.score_total),
   [offers]);
 
@@ -929,10 +931,16 @@ function PanelJobsRadar({ data, onNavigate }) {
     if (catFilter !== "all") {
       arr = arr.filter(o => o.role_category === catFilter);
     }
-    if (statusFilter === "active") {
-      arr = arr.filter(o => o.status === "new" || o.status === "to_apply" || o.status === "applied");
-    } else if (statusFilter !== "all") {
-      arr = arr.filter(o => o.status === statusFilter);
+    if (statusFilter === "closed") {
+      arr = arr.filter(o => !!o.closed_at);
+    } else {
+      // Masque les clôturées (sauf applied) de toutes les autres vues.
+      arr = arr.filter(o => !jrIsDead(o));
+      if (statusFilter === "active") {
+        arr = arr.filter(o => o.status === "new" || o.status === "to_apply" || o.status === "applied");
+      } else if (statusFilter !== "all") {
+        arr = arr.filter(o => o.status === statusFilter);
+      }
     }
     if (query.trim()) {
       const q = query.trim().toLowerCase();
@@ -954,6 +962,7 @@ function PanelJobsRadar({ data, onNavigate }) {
   // Stats line
   const totalCount = offers.length;
   const newCount = offers.filter(o => o.status === "new").length;
+  const closedCount = offers.filter(jrIsDead).length;
 
   return (
     <div className="panel panel-jobs-radar">
@@ -967,6 +976,10 @@ function PanelJobsRadar({ data, onNavigate }) {
             <span><strong>{hotLeads.length}</strong> hot leads</span>
             <span className="jr-sep">·</span>
             <span><strong>{totalCount}</strong> au total dans le radar</span>
+            {closedCount > 0 && (<>
+              <span className="jr-sep">·</span>
+              <span><strong>{closedCount}</strong> clôturée{closedCount > 1 ? "s" : ""} masquée{closedCount > 1 ? "s" : ""}</span>
+            </>)}
           </div>
         </div>
         <h1 className="jr-title">
@@ -1049,6 +1062,7 @@ function PanelJobsRadar({ data, onNavigate }) {
                 { id: "new",      label: "Nouvelles" },
                 { id: "to_apply", label: "À postuler" },
                 { id: "applied",  label: "Candidaté" },
+                { id: "closed",   label: "Clôturées" },
                 { id: "all",      label: "Tout" },
               ]}
             />
