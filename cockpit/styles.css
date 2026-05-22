@@ -57,52 +57,6 @@ select:focus-visible {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   VARIANT SWITCHER (top bar)
-   ═══════════════════════════════════════════════════════════════ */
-.variant-bar {
-  position: sticky; top: 0; z-index: 100;
-  display: flex; align-items: center; gap: 18px;
-  padding: 10px 20px;
-  background: #0E0E10;
-  color: #F4F4F1;
-  border-bottom: 1px solid #1F1F22;
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: var(--text-sm);
-}
-.variant-bar-label {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  color: #7B7B80;
-}
-.variant-btns { display: flex; gap: 6px; }
-.variant-btn {
-  display: flex; align-items: center; gap: 8px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: transparent;
-  color: #A8A8AD;
-  font-size: var(--text-sm); font-weight: 500;
-  border: 1px solid #2A2A2E;
-  transition: all 120ms;
-}
-.variant-btn:hover { color: #F4F4F1; border-color: #3F3F44; }
-.variant-btn.is-active {
-  background: #F4F4F1; color: #0E0E10;
-  border-color: #F4F4F1;
-}
-.variant-btn-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--vbdot, #888);
-}
-.variant-btn-sub {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: var(--text-2xs); opacity: 0.6;
-}
-.variant-bar-meta { margin-left: auto; color: #7B7B80; font-family: 'JetBrains Mono', monospace; font-size: var(--text-2xs); letter-spacing: 0.06em; }
-
-/* ═══════════════════════════════════════════════════════════════
    APP SHELL (sidebar + main)
    ═══════════════════════════════════════════════════════════════ */
 .app {
@@ -1412,6 +1366,8 @@ select:focus-visible {
   transition: all 120ms;
 }
 .card-action:hover { background: var(--bg2); color: var(--tx); border-color: var(--bd2); }
+.card-action:disabled { opacity: 0.4; cursor: not-allowed; }
+.card-action:disabled:hover { background: var(--bg2); color: var(--tx2); border-color: var(--bd); }
 .is-read .card-action { background: var(--positive-tint); border-color: var(--positive); color: var(--positive); }
 
 .top-card .top-actions { opacity: 0.55; transition: opacity 120ms; }

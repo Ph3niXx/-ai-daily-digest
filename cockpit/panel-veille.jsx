@@ -595,13 +595,13 @@ function PanelVeille({ data, onNavigate, corpus = "VEILLE_DATA", title = "Veille
                   </div>
                 </div>
                 <div className="vl-feed-actions-col" onClick={(e) => e.stopPropagation()}>
-                  <button className="vl-iconbtn" title={isRead ? "Marquer non-lu" : "Marquer lu"} onClick={() => markRead(f.id)}>
+                  <button className="vl-iconbtn" aria-label={isRead ? "Marquer non-lu" : "Marquer lu"} title={isRead ? "Marquer non-lu" : "Marquer lu"} onClick={() => markRead(f.id)}>
                     <Icon name={isRead ? "envelope" : "check"} size={13} stroke={2}/>
                   </button>
-                  <button className="vl-iconbtn" title="Archiver" onClick={() => archive(f.id)}>
+                  <button className="vl-iconbtn" aria-label="Archiver" title="Archiver" onClick={() => archive(f.id)}>
                     <Icon name="archive" size={13} stroke={2}/>
                   </button>
-                  <button className="vl-iconbtn" title="Ouvrir l'article" onClick={openArticle}>
+                  <button className="vl-iconbtn" aria-label="Ouvrir l'article" title="Ouvrir l'article" onClick={openArticle}>
                     <Icon name="arrow_right" size={13} stroke={2}/>
                   </button>
                 </div>

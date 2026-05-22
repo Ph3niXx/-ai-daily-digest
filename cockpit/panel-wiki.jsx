@@ -92,7 +92,7 @@ function PanelWiki({ data, onNavigate }) {
             autoFocus
           />
           {query && (
-            <button className="wiki-search-clear" onClick={() => setQuery("")}>×</button>
+            <button className="wiki-search-clear" onClick={() => setQuery("")} aria-label="Effacer la recherche" title="Effacer">×</button>
           )}
           <kbd className="wiki-search-kbd">⌘K</kbd>
         </div>

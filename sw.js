@@ -2,7 +2,7 @@
 // Cache-first for static shell (cockpit/* + CDN libs pinned by SRI),
 // network-first for Supabase/API calls — so the app stays installable
 // and fast offline while always preferring fresh data when online.
-const CACHE = "cockpit-v41";
+const CACHE = "cockpit-v42";
 
 const STATIC = [
   "/",
@@ -29,7 +29,7 @@ const STATIC = [
   "/cockpit/data-veille.js?v=2",
   "/cockpit/data-wiki.js?v=1",
   "/cockpit/data.js",
-  "/cockpit/home.jsx?v=5",
+  "/cockpit/home.jsx?v=6",
   "/cockpit/icons.jsx?v=3",
   "/cockpit/lib/auth.js?v=2",
   "/cockpit/lib/bootstrap.js?v=2",
@@ -46,7 +46,7 @@ const STATIC = [
   "/cockpit/panel-history.jsx?v=3",
   "/cockpit/panel-ideas.jsx?v=5",
   "/cockpit/panel-jarvis-lab.jsx?v=7",
-  "/cockpit/panel-jarvis.jsx?v=3",
+  "/cockpit/panel-jarvis.jsx?v=4",
   "/cockpit/panel-jobs-radar.jsx?v=4",
   "/cockpit/panel-musique.jsx?v=4",
   "/cockpit/panel-opportunities.jsx?v=4",
@@ -55,13 +55,13 @@ const STATIC = [
   "/cockpit/panel-recos.jsx?v=4",
   "/cockpit/panel-review.jsx?v=1",
   "/cockpit/panel-search.jsx?v=3",
-  "/cockpit/panel-signals.jsx?v=8",
+  "/cockpit/panel-signals.jsx?v=9",
   "/cockpit/panel-stacks.jsx?v=2",
   "/cockpit/panel-top.jsx",
   "/cockpit/panel-veille-outils.jsx?v=2",
-  "/cockpit/panel-veille.jsx?v=10",
+  "/cockpit/panel-veille.jsx?v=11",
   "/cockpit/panel-week.jsx",
-  "/cockpit/panel-wiki.jsx?v=4",
+  "/cockpit/panel-wiki.jsx?v=5",
   "/cockpit/sidebar.jsx?v=7",
   "/cockpit/styles-challenges.css?v=5",
   "/cockpit/styles-evening.css?v=1",
@@ -70,7 +70,7 @@ const STATIC = [
   "/cockpit/styles-history.css?v=1",
   "/cockpit/styles-ideas.css?v=1",
   "/cockpit/styles-jarvis-lab.css?v=11",
-  "/cockpit/styles-jarvis.css?v=6",
+  "/cockpit/styles-jarvis.css?v=7",
   "/cockpit/styles-jobs-radar.css?v=5",
   "/cockpit/styles-mobile.css?v=1",
   "/cockpit/styles-musique.css?v=2",
@@ -82,7 +82,7 @@ const STATIC = [
   "/cockpit/styles-stacks.css?v=3",
   "/cockpit/styles-veille-outils.css?v=3",
   "/cockpit/styles-wiki.css?v=6",
-  "/cockpit/styles.css?v=30",
+  "/cockpit/styles.css?v=31",
   "/cockpit/themes.js?v=2",
   "/index.html",
   "/manifest.json",
