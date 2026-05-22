@@ -296,7 +296,7 @@ function PanelMusique() {
         <div className="mz-kpi">
           <div className="mz-kpi-label">scrobbles · 7j</div>
           <div className="mz-kpi-value">{D.totals.last7.toLocaleString("fr-FR")}</div>
-          <div className="mz-kpi-sub"><span className="up">▲ +8%</span> vs 7j préc.</div>
+          <div className="mz-kpi-sub">~{Math.round(D.totals.last7 / 7)} / jour</div>
         </div>
         <div className="mz-kpi">
           <div className="mz-kpi-label">scrobbles · 30j</div>

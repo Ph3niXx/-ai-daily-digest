@@ -355,8 +355,8 @@ function KanbanView({ opps, onOpen, onTake, onPass }) {
 // ─── Timeline "fenêtres" View ────────────────────────────
 function TimelineView({ opps, onOpen }) {
   // 6 months, starting today
-  const today = new Date("2026-04-21");
-  const monthCount = 9; // avril → décembre
+  const today = new Date();
+  const monthCount = 9; // horizon glissant de 9 mois à partir du mois courant
   const months = [];
   for (let i = 0; i < monthCount; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
