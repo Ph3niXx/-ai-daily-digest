@@ -1344,8 +1344,8 @@
   color: var(--tx2); cursor: pointer; transition: all .12s ease;
 }
 .jr-vote-btn:hover { color: var(--tx); border-color: var(--tx2); }
-.jr-vote-btn.is-up   { background: var(--positive-tint, rgba(84,201,138,.14)); border-color: var(--positive, #54c98a); color: var(--positive, #54c98a); }
-.jr-vote-btn.is-down { background: var(--negative-tint, rgba(224,113,111,.13)); border-color: var(--negative, #e0716f); color: var(--negative, #e0716f); }
+.jr-vote-btn.is-up   { background: var(--positive-tint); border-color: var(--positive); color: var(--positive); }
+.jr-vote-btn.is-down { background: var(--alert-tint); border-color: var(--alert); color: var(--alert); }
 .jr-vote--compact .jr-vote-btn { width: 29px; height: 29px; }
 
 .jr-vote-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; }

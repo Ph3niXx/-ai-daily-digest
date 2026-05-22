@@ -1000,7 +1000,7 @@ function PanelIdeas({ data, onNavigate }) {
         {captureMsg && (
           <span style={{
             fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.04em",
-            color: captureMsg.kind === "ok" ? "var(--positive)" : "var(--negative, #b3491a)"
+            color: captureMsg.kind === "ok" ? "var(--positive)" : "var(--alert)"
           }}>
             {captureMsg.text}
           </span>

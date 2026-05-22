@@ -163,7 +163,7 @@
 }
 
 .jl-node.is-selected .jl-node-dot {
-  box-shadow: 0 0 0 4px rgba(0, 255, 157, 0.18);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--jl-accent) 18%, transparent);
 }
 .jl-node.is-selected .jl-node-label {
   color: var(--jl-text-max);
@@ -185,8 +185,8 @@
 }
 
 @keyframes jl-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 255, 157, 0.4); }
-  50%      { box-shadow: 0 0 0 6px rgba(0, 255, 157, 0); }
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--jl-accent) 40%, transparent); }
+  50%      { box-shadow: 0 0 0 6px transparent; }
 }
 
 /* ── Résumé phase sélectionnée ──────────────────────── */
@@ -768,7 +768,7 @@
   outline-offset: 2px;
 }
 .jl-tab-card[data-frequency="daily"]    { border-left: 2px solid var(--jl-accent); }
-.jl-tab-card[data-frequency="weekly"]   { border-left: 2px solid #8a74ff; }
+.jl-tab-card[data-frequency="weekly"]   { border-left: 2px solid var(--brand-ink); }
 .jl-tab-card[data-frequency="realtime"] { border-left: 2px solid var(--jl-text-strong); }
 .jl-tab-card[data-frequency="manual"]   { border-left: 2px solid var(--jl-text-mute); }
 .jl-tab-card[data-frequency="mixed"]    { border-left: 2px solid var(--jl-warning); }
@@ -864,7 +864,7 @@
 .jl-tab-open:hover {
   color: var(--jl-accent);
   border-color: var(--jl-accent);
-  background: rgba(0, 255, 157, 0.05);
+  background: color-mix(in srgb, var(--jl-accent) 5%, transparent);
 }
 .jl-tab-open:focus-visible {
   outline: 1px solid var(--jl-accent);
@@ -1076,11 +1076,11 @@
 }
 .jl-spec-badge--documented {
   color: var(--jl-accent);
-  border-color: rgba(0, 255, 157, 0.3);
+  border-color: color-mix(in srgb, var(--jl-accent) 30%, transparent);
 }
 .jl-spec-badge--stub {
   color: var(--jl-warning);
-  border-color: rgba(255, 184, 0, 0.35);
+  border-color: color-mix(in srgb, var(--jl-warning) 35%, transparent);
 }
 .jl-spec-badge--scope { color: var(--jl-text-strong); }
 .jl-specs-doc-date {
@@ -1103,7 +1103,7 @@
   transition: background .12s ease;
   white-space: nowrap;
 }
-.jl-specs-doc-open:hover { background: rgba(0, 255, 157, 0.1); }
+.jl-specs-doc-open:hover { background: color-mix(in srgb, var(--jl-accent) 10%, transparent); }
 .jl-specs-doc-open:focus-visible {
   outline: 1px solid var(--jl-accent);
   outline-offset: 2px;
@@ -1112,7 +1112,7 @@
 .jl-specs-doc-stub {
   padding: 20px 24px;
   border-left: 2px solid var(--jl-warning);
-  background: rgba(255, 184, 0, 0.05);
+  background: color-mix(in srgb, var(--jl-warning) 5%, transparent);
   color: var(--jl-text);
   font-size: 14px;
   line-height: 1.6;
@@ -1177,7 +1177,7 @@
 .jl-specs-doc-body a {
   color: var(--jl-accent);
   text-decoration: none;
-  border-bottom: 1px dotted rgba(0, 255, 157, 0.4);
+  border-bottom: 1px dotted color-mix(in srgb, var(--jl-accent) 40%, transparent);
 }
 .jl-specs-doc-body a:hover { border-bottom-style: solid; }
 .jl-specs-doc-body pre {
@@ -1202,7 +1202,7 @@
   margin: 14px 0;
   color: var(--jl-text);
   font-style: italic;
-  background: rgba(0, 255, 157, 0.04);
+  background: color-mix(in srgb, var(--jl-accent) 4%, transparent);
 }
 .jl-specs-doc-body blockquote p:last-child { margin-bottom: 0; }
 .jl-specs-doc-body table {
@@ -1236,12 +1236,12 @@
 /* Bloc "Limitations / TODO" — border-left accent orange doux pour attirer l'œil */
 .jl-specs-doc-body h2[id^="limitations"] {
   color: var(--jl-warning);
-  border-bottom-color: rgba(255, 184, 0, 0.35);
+  border-bottom-color: color-mix(in srgb, var(--jl-warning) 35%, transparent);
 }
 .jl-specs-doc-body h2[id^="limitations"] + ul {
   border-left: 2px solid var(--jl-warning);
   padding-left: 18px;
-  background: rgba(255, 184, 0, 0.04);
+  background: color-mix(in srgb, var(--jl-warning) 4%, transparent);
   padding-top: 10px;
   padding-bottom: 10px;
   margin-left: 0;
