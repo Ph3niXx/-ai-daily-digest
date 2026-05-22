@@ -578,6 +578,14 @@
   letter-spacing: 0.02em;
 }
 
+/* Split genres (table + camembert) — classe dédiée (ex-inline) pour rester
+   responsive ; replié en 1 colonne sur mobile via styles-mobile.css. */
+.gm-genre-split {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 36px;
+}
+
 /* Heatmap (reuse mz pattern) */
 .gm-heatmap-grid {
   display: grid;

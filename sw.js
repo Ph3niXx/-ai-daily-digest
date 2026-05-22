@@ -2,7 +2,7 @@
 // Cache-first for static shell (cockpit/* + CDN libs pinned by SRI),
 // network-first for Supabase/API calls — so the app stays installable
 // and fast offline while always preferring fresh data when online.
-const CACHE = "cockpit-v47";
+const CACHE = "cockpit-v48";
 
 const STATIC = [
   "/",
@@ -43,7 +43,7 @@ const STATIC = [
   "/cockpit/panel-challenges.jsx?v=5",
   "/cockpit/panel-evening.jsx?v=1",
   "/cockpit/panel-forme.jsx?v=4",
-  "/cockpit/panel-gaming.jsx?v=6",
+  "/cockpit/panel-gaming.jsx?v=7",
   "/cockpit/panel-history.jsx?v=4",
   "/cockpit/panel-ideas.jsx?v=7",
   "/cockpit/panel-jarvis-lab.jsx?v=7",
@@ -67,13 +67,13 @@ const STATIC = [
   "/cockpit/styles-challenges.css?v=5",
   "/cockpit/styles-evening.css?v=1",
   "/cockpit/styles-forme.css?v=2",
-  "/cockpit/styles-gaming.css?v=5",
+  "/cockpit/styles-gaming.css?v=6",
   "/cockpit/styles-history.css?v=1",
   "/cockpit/styles-ideas.css?v=2",
   "/cockpit/styles-jarvis-lab.css?v=11",
   "/cockpit/styles-jarvis.css?v=7",
   "/cockpit/styles-jobs-radar.css?v=5",
-  "/cockpit/styles-mobile.css?v=2",
+  "/cockpit/styles-mobile.css?v=3",
   "/cockpit/styles-musique.css?v=2",
   "/cockpit/styles-opportunities.css?v=5",
   "/cockpit/styles-profile.css?v=5",

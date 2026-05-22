@@ -434,7 +434,7 @@ function PanelGaming({ onNavigate }) {
             </div>
           ))}
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 36 }}>
+        <div className="gm-genre-split">
           <div className="gm-genre-table">
             {D.genres_30d.map((g) => (
               <div className="gm-genre-row" key={g.label}>
