@@ -165,6 +165,10 @@
 .reco-type--article { background: var(--bg2); color: var(--tx2); }
 .reco-type--video { background: oklch(92% 0.05 20); color: oklch(30% 0.08 20); border-color: oklch(80% 0.06 20); }
 .reco-type--course { background: oklch(92% 0.04 140); color: oklch(30% 0.08 140); border-color: oklch(80% 0.05 140); }
+/* Obsidian (sombre) : pastilles de type en fond sombre, teinte préservée */
+[data-theme="obsidian"] .reco-type--paper  { background: oklch(28% 0.05 40);  color: oklch(85% 0.12 40);  border-color: oklch(40% 0.06 40); }
+[data-theme="obsidian"] .reco-type--video  { background: oklch(28% 0.06 20);  color: oklch(85% 0.12 20);  border-color: oklch(40% 0.07 20); }
+[data-theme="obsidian"] .reco-type--course { background: oklch(28% 0.05 140); color: oklch(85% 0.12 140); border-color: oklch(40% 0.06 140); }
 
 .reco-sep { color: var(--tx3); opacity: 0.5; }
 .reco-source { color: var(--tx2); font-weight: 500; }

@@ -291,7 +291,7 @@
 .opp-match-ring--none { color: var(--tx3); }
 .opp-match-ring--low  { color: var(--tx2); }
 .opp-match-ring--mid  { color: var(--brand); }
-.opp-match-ring--high { color: var(--positive, #2f9e7a); }
+.opp-match-ring--high { color: var(--positive); }
 .opp-match-ring-inner {
   position: absolute; inset: 0;
   display: flex; flex-direction: column;
@@ -327,7 +327,7 @@
   font-weight: 500;
   border-radius: 4px;
 }
-.opp-status-badge--taken { background: var(--positive, #2f9e7a); color: #fff; }
+.opp-status-badge--taken { background: var(--positive); color: var(--bg); }
 .opp-status-badge--passed { background: var(--bg2); color: var(--tx2); text-decoration: line-through; }
 
 /* Bouton Restaurer du ledger */
@@ -429,7 +429,7 @@
 }
 .opp-comp-bar.is-filled--low { background: var(--positive); }
 .opp-comp-bar.is-filled--med { background: var(--neutral); }
-.opp-comp-bar.is-filled--high { background: #c57455; }
+.opp-comp-bar.is-filled--high { background: var(--neutral); }
 
 /* Window chip on card */
 .opp-card-window {
@@ -451,7 +451,7 @@
   font-weight: 400;
   line-height: 1.1;
 }
-.opp-card-window-val--closing { color: #c57455; }
+.opp-card-window-val--closing { color: var(--neutral); }
 .opp-card-window-val--getting { color: var(--neutral); }
 
 .opp-card-window-bar {
@@ -465,7 +465,7 @@
   position: absolute; inset: 0 auto 0 0;
   background: var(--tx);
 }
-.opp-card-window-bar-fill--closing { background: #c57455; }
+.opp-card-window-bar-fill--closing { background: var(--neutral); }
 .opp-card-window-bar-fill--getting { background: var(--neutral); }
 .opp-card-signals {
   display: flex; flex-wrap: wrap; gap: 4px;
@@ -588,7 +588,7 @@
   display: flex; flex-direction: column; gap: 10px;
   min-height: 300px;
 }
-.opp-kan-col--closing { border-color: #c57455; }
+.opp-kan-col--closing { border-color: var(--neutral); }
 .opp-kan-col-head { display: flex; flex-direction: column; gap: 4px; padding-bottom: 12px; border-bottom: 1px solid var(--bd); margin-bottom: 4px; }
 .opp-kan-col-kicker {
   font-family: var(--font-mono);
@@ -706,7 +706,7 @@
   transition: filter 120ms;
 }
 .opp-tl-bar--closing {
-  background: #c57455;
+  background: var(--neutral);
 }
 .opp-tl-bar--getting {
   background: var(--neutral);
@@ -758,7 +758,7 @@
 .opp-tl-legend-sw {
   width: 14px; height: 8px; border-radius: 2px;
 }
-.opp-tl-legend-sw--closing { background: #c57455; }
+.opp-tl-legend-sw--closing { background: var(--neutral); }
 .opp-tl-legend-sw--getting { background: var(--neutral); }
 .opp-tl-legend-sw--right   { background: var(--tx); }
 .opp-tl-legend-sw--perp    {

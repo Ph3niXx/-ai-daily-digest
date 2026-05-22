@@ -204,9 +204,9 @@ function MzHeatmap({ grid }) {
   const color = (v) => {
     if (v < 0.5) return "var(--bd)";
     const t = v / max;
-    // teinte brand (orange/brun) en 5 paliers
+    // teinte brand du thème en 5 paliers (tri-thème via color-mix)
     const alpha = 0.15 + t * 0.85;
-    return `rgba(168, 74, 34, ${alpha.toFixed(2)})`;
+    return `color-mix(in srgb, var(--brand) ${Math.round(alpha * 100)}%, transparent)`;
   };
   return (
     <div>
@@ -484,10 +484,10 @@ function PanelMusique() {
               moins
               <div className="mz-heatmap-scale">
                 <span style={{ background: "var(--bd)" }}></span>
-                <span style={{ background: "rgba(168, 74, 34, 0.25)" }}></span>
-                <span style={{ background: "rgba(168, 74, 34, 0.5)" }}></span>
-                <span style={{ background: "rgba(168, 74, 34, 0.75)" }}></span>
-                <span style={{ background: "rgba(168, 74, 34, 1)" }}></span>
+                <span style={{ background: "color-mix(in srgb, var(--brand) 25%, transparent)" }}></span>
+                <span style={{ background: "color-mix(in srgb, var(--brand) 50%, transparent)" }}></span>
+                <span style={{ background: "color-mix(in srgb, var(--brand) 75%, transparent)" }}></span>
+                <span style={{ background: "var(--brand)" }}></span>
               </div>
               plus
             </div>

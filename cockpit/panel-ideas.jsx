@@ -17,13 +17,6 @@ const STAGE_ORDER = ["seed", "incubating", "maturing", "ready_to_promote", "park
   promoted: "Promue",
   archived: "Archivée",
 };
-const CAT_COLOR = {
-  business: "#2f2a24",
-  side:     "#5a4634",
-  content:  "#8a6e4a",
-  jarvis:   "#3a4a3a",
-  life:     "#6a4a3a",
-};
 
 // Free-form label normalization: lowercase, strip diacritics + special chars.
 function normalizeLabel(s) {
@@ -246,7 +239,7 @@ function PipelineView({ ideas, stages, onOpen, onMoveStatus, pending }) {
                   onDragEnd={onDragEnd}
                   onClick={() => onOpen(i.id)}>
                   <div className="id-pipe-card-kicker">
-                    <span className="id-pipe-card-cat" style={{ background: CAT_COLOR[i.category] }} />
+                    <span className="id-pipe-card-cat" data-cat={i.category} />
                     <span>{i.category}</span>
                   </div>
                   <h4 className="id-pipe-card-title">{i.title}</h4>
