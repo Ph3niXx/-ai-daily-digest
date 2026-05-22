@@ -581,7 +581,7 @@ function PanelJarvis({ data, onNavigate }) {
 
   const handleForget = async (item) => {
     if (!window.sb || !window.SUPABASE_URL) return;
-    if (!confirm(`Oublier ce fait ?\n\n"${item.value}"`)) return;
+    if (!(await cockpitConfirm(`Oublier ce fait ?\n\n"${item.value}"`, { danger: true, confirmLabel: "Oublier" }))) return;
     setPendingFacts(p => ({ ...p, [item.id]: true }));
     // Optimistic remove
     const prevMem = memory;
@@ -599,7 +599,7 @@ function PanelJarvis({ data, onNavigate }) {
     } catch (e) {
       console.error("[jarvis] forget failed", e);
       setMemory(prevMem);
-      alert("Impossible d'oublier ce fait. Réessaie dans un instant.");
+      cockpitToast("Impossible d'oublier ce fait. Réessaie dans un instant.", { kind: "error" });
     } finally {
       setPendingFacts(p => {
         const n = { ...p }; delete n[item.id]; return n;
@@ -717,8 +717,8 @@ function PanelJarvis({ data, onNavigate }) {
               <span>Session · <code>{getJarvisSessionId().slice(0, 8)}…</code></span>
               <button
                 className="jv-settings-reset"
-                onClick={() => {
-                  if (!confirm("Démarrer une nouvelle session ? L'historique actuel reste en base, mais les prochaines réponses partiront d'un contexte vide.")) return;
+                onClick={async () => {
+                  if (!(await cockpitConfirm("Démarrer une nouvelle session ? L'historique actuel reste en base, mais les prochaines réponses partiront d'un contexte vide.", { confirmLabel: "Nouvelle session" }))) return;
                   try { localStorage.removeItem("jarvis-session-id"); } catch {}
                   setSettingsOpen(false);
                 }}

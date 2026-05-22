@@ -701,15 +701,15 @@ function PanelIdeas({ data, onNavigate }) {
 
   const handlePromote = async (id) => {
     if (pending[id]) return;
-    if (!confirm("Marquer cette idée comme promue en opportunité ? Elle sera taguée 'promoted' et tu pourras l'intégrer au panel Opportunités.")) return;
+    if (!(await cockpitConfirm("Marquer cette idée comme promue en opportunité ? Elle sera taguée 'promoted' et tu pourras l'intégrer au panel Opportunités.", { confirmLabel: "Promouvoir" }))) return;
     setPending(p => ({ ...p, [id]: true }));
     try {
       await patchIdea(id, { status: "promoted", updated_at: new Date().toISOString() });
       try { window.track && window.track("idea_promoted", { id }); } catch {}
-      alert("Idée taguée 'promoted'. Recharge le panel Opportunités pour l'y voir.");
+      cockpitToast("Idée taguée 'promoted'. Recharge le panel Opportunités pour l'y voir.", { kind: "success" });
     } catch (e) {
       console.error(e);
-      alert("Échec de la sauvegarde — réessaie.");
+      cockpitToast("Échec de la sauvegarde — réessaie.", { kind: "error" });
     } finally {
       setPending(p => { const n = { ...p }; delete n[id]; return n; });
     }
@@ -717,7 +717,7 @@ function PanelIdeas({ data, onNavigate }) {
 
   const handleArchive = async (id) => {
     if (pending[id]) return;
-    if (!confirm("Parquer cette idée ? Elle passera en statut 'parked' et sera filée dans la colonne parking du pipeline.")) return;
+    if (!(await cockpitConfirm("Parquer cette idée ? Elle passera en statut 'parked' et sera filée dans la colonne parking du pipeline.", { confirmLabel: "Parquer" }))) return;
     setPending(p => ({ ...p, [id]: true }));
     try {
       await patchIdea(id, { status: "parked", updated_at: new Date().toISOString() });
@@ -725,7 +725,7 @@ function PanelIdeas({ data, onNavigate }) {
       try { window.track && window.track("idea_archived", { id }); } catch {}
     } catch (e) {
       console.error(e);
-      alert("Échec de la sauvegarde — réessaie.");
+      cockpitToast("Échec de la sauvegarde — réessaie.", { kind: "error" });
     } finally {
       setPending(p => { const n = { ...p }; delete n[id]; return n; });
     }
@@ -910,7 +910,7 @@ function PanelIdeas({ data, onNavigate }) {
       setOpenId(newIdea.id);
     } catch (e) {
       console.error(e);
-      alert("Impossible d'ajouter la suggestion — réessaie.");
+      cockpitToast("Impossible d'ajouter la suggestion — réessaie.", { kind: "error" });
     }
   };
   const handleDismissSuggestion = (key) => {

@@ -518,7 +518,7 @@ Sors en markdown, je collerai le résultat comme entrée wiki.`;
     });
     setPersoPending(false);
     if (!saved) {
-      alert("Impossible de sauvegarder la note. Vérifie ta connexion Supabase.");
+      cockpitToast("Impossible de sauvegarder la note. Vérifie ta connexion Supabase.", { kind: "error" });
       return;
     }
     // Optimistic local insert so the panel shows it immediately.

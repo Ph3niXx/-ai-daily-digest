@@ -4610,6 +4610,99 @@ select:focus-visible {
    cockpit/styles-*.css. Plus besoin d'ajouter une garde dans
    chaque stylesheet — ce bloc s'applique en cascade.
    ────────────────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   DIALOGS PARTAGÉS — toast / confirm / prompt (cockpit/lib/dialog.js)
+   Remplacent alert/confirm/prompt natifs. Themés via tokens.
+   ═══════════════════════════════════════════════════════════════ */
+.ck-toast-root {
+  position: fixed; bottom: var(--space-5); right: var(--space-5);
+  z-index: 2000;
+  display: flex; flex-direction: column; gap: var(--space-2);
+  pointer-events: none;
+}
+.ck-toast {
+  pointer-events: auto;
+  max-width: 360px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--bd);
+  border-left: 3px solid var(--tx3);
+  background: var(--surface);
+  color: var(--tx);
+  font-size: var(--text-md);
+  line-height: 1.45;
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+  opacity: 0; transform: translateY(8px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.ck-toast.is-in { opacity: 1; transform: translateY(0); }
+.ck-toast--success { border-left-color: var(--positive); }
+.ck-toast--error   { border-left-color: var(--alert); }
+.ck-toast--info    { border-left-color: var(--brand); }
+
+.ck-dialog-overlay {
+  position: fixed; inset: 0; z-index: 2100;
+  display: flex; align-items: center; justify-content: center;
+  padding: var(--space-5);
+  background: color-mix(in srgb, var(--tx) 38%, transparent);
+  opacity: 0;
+  transition: opacity 180ms ease;
+}
+.ck-dialog-overlay.is-in { opacity: 1; }
+.ck-dialog {
+  width: 100%; max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--bd);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--space-5);
+  transform: translateY(8px) scale(0.98);
+  transition: transform 180ms ease;
+}
+.ck-dialog-overlay.is-in .ck-dialog { transform: translateY(0) scale(1); }
+.ck-dialog-msg {
+  font-size: var(--text-lg);
+  color: var(--tx);
+  line-height: 1.5;
+  margin: 0 0 var(--space-4);
+  white-space: pre-line;
+}
+.ck-dialog-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-3);
+  margin: 0 0 var(--space-4);
+  background: var(--bg);
+  border: 1px solid var(--bd2);
+  border-radius: var(--radius);
+  color: var(--tx);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+}
+.ck-dialog-actions {
+  display: flex; justify-content: flex-end; gap: var(--space-2);
+}
+.ck-dialog-btn {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  border: 1px solid var(--bd2);
+  font-family: var(--font-body);
+  font-size: var(--text-md);
+  font-weight: 500;
+  transition: all 120ms;
+}
+.ck-dialog-btn--cancel { background: var(--bg); color: var(--tx2); }
+.ck-dialog-btn--cancel:hover { color: var(--tx); border-color: var(--tx3); }
+.ck-dialog-btn--ok { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+.ck-dialog-btn--ok:hover { background: var(--brand); border-color: var(--brand); }
+.ck-dialog-btn--ok.is-danger { background: var(--alert); border-color: var(--alert); color: var(--bg); }
+.ck-dialog-btn--ok.is-danger:hover { background: var(--alert); filter: brightness(1.08); }
+
+/* ═══ Kill-switch global pour reduced-motion ═════════════════
+   Couvre les 9 animations infinies réparties dans
+   cockpit/styles-*.css. Plus besoin d'ajouter une garde dans
+   chaque stylesheet — ce bloc s'applique en cascade.
+   ────────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

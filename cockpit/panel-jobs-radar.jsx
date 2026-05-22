@@ -654,7 +654,7 @@ function JrCalibrage() {
       // PROFILE_DATA fraîchement muté ci-dessus (pas de state local pour rules).
       setEditing(false);
     } catch (e) {
-      alert("Échec de la sauvegarde : " + e.message);
+      cockpitToast("Échec de la sauvegarde : " + e.message, { kind: "error" });
     } finally {
       setSaving(false);
     }

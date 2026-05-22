@@ -306,7 +306,7 @@ function PanelProfile({ data, onNavigate }) {
       setEditing(e => { const c = { ...e }; delete c[key]; return c; });
       if (window.track) window.track("profile_field_saved", { key });
     } catch (err) {
-      alert("Échec de la sauvegarde : " + err.message);
+      cockpitToast("Échec de la sauvegarde : " + err.message, { kind: "error" });
     } finally {
       setSaving(s => { const c = { ...s }; delete c[key]; return c; });
     }
@@ -319,12 +319,12 @@ function PanelProfile({ data, onNavigate }) {
       const now = new Date().toISOString();
       setLocalRows(rs => [...rs, { key, value, updated_at: now }]);
     } catch (err) {
-      alert("Échec : " + err.message);
+      cockpitToast("Échec : " + err.message, { kind: "error" });
     }
   }
 
   async function handleMarkFactFalse(factId) {
-    if (!confirm("Marquer ce fait comme incorrect ? Il sera supprimé de la vue active.")) return;
+    if (!(await cockpitConfirm("Marquer ce fait comme incorrect ? Il sera supprimé de la vue active.", { danger: true, confirmLabel: "Marquer incorrect" }))) return;
     try {
       await pfSupersedeFact(factId);
       setLocalFacts(fs => fs.filter(f => f.id !== factId));
@@ -332,7 +332,7 @@ function PanelProfile({ data, onNavigate }) {
         window.PROFILE_DATA._facts = window.PROFILE_DATA._facts.filter(f => f.id !== factId);
       }
     } catch (err) {
-      alert("Échec : " + err.message);
+      cockpitToast("Échec : " + err.message, { kind: "error" });
     }
   }
 
@@ -345,17 +345,17 @@ function PanelProfile({ data, onNavigate }) {
         return [...cs, fresh];
       });
     } catch (err) {
-      alert("Échec : " + err.message);
+      cockpitToast("Échec : " + err.message, { kind: "error" });
     }
   }
 
   async function handleDeleteCommit(id) {
-    if (!confirm("Archiver ce commitment ?")) return;
+    if (!(await cockpitConfirm("Archiver ce commitment ?", { confirmLabel: "Archiver" }))) return;
     try {
       await pfUpsertCommitment({ archived_at: new Date().toISOString() }, id);
       setLocalCommits(cs => cs.filter(c => c.id !== id));
     } catch (err) {
-      alert("Échec : " + err.message);
+      cockpitToast("Échec : " + err.message, { kind: "error" });
     }
   }
 
@@ -364,7 +364,7 @@ function PanelProfile({ data, onNavigate }) {
       await pfAnswerUQ(id, answer, resolution);
       setLocalUqs(us => us.map(u => u.id === id ? { ...u, answer, resolution, resolved: true, answered_at: new Date().toISOString() } : u));
     } catch (err) {
-      alert("Échec : " + err.message);
+      cockpitToast("Échec : " + err.message, { kind: "error" });
     }
   }
 
@@ -396,7 +396,7 @@ function PanelProfile({ data, onNavigate }) {
       setTimeout(() => setCopyFlash(false), 1500);
       if (window.track) window.track("profile_payload_copied", { mission });
     } catch (err) {
-      alert("Impossible de copier : " + err.message);
+      cockpitToast("Impossible de copier : " + err.message, { kind: "error" });
     }
   }
 
@@ -952,7 +952,7 @@ function CommitmentRow({ commit, isNew, onSave, onDelete, onCancel }) {
 
   async function save() {
     const payload = { ...form };
-    if (!payload.label.trim()) { alert("Label requis"); return; }
+    if (!payload.label.trim()) { cockpitToast("Label requis", { kind: "error" }); return; }
     if (!payload.deadline) delete payload.deadline;
     if (!isNew && form.last_movement !== commit.last_movement) {
       payload.last_movement_at = new Date().toISOString();

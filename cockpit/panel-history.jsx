@@ -306,7 +306,7 @@ function HiDrawer({ day, onClose, onTogglePin, isPinned }) {
             className="hi-drawer-btn is-primary"
             onClick={() => {
               if (!briefHtml) {
-                alert("Pas de brief Gemini pour ce jour-là.");
+                cockpitToast("Pas de brief Gemini pour ce jour-là.", { kind: "info" });
                 return;
               }
               const w = window.open("", "_blank", "noopener,width=900,height=900");
