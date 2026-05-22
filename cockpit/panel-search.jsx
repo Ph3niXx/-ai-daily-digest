@@ -220,7 +220,7 @@ function CmdKModal({ query, setQuery, filtered, selectedIdx, setSelectedIdx, onC
                   title="Sauvegarder cette recherche"
                   style={{
                     background: "transparent",
-                    border: "1px solid var(--div, rgba(120,120,120,.3))",
+                    border: "1px solid var(--bd)",
                     borderRadius: 4,
                     padding: "3px 8px",
                     fontSize: 11,

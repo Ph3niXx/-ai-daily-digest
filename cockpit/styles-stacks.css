@@ -97,7 +97,7 @@
   line-height: 1;
 }
 .st-kpi-val.is-critical { color: var(--critical); }
-.st-kpi-val.is-warn { color: var(--warn); }
+.st-kpi-val.is-warn { color: var(--neutral); }
 .st-kpi-sub {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -136,7 +136,7 @@
   margin-top: 1px;
 }
 .st-alert-tag.is-critical { background: var(--critical); color: #fff; }
-.st-alert-tag.is-warn { background: var(--warn); color: #fff; }
+.st-alert-tag.is-warn { background: var(--neutral); color: var(--bg); }
 .st-alert-tag.is-info { background: var(--bd); color: var(--tx2); }
 .st-alert-service {
   font-family: var(--font-mono);
@@ -276,8 +276,8 @@
 }
 .st-service-status.is-safe { color: var(--safe); }
 .st-service-status.is-safe .st-status-dot { background: var(--safe); }
-.st-service-status.is-warn { color: var(--warn); }
-.st-service-status.is-warn .st-status-dot { background: var(--warn); }
+.st-service-status.is-warn { color: var(--neutral); }
+.st-service-status.is-warn .st-status-dot { background: var(--neutral); }
 .st-service-status.is-critical { color: var(--critical); }
 .st-service-status.is-critical .st-status-dot {
   background: var(--critical);
@@ -348,7 +348,7 @@
   margin-left: 8px;
   color: var(--tx3);
 }
-.st-quota-values .st-qpct.is-warn { color: var(--warn); }
+.st-quota-values .st-qpct.is-warn { color: var(--neutral); }
 .st-quota-values .st-qpct.is-critical { color: var(--critical); font-weight: 700; }
 
 .st-quota-bar {
@@ -366,7 +366,7 @@
   transition: width 0.4s ease;
 }
 .st-quota-fill.is-safe { background: var(--safe); }
-.st-quota-fill.is-warn { background: var(--warn); }
+.st-quota-fill.is-warn { background: var(--neutral); }
 .st-quota-fill.is-critical {
   background: var(--critical);
 }
@@ -389,7 +389,7 @@
   letter-spacing: 0.02em;
 }
 .st-quota-foot .st-projected.is-over { color: var(--critical); font-weight: 600; }
-.st-quota-foot .st-projected.is-near { color: var(--warn); font-weight: 600; }
+.st-quota-foot .st-projected.is-near { color: var(--neutral); font-weight: 600; }
 
 /* Usage-only (pas de limite) */
 .st-quota.is-info .st-quota-bar { display: none; }
@@ -493,7 +493,7 @@
   color: var(--tx3);
   margin-top: 2px;
 }
-.st-bd-note.is-warn { color: var(--warn); }
+.st-bd-note.is-warn { color: var(--neutral); }
 
 /* ── LIMITS (rate) ───────────────────────────── */
 .st-rate {

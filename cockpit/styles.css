@@ -1636,7 +1636,7 @@ select:focus-visible {
   width: 100%;
   background: var(--tx2);
   opacity: 0.22;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: var(--radius) var(--radius) 0 0;
   min-height: 3px;
   transition: height 400ms cubic-bezier(.2,.8,.2,1), opacity 200ms;
 }
@@ -2607,7 +2607,7 @@ select:focus-visible {
 }
 .act-matrix-cell[data-color="brand"] .act-matrix-cell-fill { background: var(--brand); }
 .act-matrix-cell[data-color="positive"] .act-matrix-cell-fill { background: var(--positive); }
-.act-matrix-cell[data-color="warn"] .act-matrix-cell-fill { background: #E89B3A; }
+.act-matrix-cell[data-color="warn"] .act-matrix-cell-fill { background: var(--neutral); }
 .act-matrix-cell[data-color="neutral"] .act-matrix-cell-fill { background: var(--tx2); }
 .act-matrix-cell[data-color="neutral2"] .act-matrix-cell-fill { background: var(--tx3); }
 .act-matrix-cell-val {
@@ -3086,7 +3086,7 @@ select:focus-visible {
 .day-card-row-fill[data-color="brand"] { background: var(--brand); }
 .day-card-row-fill[data-color="positive"] { background: var(--positive); }
 .day-card-row-fill[data-color="neutral"] { background: var(--tx2); }
-.day-card-row-fill[data-color="warn"] { background: #E89B3A; }
+.day-card-row-fill[data-color="warn"] { background: var(--neutral); }
 
 /* ═══════════════════════════════════════════════════════════════
    PANEL RECHERCHE — Command-K

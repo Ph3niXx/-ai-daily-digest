@@ -438,7 +438,7 @@
   stroke-width: 2;
   stroke-linecap: round;
   transform: rotate(-90deg);
-  transform-origin: var(--origin);
+  transform-origin: center;
   transition: stroke-width 120ms;
 }
 .reco-constel-axis g {

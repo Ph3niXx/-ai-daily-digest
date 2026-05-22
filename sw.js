@@ -2,7 +2,7 @@
 // Cache-first for static shell (cockpit/* + CDN libs pinned by SRI),
 // network-first for Supabase/API calls — so the app stays installable
 // and fast offline while always preferring fresh data when online.
-const CACHE = "cockpit-v46";
+const CACHE = "cockpit-v47";
 
 const STATIC = [
   "/",
@@ -55,7 +55,7 @@ const STATIC = [
   "/cockpit/panel-radar.jsx?v=5",
   "/cockpit/panel-recos.jsx?v=5",
   "/cockpit/panel-review.jsx?v=1",
-  "/cockpit/panel-search.jsx?v=4",
+  "/cockpit/panel-search.jsx?v=5",
   "/cockpit/panel-signals.jsx?v=9",
   "/cockpit/panel-stacks.jsx?v=2",
   "/cockpit/panel-top.jsx",
@@ -78,12 +78,12 @@ const STATIC = [
   "/cockpit/styles-opportunities.css?v=5",
   "/cockpit/styles-profile.css?v=5",
   "/cockpit/styles-radar.css?v=4",
-  "/cockpit/styles-recos.css?v=3",
+  "/cockpit/styles-recos.css?v=4",
   "/cockpit/styles-signals.css?v=4",
-  "/cockpit/styles-stacks.css?v=3",
+  "/cockpit/styles-stacks.css?v=4",
   "/cockpit/styles-veille-outils.css?v=3",
   "/cockpit/styles-wiki.css?v=7",
-  "/cockpit/styles.css?v=32",
+  "/cockpit/styles.css?v=33",
   "/cockpit/themes.js?v=2",
   "/index.html",
   "/manifest.json",
