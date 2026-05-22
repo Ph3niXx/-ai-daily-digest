@@ -3,6 +3,34 @@
    Single-file mobile responsive layer to avoid touching 16 CSS files.
    Pattern: override desktop-first grids, paddings, and the sidebar
    which becomes a drawer overlay.
+
+   ── ⚠ DETTE PRIORITAIRE : sélecteurs morts (audit 2026-05-22) ─────
+   ~38 des classes ciblées plus bas N'EXISTENT PAS dans les composants
+   (noms devinés à l'écriture, jamais alignés sur les vraies classes).
+   Conséquence : le responsive de ces panels NE S'APPLIQUE PAS — ils
+   gardent leur grille desktop multi-colonnes sur mobile.
+
+   Sélecteurs morts → vraie classe à viser :
+     .music-*            → .mz-*       (panel-musique)
+     .forme-*            → .fm-*       (panel-forme)
+     .gaming-*           → cf. styles-gaming.css
+     .profile-*          → cf. styles-profile.css
+     .opp-grid/.opp-kpis → .opp-*      (.opp-hero existe déjà, lui)
+     .jrv-layout/-message/-panel-left  → classes Jarvis réelles
+     .wiki-layout/.wiki-sidebar        → .wiki-*
+     .ideas-grid .stacks-grid .recos-* .ch-* .hist-* .jr-* .radar-hero-v2
+     .vl-item* .vl-filter-row .vl-feed-wrap .vl-trends-section .top-right
+   Correctif (tâche dédiée, à VÉRIFIER sur mobile réel) : remapper ces
+   sélecteurs sur les classes réelles de chaque panel.
+
+   ── Sur les ≈80 !important ─────────────────────────────────────────
+   Pour les classes qui existent (.radar-box, .top-grid, .sig-grid…), la
+   règle desktop est mono-classe et ce fichier est chargé EN DERNIER : à
+   spécificité égale le mobile gagne déjà sans `!important` → ils sont en
+   grande partie REDONDANTS (pas portants). NB : @layer serait contre-
+   productif (priorité inférieure au CSS non-layered). Le nettoyage des
+   `!important` doit se faire APRÈS le remap ci-dessus, sur device réel —
+   ne pas les retirer à l'aveugle tant que le rendu mobile n'est pas testé.
    ═══════════════════════════════════════════════════════════════ */
 
 /* Hamburger trigger + backdrop are always present in DOM but hidden
