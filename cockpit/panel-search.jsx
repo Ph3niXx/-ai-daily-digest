@@ -59,9 +59,9 @@ function readSavedSearches(){
   } catch { return []; }
 }
 
-function saveCurrentSearch(q){
+async function saveCurrentSearch(q){
   try {
-    const name = (window.prompt("Nom de cette recherche :", q) || "").trim();
+    const name = ((await cockpitPrompt("Nom de cette recherche :", q)) || "").trim();
     if (!name) return false;
     const prev = readSavedSearches().filter(s => s.name !== name);
     const next = [{ name, query: q, ts: new Date().toISOString() }, ...prev].slice(0, 20);
@@ -220,7 +220,7 @@ function CmdKModal({ query, setQuery, filtered, selectedIdx, setSelectedIdx, onC
                   title="Sauvegarder cette recherche"
                   style={{
                     background: "transparent",
-                    border: "1px solid var(--div, rgba(120,120,120,.3))",
+                    border: "1px solid var(--bd)",
                     borderRadius: 4,
                     padding: "3px 8px",
                     fontSize: 11,
@@ -417,8 +417,8 @@ function PanelSearch({ data, onNavigate }) {
     onNavigate("jarvis");
   };
 
-  const handleSaveSearch = (q) => {
-    const ok = saveCurrentSearch(q);
+  const handleSaveSearch = async (q) => {
+    const ok = await saveCurrentSearch(q);
     if (ok) {
       try { window.track && window.track("search_saved", { query_length: q.length }); } catch {}
     }

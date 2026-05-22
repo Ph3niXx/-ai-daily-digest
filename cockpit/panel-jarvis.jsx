@@ -581,7 +581,7 @@ function PanelJarvis({ data, onNavigate }) {
 
   const handleForget = async (item) => {
     if (!window.sb || !window.SUPABASE_URL) return;
-    if (!confirm(`Oublier ce fait ?\n\n"${item.value}"`)) return;
+    if (!(await cockpitConfirm(`Oublier ce fait ?\n\n"${item.value}"`, { danger: true, confirmLabel: "Oublier" }))) return;
     setPendingFacts(p => ({ ...p, [item.id]: true }));
     // Optimistic remove
     const prevMem = memory;
@@ -599,7 +599,7 @@ function PanelJarvis({ data, onNavigate }) {
     } catch (e) {
       console.error("[jarvis] forget failed", e);
       setMemory(prevMem);
-      alert("Impossible d'oublier ce fait. Réessaie dans un instant.");
+      cockpitToast("Impossible d'oublier ce fait. Réessaie dans un instant.", { kind: "error" });
     } finally {
       setPendingFacts(p => {
         const n = { ...p }; delete n[item.id]; return n;
@@ -643,6 +643,7 @@ function PanelJarvis({ data, onNavigate }) {
           <div className="jv-header-actions">
             <button
               className={`jv-iconbtn ${searchOpen ? "is-active" : ""}`}
+              aria-label="Rechercher dans la conversation"
               title="Rechercher"
               onClick={() => { setSearchOpen(v => !v); if (searchOpen) setSearchQuery(""); }}
             >
@@ -650,6 +651,7 @@ function PanelJarvis({ data, onNavigate }) {
             </button>
             <button
               className={`jv-iconbtn ${settingsOpen ? "is-active" : ""}`}
+              aria-label="Paramètres"
               title="Paramètres"
               onClick={() => setSettingsOpen(v => !v)}
             >
@@ -669,7 +671,7 @@ function PanelJarvis({ data, onNavigate }) {
               autoFocus
             />
             {searchQuery && (
-              <button className="jv-searchbar-clear" onClick={() => setSearchQuery("")} title="Effacer">
+              <button className="jv-searchbar-clear" onClick={() => setSearchQuery("")} aria-label="Effacer la recherche" title="Effacer">
                 <JvIcon name="close" size={12} />
               </button>
             )}
@@ -715,8 +717,8 @@ function PanelJarvis({ data, onNavigate }) {
               <span>Session · <code>{getJarvisSessionId().slice(0, 8)}…</code></span>
               <button
                 className="jv-settings-reset"
-                onClick={() => {
-                  if (!confirm("Démarrer une nouvelle session ? L'historique actuel reste en base, mais les prochaines réponses partiront d'un contexte vide.")) return;
+                onClick={async () => {
+                  if (!(await cockpitConfirm("Démarrer une nouvelle session ? L'historique actuel reste en base, mais les prochaines réponses partiront d'un contexte vide.", { confirmLabel: "Nouvelle session" }))) return;
                   try { localStorage.removeItem("jarvis-session-id"); } catch {}
                   setSettingsOpen(false);
                 }}
@@ -793,9 +795,9 @@ function PanelJarvis({ data, onNavigate }) {
                 rows={1}
               />
               <div className="jv-composer-actions">
-                <button className="jv-iconbtn" title="Joindre un fichier"><JvIcon name="paperclip" /></button>
-                <button className="jv-iconbtn" title="Dicter"><JvIcon name="mic" /></button>
-                <button className="jv-send" disabled={!input.trim()} onClick={handleSend} title="Envoyer">
+                <button className="jv-iconbtn" aria-label="Joindre un fichier (bientôt)" title="Joindre un fichier — bientôt" disabled><JvIcon name="paperclip" /></button>
+                <button className="jv-iconbtn" aria-label="Dicter (bientôt)" title="Dicter — bientôt" disabled><JvIcon name="mic" /></button>
+                <button className="jv-send" disabled={!input.trim()} onClick={handleSend} aria-label="Envoyer le message" title="Envoyer">
                   <JvIcon name="send" size={15} />
                 </button>
               </div>

@@ -53,7 +53,13 @@ function DayStrip({ days }) {
   };
   const FULL_DAYS = { Lun: "Lundi", Mar: "Mardi", Mer: "Mercredi", Jeu: "Jeudi", Ven: "Vendredi", Sam: "Samedi", Dim: "Dimanche" };
 
-  const todayIdx = 1; // Mardi
+  // Dérive le jour courant et les numéros de jour de la semaine ISO réelle
+  // (Lun=0 … Dim=6) au lieu de valeurs figées.
+  const today = new Date();
+  const todayIdx = (today.getDay() + 6) % 7;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - todayIdx);
+  const dateNum = (i) => { const d = new Date(monday); d.setDate(monday.getDate() + i); return d.getDate(); };
 
   return (
     <div className="day-strip">
@@ -64,7 +70,7 @@ function DayStrip({ days }) {
           <div key={d.day} className={`day-card ${isToday ? "is-today" : ""} ${isPast ? "is-past" : "is-future"}`}>
             <div className="day-card-head">
               <span className="day-card-day">{FULL_DAYS[d.day]}</span>
-              <span className="day-card-num">{14 + i}</span>
+              <span className="day-card-num">{dateNum(i)}</span>
             </div>
 
             <div className="day-card-rows">

@@ -17,13 +17,6 @@ const STAGE_ORDER = ["seed", "incubating", "maturing", "ready_to_promote", "park
   promoted: "Promue",
   archived: "Archivée",
 };
-const CAT_COLOR = {
-  business: "#2f2a24",
-  side:     "#5a4634",
-  content:  "#8a6e4a",
-  jarvis:   "#3a4a3a",
-  life:     "#6a4a3a",
-};
 
 // Free-form label normalization: lowercase, strip diacritics + special chars.
 function normalizeLabel(s) {
@@ -246,7 +239,7 @@ function PipelineView({ ideas, stages, onOpen, onMoveStatus, pending }) {
                   onDragEnd={onDragEnd}
                   onClick={() => onOpen(i.id)}>
                   <div className="id-pipe-card-kicker">
-                    <span className="id-pipe-card-cat" style={{ background: CAT_COLOR[i.category] }} />
+                    <span className="id-pipe-card-cat" data-cat={i.category} />
                     <span>{i.category}</span>
                   </div>
                   <h4 className="id-pipe-card-title">{i.title}</h4>
@@ -701,15 +694,15 @@ function PanelIdeas({ data, onNavigate }) {
 
   const handlePromote = async (id) => {
     if (pending[id]) return;
-    if (!confirm("Marquer cette idée comme promue en opportunité ? Elle sera taguée 'promoted' et tu pourras l'intégrer au panel Opportunités.")) return;
+    if (!(await cockpitConfirm("Marquer cette idée comme promue en opportunité ? Elle sera taguée 'promoted' et tu pourras l'intégrer au panel Opportunités.", { confirmLabel: "Promouvoir" }))) return;
     setPending(p => ({ ...p, [id]: true }));
     try {
       await patchIdea(id, { status: "promoted", updated_at: new Date().toISOString() });
       try { window.track && window.track("idea_promoted", { id }); } catch {}
-      alert("Idée taguée 'promoted'. Recharge le panel Opportunités pour l'y voir.");
+      cockpitToast("Idée taguée 'promoted'. Recharge le panel Opportunités pour l'y voir.", { kind: "success" });
     } catch (e) {
       console.error(e);
-      alert("Échec de la sauvegarde — réessaie.");
+      cockpitToast("Échec de la sauvegarde — réessaie.", { kind: "error" });
     } finally {
       setPending(p => { const n = { ...p }; delete n[id]; return n; });
     }
@@ -717,7 +710,7 @@ function PanelIdeas({ data, onNavigate }) {
 
   const handleArchive = async (id) => {
     if (pending[id]) return;
-    if (!confirm("Parquer cette idée ? Elle passera en statut 'parked' et sera filée dans la colonne parking du pipeline.")) return;
+    if (!(await cockpitConfirm("Parquer cette idée ? Elle passera en statut 'parked' et sera filée dans la colonne parking du pipeline.", { confirmLabel: "Parquer" }))) return;
     setPending(p => ({ ...p, [id]: true }));
     try {
       await patchIdea(id, { status: "parked", updated_at: new Date().toISOString() });
@@ -725,7 +718,7 @@ function PanelIdeas({ data, onNavigate }) {
       try { window.track && window.track("idea_archived", { id }); } catch {}
     } catch (e) {
       console.error(e);
-      alert("Échec de la sauvegarde — réessaie.");
+      cockpitToast("Échec de la sauvegarde — réessaie.", { kind: "error" });
     } finally {
       setPending(p => { const n = { ...p }; delete n[id]; return n; });
     }
@@ -910,7 +903,7 @@ function PanelIdeas({ data, onNavigate }) {
       setOpenId(newIdea.id);
     } catch (e) {
       console.error(e);
-      alert("Impossible d'ajouter la suggestion — réessaie.");
+      cockpitToast("Impossible d'ajouter la suggestion — réessaie.", { kind: "error" });
     }
   };
   const handleDismissSuggestion = (key) => {
@@ -1000,7 +993,7 @@ function PanelIdeas({ data, onNavigate }) {
         {captureMsg && (
           <span style={{
             fontFamily: "var(--font-mono)", fontSize: 11, letterSpacing: "0.04em",
-            color: captureMsg.kind === "ok" ? "var(--positive)" : "var(--negative, #b3491a)"
+            color: captureMsg.kind === "ok" ? "var(--positive)" : "var(--alert)"
           }}>
             {captureMsg.text}
           </span>

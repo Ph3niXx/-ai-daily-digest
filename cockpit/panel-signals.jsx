@@ -169,6 +169,7 @@ function SignalRow({ signal, rank, open, onToggle, watched, onWatch, windowWeeks
           <button
             className={`sig-row-watch-btn ${watched ? "is-watched" : ""}`}
             onClick={(e) => { e.stopPropagation(); onWatch(); }}
+            aria-label={watched ? "Retirer de la watchlist" : "Ajouter à la watchlist"}
             title={watched ? "Retirer de la watchlist" : "Ajouter à la watchlist"}
           >
             <Icon name="bookmark" size={14} stroke={1.75} />
@@ -259,6 +260,7 @@ function WatchlistPanel({ signals, watched, onToggle, onOpen, onClear }) {
                 <button
                   className="sig-watch-item-remove"
                   onClick={(e) => { e.stopPropagation(); onToggle(s.id); }}
+                  aria-label="Retirer de la watchlist"
                   title="Retirer"
                 >
                   <Icon name="x" size={12} stroke={1.75} />

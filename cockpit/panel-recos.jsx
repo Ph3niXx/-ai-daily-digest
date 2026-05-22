@@ -64,7 +64,7 @@ function PanelRecos({ data, onNavigate }) {
       setCompletedOverrides(o => {
         const n = { ...o }; delete n[r.id]; return n;
       });
-      alert("Impossible de sauvegarder. Réessaie dans un instant.");
+      cockpitToast("Impossible de sauvegarder. Réessaie dans un instant.", { kind: "error" });
     } finally {
       setPendingIds(p => {
         const n = { ...p }; delete n[r.id]; return n;

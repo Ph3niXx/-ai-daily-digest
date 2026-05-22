@@ -174,7 +174,7 @@
   gap: 6px;
 }
 .wiki-kind-badge--auto {
-  background: rgba(217,119,87,0.12);
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
   color: var(--brand);
 }
 .wiki-kind-badge--perso {
@@ -296,7 +296,7 @@
 }
 .wiki-item-excerpt mark,
 .wiki-item-title mark {
-  background: rgba(217,119,87,0.2);
+  background: color-mix(in srgb, var(--brand) 20%, transparent);
   color: var(--tx);
   padding: 0 2px;
   border-radius: 1px;
@@ -458,7 +458,7 @@
   margin: 24px 0;
   padding: 14px 24px;
   border-left: 3px solid var(--brand);
-  background: rgba(217,119,87,0.04);
+  background: color-mix(in srgb, var(--brand) 4%, transparent);
   font-family: var(--font-display);
   font-size: 17px;
   font-style: italic;
@@ -680,7 +680,7 @@
 }
 .wiki-source.is-on {
   border-color: var(--brand);
-  background: rgba(217,119,87,0.04);
+  background: color-mix(in srgb, var(--brand) 4%, transparent);
   box-shadow: 0 0 0 1px var(--brand);
 }
 .wiki-source-head {
@@ -724,7 +724,7 @@
 }
 .wiki-depth.is-on {
   border-color: var(--brand);
-  background: rgba(217,119,87,0.04);
+  background: color-mix(in srgb, var(--brand) 4%, transparent);
   box-shadow: 0 0 0 1px var(--brand);
 }
 .wiki-depth-name {
@@ -766,7 +766,7 @@
   width: 90px;
   height: 90px;
   border-radius: 50%;
-  background: radial-gradient(circle, rgba(217,119,87,0.35) 0%, transparent 70%);
+  background: radial-gradient(circle, color-mix(in srgb, var(--brand) 35%, transparent) 0%, transparent 70%);
   margin: 40px auto 24px;
   animation: wiki-pulse 1.8s ease-in-out 3;
   animation-fill-mode: forwards;
@@ -820,7 +820,7 @@
 .wiki-gen-steps li.is-active::before {
   background: var(--brand);
   border-color: var(--brand);
-  box-shadow: 0 0 0 4px rgba(217,119,87,0.15);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--brand) 15%, transparent);
 }
 .wiki-gen-steps li.is-done {
   color: var(--tx2);

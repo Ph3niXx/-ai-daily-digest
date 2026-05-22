@@ -355,8 +355,8 @@ function KanbanView({ opps, onOpen, onTake, onPass }) {
 // ─── Timeline "fenêtres" View ────────────────────────────
 function TimelineView({ opps, onOpen }) {
   // 6 months, starting today
-  const today = new Date("2026-04-21");
-  const monthCount = 9; // avril → décembre
+  const today = new Date();
+  const monthCount = 9; // horizon glissant de 9 mois à partir du mois courant
   const months = [];
   for (let i = 0; i < monthCount; i++) {
     const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
@@ -536,10 +536,10 @@ function PanelOpportunities({ data, onNavigate }) {
 
   const handleSendToIdeas = async (opp) => {
     if (!window.sb || !window.SUPABASE_URL) {
-      alert("Client Supabase non initialisé.");
+      cockpitToast("Client Supabase non initialisé.", { kind: "error" });
       return;
     }
-    if (!confirm(`Copier cette opportunité dans le carnet d'idées ?\n\n"${opp.title}"\n\nElle y attendra en statut "maturing" que tu la creuses.`)) return;
+    if (!(await cockpitConfirm(`Copier cette opportunité dans le carnet d'idées ?\n\n"${opp.title}"\n\nElle y attendra en statut "maturing" que tu la creuses.`, { confirmLabel: "Copier" }))) return;
     try {
       const url = `${window.SUPABASE_URL}/rest/v1/business_ideas`;
       // Compile un description riche incluant tout le contexte DB.
@@ -574,10 +574,10 @@ function PanelOpportunities({ data, onNavigate }) {
       };
       const rows = await window.sb.postJSON(url, payload);
       try { window.track && window.track("opp_sent_to_ideas", { opp_id: opp.id, idea_id: rows?.[0]?.id }); } catch {}
-      if (confirm("Idée créée avec le contexte complet (marché, concurrence, sources, next step). Ouvrir le carnet d'idées ?")) onNavigate && onNavigate("ideas");
+      if (await cockpitConfirm("Idée créée avec le contexte complet (marché, concurrence, sources, next step). Ouvrir le carnet d'idées ?", { confirmLabel: "Ouvrir le carnet" })) onNavigate && onNavigate("ideas");
     } catch (e) {
       console.error(e);
-      alert("Impossible d'enregistrer l'idée. Réessaie dans un instant.");
+      cockpitToast("Impossible d'enregistrer l'idée. Réessaie dans un instant.", { kind: "error" });
     }
   };
   const handleReset = (id) => setStatus(s => { const n = { ...s }; delete n[id]; return n; });

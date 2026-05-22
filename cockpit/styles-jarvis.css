@@ -121,6 +121,14 @@
   color: var(--tx);
   border-color: var(--tx2);
 }
+.jv-iconbtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.jv-iconbtn:disabled:hover {
+  color: var(--tx2);
+  border-color: var(--bd);
+}
 .jv-iconbtn.is-active {
   background: var(--tx);
   color: var(--bg);

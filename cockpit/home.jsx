@@ -588,7 +588,7 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
                     {t.tags.map(tag => <span key={tag} className="top-tag">{tag}</span>)}
                   </div>
                   <div className="top-actions">
-                    <button className="card-action card-action--bookmark" aria-label="Garder cet article">
+                    <button className="card-action card-action--bookmark" aria-label="Garder cet article (bientôt disponible)" title="Sauvegarde — bientôt disponible" disabled>
                       <Icon name="bookmark" size={12} stroke={2} />
                     </button>
                     <button
