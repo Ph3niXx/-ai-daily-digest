@@ -1539,16 +1539,19 @@
     const sector    = rubric.sector    ?? rubric.secteur   ?? rubric.sec;
     const impact    = rubric.impact    ?? rubric.imp;
     const bonus     = rubric.bonus;
+    const calibrage = rubric.calibrage ?? rubric.calibration;
 
     const senText = pickAxisText(seniority);
     const secText = pickAxisText(sector);
     const impText = pickAxisText(impact);
     const bonText = pickAxisText(bonus);
+    const calText = pickAxisText(calibrage);
 
     if (senText) out.push({ axis: "Séniorité", text: senText });
     if (secText) out.push({ axis: "Secteur",   text: secText });
     if (impText) out.push({ axis: "Impact",    text: impText });
     if (bonText) out.push({ axis: "Bonus",     text: bonText });
+    if (calText) out.push({ axis: "Calibrage", text: calText });
 
     if (out.length) return out;
 

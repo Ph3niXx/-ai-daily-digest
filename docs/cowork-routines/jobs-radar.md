@@ -17,7 +17,7 @@
 5. Vérifie qu'un Chrome est authentifié sur LinkedIn (session perso) + que le connecteur MCP Supabase est actif.
 6. Dépose les 2 versions du CV (`CV_Jean.pdf`, `CV_Jean.docx`) dans le répertoire du projet Cowork.
 
-## Prompt v3.1
+## Prompt v3.2
 
 ```
 Tu maintiens à jour le radar de jobs LinkedIn pour mon projet
@@ -136,7 +136,15 @@ Signaux jaunes (à creuser, pas rédhibitoires) :
   piège si juste tenir les cérémonies
 - "Project Manager" → OK si projet stratégique clairement borné
 
-ÉTAPE 2 — Sources à scanner (24 dernières heures, f_TPR=r86400)
+ÉTAPE 2 — Sources à scanner (fenêtre dynamique, anti-perte de runs manqués)
+
+Avant de lancer les recherches, calcule la fenêtre pour ne rien perdre
+si un run a sauté :
+   gap           = CURRENT_DATE - (SELECT MAX(scan_date) FROM job_scans)  -- NULL si vide
+   fenetre_jours = borne(gap + 1, min 2, max 7)                           -- défaut 2 (48h) si NULL
+   f_TPR         = "r" + (fenetre_jours * 86400)                          -- ex. 2j → r172800
+Remplace `r86400` par cette valeur dans les 7 URLs ci-dessous. La dédup
+(Étape 1, linkedin_job_id UNIQUE) absorbe le recouvrement sans coût.
 
 1. https://www.linkedin.com/jobs/search/?keywords=product%20manager&location=Paris&f_TPR=r86400
 2. https://www.linkedin.com/jobs/search/?keywords=chief%20of%20staff&location=Paris&f_TPR=r86400
@@ -193,6 +201,20 @@ si l'axe de ce CV n'est pas celui valorisé par la JD.
 - 0 : recule ou piège de carrière
 
 Bonus +1 si connexion 1er degré dans la boîte.
+
+**Format `rubric_justif` (OBLIGATOIRE — forme unique).** Objet JSON à clés
+plates, une string de justification par axe. JAMAIS d'objet imbriqué
+({score, max, just}) : les scores vivent dans les colonnes score_*. Émets
+EXACTEMENT ces clés (pas de variante FR/EN, pas de clé inventée) :
+   {
+     "seniority": "justif courte",
+     "sector":    "justif courte",
+     "impact":    "justif courte",
+     "bonus":     "justif (optionnel — omettre si bonus = 0)",
+     "calibrage": "justif de l'ajustement profil (optionnel — omettre si aucun)"
+   }
+Le cockpit attend ces clés (transformJobRubric). Toute autre forme oblige
+le front à deviner et a déjà provoqué un crash (12/05).
 
 ÉTAPE 4 — Niveaux d'Intel (2 paliers)
 
@@ -441,17 +463,24 @@ pour rester dans le budget temps (15 min).
 
 ÉTAPE 8 — Passe de fraîcheur (offres clôturées)
 
-Re-vérifie un lot borné d'offres actives pour repérer les clôturées
-qui ont disparu de la recherche :
+Re-vérifie un lot borné d'offres actives pour repérer les clôturées.
+PRIORITÉ aux offres DISPARUES de la recherche du jour (après l'Étape 1,
+elles ont last_seen_date < CURRENT_DATE) et à fort score (celles que
+Jean va cliquer en premier) :
    SELECT id, url, linkedin_job_id FROM jobs
    WHERE closed_at IS NULL AND status IN ('new','to_apply')
-   ORDER BY last_seen_date ASC
+     AND last_seen_date < CURRENT_DATE
+   ORDER BY score_total DESC NULLS LAST, last_seen_date ASC
    LIMIT 25;
-Pour chaque URL, visite la page ; si « ne sont plus acceptées » →
+Si < 25 lignes, compléter avec les plus anciennes actives encore
+ouvertes (closed_at IS NULL, status IN ('new','to_apply')) pour ne pas
+gâcher le budget les jours calmes.
+Pour chaque URL, visite la page ; si « ne sont plus acceptées » /
+« no longer accepting » →
    UPDATE jobs SET closed_at = now() WHERE id = <id>;
-Borne à 25/run pour tenir le budget 15 min (les plus anciennes
-d'abord = les plus susceptibles d'être mortes). Si le run est déjà
-long, réduire ce lot.
+« Non re-vue » ne pose JAMAIS closed_at seule — on confirme toujours en
+lisant la page (zéro faux positif destructeur). Borne 25/run ; si le run
+est déjà long, réduire ce lot.
 
 GARDE-FOUS D'EXÉCUTION
 
@@ -501,6 +530,7 @@ Supabase.
 
 ## Dernière MAJ
 
+2026-05-27 — fiabilisation (v3.2) : schéma `rubric_justif` figé (clés plates seniority/sector/impact/bonus/calibrage, anti-dérive des 17 formes — Étape 3) ; passe de fraîcheur re-priorisée sur les offres disparues × forts scores (Étape 8) ; fenêtre de scan dynamique anti-perte de runs manqués (Étape 2). Côté cockpit (Lot 1) : bouton « Marquer clôturée »/« Rouvrir » (le front écrit `closed_at`). Voir docs/superpowers/plans/2026-05-27-jobs-radar-routine-hardening.md.
 2026-05-21 — détection des offres clôturées : `closed_at` posée à la lecture de "ne sont plus acceptées" (opportuniste Étape 5 + passe de fraîcheur Étape 8, 25 actives les plus anciennes/run).
 2026-05-21 — calibrage par feedback : Étape 0 (synthèse job_pref_observed depuis les votes user_verdict + signaux implicites, sans jamais toucher job_pref_rules), injection du profil dans le scoring (Étape 3), recalibrage hebdo du stock actif (Étape 7, dimanche). Voir docs/superpowers/plans/2026-05-21-jobs-radar-calibrage-feedback.md.
 
