@@ -146,12 +146,6 @@ function JrActionsMenu({ offer, open, onToggle, onSnooze, onArchive, onEditNotes
               <span>Rouvrir</span>
             </button>
           )}
-          {offer.intel_depth === "light" && (
-            <button className="jr-menu-item" role="menuitem" disabled title="Feature à venir — enrichira l'intel manquant via Jarvis">
-              <Icon name="sparkles" size={13} stroke={2} />
-              <span>Enrichir l'Intel →</span>
-            </button>
-          )}
         </div>
       )}
     </div>
@@ -419,6 +413,34 @@ function RubricBlock({ offer }) {
   );
 }
 
+// ─── Skills attendus (split : présent sur le CV / à acquérir) ───
+function JrSkills({ skills }) {
+  if (!Array.isArray(skills) || !skills.length) return null;
+  const have = skills.filter(s => s && s.on_cv);
+  const gap  = skills.filter(s => s && !s.on_cv);
+  return (
+    <div className="jr-skills">
+      <div className="jr-section-kicker">Skills attendus dans l'offre</div>
+      <div className="jr-skills-split">
+        <div className="jr-skills-col jr-skills-col--have">
+          <div className="jr-skills-head">Tu as déjà <span className="jr-skills-count">{have.length}</span></div>
+          <ul className="jr-skills-chips">
+            {have.map((s, i) => <li key={i} className="jr-skill jr-skill--have">{s.name}</li>)}
+            {!have.length && <li className="jr-skills-empty">—</li>}
+          </ul>
+        </div>
+        <div className="jr-skills-col jr-skills-col--gap">
+          <div className="jr-skills-head">À acquérir <span className="jr-skills-count">{gap.length}</span></div>
+          <ul className="jr-skills-chips">
+            {gap.map((s, i) => <li key={i} className="jr-skill jr-skill--gap">{s.name}</li>)}
+            {!gap.length && <li className="jr-skills-empty">—</li>}
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Hot lead card (big, intel déplié) ────────────────────
 function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, onClose, onReopen, openMenu, onMenuToggle, notesEditing }) {
   const intel = offer.intel;
@@ -460,67 +482,12 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
         <RubricBlock offer={offer} />
       </div>
 
+      {/* Skills attendus — tu as / à acquérir */}
+      {intel && <JrSkills skills={intel.skills_required} />}
+
       {/* Salary estimate — calibrated for this profile */}
       {intel && intel.salary_estimate && (
         <SalaryEstimate estimate={intel.salary_estimate} targetRange={targetRange} />
-      )}
-
-      {/* Intel — only on hot leads */}
-      {intel && (
-        <div className="jr-hot-intel">
-          <div className="jr-intel-grid">
-            {/* Company signals */}
-            <div className="jr-intel-block">
-              <div className="jr-section-kicker">Signaux boîte</div>
-              <ul className="jr-intel-list">
-                {intel.company_signals.map((s, i) => <li key={i}>{s}</li>)}
-              </ul>
-            </div>
-
-            {/* Lead + warm network */}
-            <div className="jr-intel-block">
-              <div className="jr-section-kicker">Lead identifié</div>
-              {intel.lead && (
-                <div className="jr-intel-lead">
-                  <div className="jr-intel-lead-name">{intel.lead.name}</div>
-                  <div className="jr-intel-lead-role">{intel.lead.role}</div>
-                  <p className="jr-intel-lead-notes">{intel.lead.notes}</p>
-                </div>
-              )}
-              {intel.warm_network && intel.warm_network.length > 0 && (
-                <div className="jr-warm">
-                  <div className="jr-warm-title">Réseau warm</div>
-                  <ul className="jr-warm-list">
-                    {intel.warm_network.map((w, i) => (
-                      <li key={i} className="jr-warm-item">
-                        <span className="jr-warm-degree">{w.degree === 1 ? "1er" : "2e"}°</span>
-                        <div className="jr-warm-body">
-                          <span className="jr-warm-name">{w.name}</span>
-                          <span className="jr-warm-rel">{w.relation}</span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {intel.safe_maturity && (
-                <div className="jr-safe-line">
-                  <span className="jr-safe-label">SAFe</span>
-                  <span className="jr-safe-val">{intel.safe_maturity}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Angle d'approche */}
-          <div className="jr-angle">
-            <div className="jr-angle-label">
-              <Icon name="target" size={13} stroke={2} />
-              <span>Angle d'approche</span>
-            </div>
-            <p className="jr-angle-text">{intel.angle}</p>
-          </div>
-        </div>
       )}
 
       {/* Notes editor (inline, toggled via menu) */}
@@ -537,12 +504,6 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
       {/* Actions footer */}
       <footer className="jr-hot-foot">
         <JrVote offer={offer} onVote={onVote} />
-        <div className="jr-cv-reco">
-          <span className={`jr-cv-badge jr-cv-badge--${offer.cv_recommended}`}>
-            CV {offer.cv_recommended.toUpperCase()}
-          </span>
-          <span className="jr-cv-reason">{offer.cv_reason}</span>
-        </div>
         <div className="jr-hot-actions">
           <JrActionsMenu
             offer={offer}
@@ -554,12 +515,6 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
             onClose={onClose}
             onReopen={onReopen}
           />
-          {intel && intel.lead && intel.lead.linkedin && (
-            <a className="jr-btn jr-btn--ghost" href={intel.lead.linkedin} target="_blank" rel="noopener noreferrer">
-              <Icon name="user" size={14} stroke={2} />
-              <span>Ouvrir le lead</span>
-            </a>
-          )}
           <button className="jr-btn jr-btn--primary" onClick={() => onApply(offer)} disabled={!offer.url}>
             <span>{offer.status === "applied" ? "Rouvrir sur LinkedIn" : "Postuler sur LinkedIn"}</span>
             <Icon name="arrow_right" size={14} stroke={2} />
@@ -621,11 +576,6 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
         <div className="jr-row-meta-line">
           <span className="jr-row-meta-age">{dayLabel(offer.posted_days_ago)}</span>
           {offer.compensation && <span className="jr-row-meta-comp">{offer.compensation}</span>}
-        </div>
-        <div className="jr-row-meta-cv">
-          <span className={`jr-cv-badge jr-cv-badge--${offer.cv_recommended}`}>
-            CV {offer.cv_recommended.toUpperCase()}
-          </span>
         </div>
       </div>
 
@@ -767,22 +717,6 @@ function ScanBanner({ scan }) {
               </div>
             ))}
           </div>
-        </div>
-
-        {/* Signal CV */}
-        <div className="jr-scan-block jr-scan-block--cv">
-          <div className="jr-scan-kicker">Signal CV · {scan.signal_cv.window_days}j</div>
-          <div className="jr-cv-split">
-            <div className="jr-cv-split-bar">
-              <div className="jr-cv-split-pdf"  style={{ width: `${scan.signal_cv.pdf_pct}%` }}>
-                <span>PDF {scan.signal_cv.pdf_pct}%</span>
-              </div>
-              <div className="jr-cv-split-docx" style={{ width: `${scan.signal_cv.docx_pct}%` }}>
-                <span>DOCX {scan.signal_cv.docx_pct}%</span>
-              </div>
-            </div>
-          </div>
-          <p className="jr-cv-insight">{scan.signal_cv.insight}</p>
         </div>
 
         {/* Actions du jour */}
