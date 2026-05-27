@@ -1577,25 +1577,8 @@
 
   function transformJobIntel(intel){
     if (!intel || typeof intel !== "object") return null;
-    // Accept both the Supabase shape (signaux_boite / lead_identifie /
-    // reseau_warm / angle_approche / maturite_safe) and the panel shape
-    // (company_signals / lead / warm_network / angle / safe_maturity) —
-    // so mock data keeps working.
-    const signals = intel.company_signals || intel.signaux_boite || [];
-    const leadSrc = intel.lead || intel.lead_identifie;
-    const lead = leadSrc ? {
-      name:     leadSrc.name  || "",
-      role:     leadSrc.role  || leadSrc.title || "",
-      linkedin: leadSrc.linkedin || leadSrc.linkedin_url || "",
-      notes:    leadSrc.notes || leadSrc.background || "",
-    } : null;
-    const warmSrc = intel.warm_network || intel.reseau_warm || [];
-    const warm_network = warmSrc.map(w => ({
-      name:     w.name || "",
-      degree:   Number(w.degree) === 1 ? 1 : 2,
-      relation: w.relation || [w.current_title, w.context].filter(Boolean).join(" — "),
-    }));
-    const safe = intel.safe_maturity || intel.maturite_safe || null;
+
+    // Salaire estimé (conservé) — accepte clés FR + EN.
     const salarySrc = intel.salary_estimate || intel.estimation_salaire || null;
     let salary_estimate = null;
     if (salarySrc && typeof salarySrc === "object") {
@@ -1614,14 +1597,25 @@
         salary_estimate = null;
       }
     }
-    return {
-      company_signals: signals,
-      lead,
-      warm_network,
-      safe_maturity: typeof safe === "string" ? safe : (safe ? JSON.stringify(safe) : null),
-      angle: intel.angle || intel.angle_approche || "",
-      salary_estimate,
-    };
+
+    // Skills attendus (nouveau) — [{ name, on_cv }]. Accepte skills_required / skills,
+    // et tolère des strings nues (on_cv=false par défaut).
+    const skillsSrc = Array.isArray(intel.skills_required) ? intel.skills_required
+                    : Array.isArray(intel.skills) ? intel.skills : [];
+    const skills_required = skillsSrc
+      .map(s => {
+        if (typeof s === "string") return s.trim() ? { name: s.trim(), on_cv: false } : null;
+        if (s && typeof s === "object") {
+          const name = typeof s.name === "string" ? s.name : (typeof s.label === "string" ? s.label : "");
+          return name.trim() ? { name: name.trim(), on_cv: s.on_cv === true } : null;
+        }
+        return null;
+      })
+      .filter(Boolean);
+
+    // Rien d'exploitable → null (le guard `intel && (...)` masque la carte enrichie).
+    if (!salary_estimate && !skills_required.length) return null;
+    return { salary_estimate, skills_required };
   }
 
   function transformJobRow(row){
@@ -1641,8 +1635,6 @@
       score_impact: Number(row.score_impact) || 0,
       score_bonus: Number(row.score_bonus) || 0,
       rubric_justif: transformJobRubric(row.rubric_justif),
-      cv_recommended: row.cv_recommended || "pdf",
-      cv_reason: row.cv_reason || "",
       intel: transformJobIntel(row.intel),
       intel_depth: row.intel_depth || "none",
       status: row.status || "new",
@@ -1688,16 +1680,6 @@
       return { id: c.id, label: c.label, pct: Math.round(count / totalActive * 100) };
     });
 
-    // CV signal — PDF/DOCX ratio on last 30 days of jobs
-    const thirty = Date.now() - 30 * 86400000;
-    const recent = (allJobs || []).filter(j => j.first_seen_date && new Date(j.first_seen_date + "T00:00:00").getTime() >= thirty);
-    const pdfCount  = recent.filter(j => j.cv_recommended === "pdf").length;
-    const docxCount = recent.filter(j => j.cv_recommended === "docx").length;
-    const sumCv = pdfCount + docxCount || 1;
-    const pdf_pct  = Math.round(pdfCount  / sumCv * 100);
-    const docx_pct = 100 - pdf_pct;
-    const signalCvFromScan = todayScan && todayScan.signal_cv && typeof todayScan.signal_cv === "object" ? todayScan.signal_cv : null;
-
     // Date label in French
     const dLabel = `${DAYS_FR_SCAN[today.getDay()]} ${today.getDate()} ${MONTHS_FR_SCAN[today.getMonth()]}`;
 
@@ -1721,17 +1703,6 @@
       tendances: {
         volumes_7d,
         ratios_category,
-      },
-      signal_cv: signalCvFromScan ? {
-        pdf_pct:  Number(signalCvFromScan.pdf_pct  ?? pdf_pct),
-        docx_pct: Number(signalCvFromScan.docx_pct ?? docx_pct),
-        window_days: Number(signalCvFromScan.window_days ?? 30),
-        insight: signalCvFromScan.insight || (pdfCount >= docxCount ? "Les offres récentes recommandent majoritairement le PDF." : "Le DOCX reste dominant sur la période — garde les deux versions à jour."),
-      } : {
-        pdf_pct, docx_pct, window_days: 30,
-        insight: sumCv <= 1
-          ? "Pas encore assez d'offres pour tirer un signal CV."
-          : (pdfCount >= docxCount ? "Les offres récentes recommandent majoritairement le PDF." : "Le DOCX reste dominant sur la période."),
       },
       actions,
     };
