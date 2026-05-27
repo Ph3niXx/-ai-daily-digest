@@ -1,0 +1,104 @@
+# Jobs Radar — migration vers une routine Claude Code sur API jobs structurée
+
+> Design validé le 2026-05-27. Remplace la routine Cowork token-vore (Sonnet + navigateur + session LinkedIn) par une routine Claude Code planifiée qui lit une API jobs structurée (JSON) et abandonne l'intel réseau warm.
+
+## Problème
+
+La routine actuelle ([docs/cowork-routines/jobs-radar.md](../../cowork-routines/jobs-radar.md)) tourne dans Cowork desktop avec **Sonnet + un navigateur sur une session LinkedIn authentifiée**. Elle est token-vore pour deux raisons cumulées :
+
+1. **Lecture d'écrans LinkedIn rendus** — chaque page de recherche / fiche de poste est un DOM gigantesque plein de bruit, ingéré tel quel par le modèle.
+2. **Navigation du graphe social** — pour produire l'intel warm (lead identifié, réseau 1er/2e degré, angle d'approche), l'agent visite des pages entreprise et des profils, multipliant les écrans lourds.
+
+Coût observé : **0,20-0,40 €/run**, 8-15 min, dépendance à un Chrome authentifié + Cowork desktop allumé.
+
+## Décisions de cadrage (issues du brainstorming)
+
+| Question | Décision |
+|---|---|
+| Qu'est-ce qui a le plus de valeur ? | **La découverte + le scoring**. L'intel warm est un bonus non vital. |
+| D'où viennent les offres ? | **API agrégateur structurée** (Google for Jobs) — plus de session LinkedIn ni de navigateur. |
+| Quel moteur ? | **Routine Claude Code planifiée** (remote agent, cron), pas Cowork, pas un pipeline Python. |
+| API primaire ? | **JSearch (RapidAPI)** — meilleure couverture des rôles produit/RTE scale-up Paris. |
+| Intel warm ? | **Abandonnée franchement** — on nettoie aussi le code UI mort (lead/réseau/angle). |
+
+## Architecture cible
+
+Le principe directeur : **on ne change que qui remplit les tables et comment.** Les tables `jobs` + `job_scans`, le front Jobs Radar et le realtime Supabase restent la cible et la source de vérité côté lecture.
+
+```
+┌─ Routine Claude Code (cron, 1×/jour 8h Paris) ───────────────┐
+│  Étape 0  Calibrage : lit job_pref_rules + job_pref_observed  │
+│           + verdicts récents (inchangé vs v3.2)               │
+│  Étape 1  Fetch JSearch (7 requêtes-rôles, country=fr) → JSON │
+│  Étape 2  Dédup sur external id + trigger (title, company)    │
+│  Étape 3  Scoring rubric /10 sur le TEXTE de la JD (calibré)  │
+│  Étape 4  Reco CV (pdf/docx) + estimation salaire (Top 3)     │
+│  Étape 5  UPSERT jobs + INSERT job_scans (Supabase MCP,       │
+│           service_role)                                        │
+└───────────────────────────────────────────────────────────────┘
+        │ (texte compact, ~30 JD/jour — plus aucun écran rendu)
+        ▼
+   Supabase  jobs / job_scans  ──realtime──▶  Front Jobs Radar (inchangé)
+```
+
+Pas de navigateur, pas de session LinkedIn, pas de graphe social. Coût attendu : **cents/run** (scoring de ~30 fiches en texte compact).
+
+### Couche source — JSearch (RapidAPI)
+
+- Endpoint `search` de JSearch, `country=fr`, une requête par rôle cible (les 7 requêtes-clés actuelles : product manager, chief of staff, head of product, senior product owner fintech, release train engineer, senior program manager, transformation program manager).
+- Retour JSON structuré par offre : `job_id`, `employer_name`, `job_title`, `job_description`, `job_city`, `job_posted_at`, `job_apply_link`, et parfois `job_min_salary`/`job_max_salary`.
+- Secret nouveau : `RAPIDAPI_KEY` (à documenter dans [docs/secrets.md](../../secrets.md)).
+- **Quota** : free tier JSearch = 200 req/mois. 7 requêtes/jour ≈ 210/mois → légèrement au-dessus. Au choix à l'implémentation : (a) tier payant JSearch (quelques $/mois), (b) réduire/fusionner des requêtes, ou (c) basculer Adzuna (100 % gratuit, couverture moindre) — le code de fetch est quasi identique. **Adzuna reste le plan B documenté.**
+
+### Couche scoring — inchangée sur le fond
+
+Les Étapes 0, 3, 4.5 du prompt v3.2 sont **reprises telles quelles** : calibrage `job_pref_rules` (autorité absolue) + `job_pref_observed`, rubric 3 axes (Séniorité /3, Secteur /3, Impact /4) + bonus, format `rubric_justif` à clés plates figées (`seniority`/`sector`/`impact`/`bonus`/`calibrage`), reco CV pdf/docx, estimation salaire calibrée sur le Top 3. La seule différence : le modèle score sur **le texte de la JD renvoyé par l'API**, plus sur une page rendue.
+
+### Couche écriture — inchangée
+
+UPSERT sur `jobs` (clé `linkedin_job_id`, qui stocke désormais l'ID externe de l'agrégateur), INSERT `job_scans` (1 ligne/jour avec `tendances`, `signal_cv`, `actions`). Mêmes garde-fous user-modifiables (`status`, `user_notes`, `user_verdict*` jamais écrasés). Le trigger `jobs_inherit_user_status` (dédup `(title, company)`) continue de fonctionner indépendamment de la source.
+
+## Ce qui disparaît du prompt
+
+- **Étape 4 — Intel light + deep** (signaux boîte, lead identifié, réseau warm, angle d'approche, maturité SAFe). Supprimée.
+- **Fenêtre LinkedIn `f_TPR`** (Étape 2 v3.2). Remplacée par la fraîcheur native de l'API + `last_seen_date`.
+- **Passe de fraîcheur par re-fetch de pages** (Étape 8 v3.2). Supprimée : la détection de clôture par lecture de « ne sont plus acceptées » exigeait le navigateur. La clôture reste possible **manuellement** via le bouton « Marquer clôturée » du cockpit (ADR-18), conservé.
+- **GUARD anti-injection LinkedIn** : conservé par prudence (le texte des JD reste une donnée non fiable), mais le risque baisse (plus de pages tierces naviguées).
+
+## Impact données
+
+- `intel` jsonb ne contient plus que `salary_estimate` (Top 3). Les clés `signaux_boite` / `lead_identifie` / `reseau_warm` / `angle_approche` ne sont plus produites.
+- `intel_depth` : devient `none` ou `light` (plus jamais `deep`).
+- `linkedin_job_id` (UNIQUE) stocke l'ID JSearch ; `url` = `job_apply_link`.
+- **Migration optionnelle** : ajouter une colonne `source text default 'jsearch'` sur `jobs` pour tracer la provenance (les 554 lignes historiques restent, provenance LinkedIn implicite). À trancher dans le plan — non bloquant, le front ne la lit pas.
+
+## Impact front
+
+Changement **minimal** — le front gère déjà l'absence des champs intel (guards `intel && (...)`), donc la carte hot dégrade proprement vers **score + rubric par axe + salaire estimé + boutons**.
+
+Nettoyage à faire (décision « abandon franc ») dans [cockpit/panel-jobs-radar.jsx](../../../cockpit/panel-jobs-radar.jsx) + [cockpit/styles-jobs-radar.css](../../../cockpit/styles-jobs-radar.css) :
+
+- Retirer de `HotLeadCard` le rendu des blocs `signaux_boite`, `lead_identifie`, `reseau_warm`, `angle_approche` (et le bouton « Ouvrir le lead »).
+- Retirer la normalisation correspondante dans `transformJobIntel` ([data-loader.js](../../../cockpit/lib/data-loader.js)) — garder uniquement `salary_estimate`.
+- Conserver intacts : `ScoreChip`, `RubricBlock`, `SalaryEstimate`, `JrVote`, le scan banner, les filtres, le bouton « Marquer clôturée ».
+- CSS : supprimer les règles `jr-intel-*` / `jr-lead-*` / `jr-warm-*` devenues orphelines.
+
+## Impact doc / archi (règles cardinales)
+
+- **Spec** : MAJ [docs/specs/tab-jobs.md](../../specs/tab-jobs.md) (source des données, intel dégradée, suppression intel warm) + bump `last_updated` dans `docs/specs/index.json`.
+- **Routine** : réécrire [docs/cowork-routines/jobs-radar.md](../../cowork-routines/jobs-radar.md) en prompt Claude Code (envisager de renommer le dossier `cowork-routines/` → `agent-routines/`, à trancher dans le plan).
+- **Archi** : MAJ `docs/architecture/pipelines.yaml` (le pipeline Cowork externe devient une routine Claude Code cron) + `dependencies.yaml` (note RLS inchangée) + **ADR-19** dans `docs/architecture/decisions.md` (remplacement Cowork → routine Claude Code sur API structurée, abandon intel warm, justification token-vore).
+- **Secrets** : entrée `RAPIDAPI_KEY` dans [docs/secrets.md](../../secrets.md).
+
+## Hors scope (volontairement)
+
+- **Enrichissement à la demande via Jarvis** (signaux boîte + angle, local/gratuit) : abandonné pour l'instant, pas remis dans un TODO (décision « abandon franc »). Pourra ressortir si le besoin réapparaît.
+- **Refonte du scan banner / des filtres / du vote** : aucun changement.
+- **Migration des 554 lignes historiques** : aucune. La nouvelle routine appendera ; l'historique intel deep reste lisible.
+
+## Risques & garde-fous
+
+- **Couverture JSearch ≠ LinkedIn** : les offres ne sont plus 100 % LinkedIn ; les liens « Postuler » peuvent pointer ailleurs (Indeed, WTTJ…). Acceptable (l'utilisateur a choisi la couverture élargie). À vérifier sur les 7 requêtes réelles à l'implémentation.
+- **Quota free tier** : voir couche source — fallback Adzuna documenté.
+- **Perte de la détection auto de clôture** : compensée par le bouton manuel (ADR-18) ; les offres clôturées ne seront plus masquées automatiquement. Tradeoff assumé.
+- **Qualité de scoring sur JD tronquées** : certaines API renvoient une description partielle. Si le fit en pâtit, l'agent pourra fetcher l'URL de l'offre (1 page, pas un parcours) en dernier recours — à arbitrer dans le plan.
