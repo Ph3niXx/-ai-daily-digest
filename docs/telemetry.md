@@ -21,7 +21,7 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `challenge_completed` | `{challenge_id, mode}` | `cockpit/panel-challenges.jsx` post-submit |
 | `idea_moved` | `{id, from_status, to_status}` | `cockpit/panel-ideas.jsx` drag&drop |
 | `wiki_shared` | `{slug}` | `cockpit/panel-wiki.jsx` partage |
-| `jobs_action` | `{action, job_id}` | `cockpit/panel-jobs-radar.jsx` toggle |
+| `jobs_action` | `{action, job_id, value}` | `cockpit/panel-jobs-radar.jsx` — statut (snooze/archive/apply) + notes + clôture manuelle (`action:"close"`/`"reopen"`, écrit `closed_at`) |
 | `jobs_feedback` | `{verdict, reason, job_id, score_at_vote}` | `cockpit/panel-jobs-radar.jsx::voteJob()` — 👍/👎 + raison. `score_at_vote` mesure le désaccord avec le score (doit décroître). |
 | `history_pin_toggled` | `{iso, pinned}` | `cockpit/panel-history.jsx::handleTogglePin()` |
 | `review_action` | `{action, id}` | `cockpit/panel-review.jsx::markReadAndAdvance()` |

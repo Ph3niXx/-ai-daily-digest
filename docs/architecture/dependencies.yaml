@@ -132,7 +132,7 @@ panels:
       - jobs
       - job_scans
       - user_profile  # job_pref_rules (règles utilisateur verrouillées), job_pref_observed (profil inféré par Cowork) — Lot 2/3
-    writes: [jobs]  # status + user_notes + user_verdict + user_verdict_reason + user_verdict_at (whitelist)
+    writes: [jobs]  # status + user_notes + user_verdict + user_verdict_reason + user_verdict_at + closed_at (whitelist)
     realtime:
       channel: jobs_radar_sub
       tables: [jobs, job_scans]
@@ -306,12 +306,12 @@ tables:
 
   - name: jobs
     owner_pipeline: cowork_external
-    rls: public  # using(true), update whitelist status + user_notes + user_verdict*
+    rls: public  # using(true), update whitelist status + user_notes + user_verdict* + closed_at
     domain: business
     columns_notable:
       - name: closed_at
         type: timestamptz
-        writer: cowork_external  # posé quand LinkedIn marque "ne recrute plus"
+        writer: cowork_external + front  # Cowork (auto, "ne recrute plus") OU bouton cockpit "Marquer clôturée" (réversible) — ADR-18
         reader: front  # masquage feed + filtre Clôturées (migration 015)
 
   - name: learning_recommendations

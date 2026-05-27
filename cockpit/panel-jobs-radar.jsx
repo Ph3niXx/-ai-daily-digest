@@ -11,7 +11,7 @@
 
 const { useState: useStateJr, useMemo: useMemoJr, useEffect: useEffectJr, useRef: useRefJr } = React;
 
-// ─── Supabase write (user-editable fields: status, user_notes, user_verdict*) ───
+// ─── Supabase write (user-editable fields: status, user_notes, user_verdict*, closed_at) ───
 async function patchJobSupabase(id, patch) {
   const safe = {};
   if ("status" in patch) safe.status = patch.status;
@@ -19,6 +19,7 @@ async function patchJobSupabase(id, patch) {
   if ("user_verdict" in patch) safe.user_verdict = patch.user_verdict;
   if ("user_verdict_reason" in patch) safe.user_verdict_reason = patch.user_verdict_reason;
   if ("user_verdict_at" in patch) safe.user_verdict_at = patch.user_verdict_at;
+  if ("closed_at" in patch) safe.closed_at = patch.closed_at;
   if (!Object.keys(safe).length) return;
   if (!window.sb || !window.sb.patchJSON || !window.SUPABASE_URL) return;
   const url = window.SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(id);
@@ -98,7 +99,7 @@ function JrToast({ message, tone }) {
 }
 
 // ─── Actions menu — kebab popover (snooze / archive / notes) ───
-function JrActionsMenu({ offer, open, onToggle, onSnooze, onArchive, onEditNotes }) {
+function JrActionsMenu({ offer, open, onToggle, onSnooze, onArchive, onEditNotes, onClose, onReopen }) {
   const ref = useRefJr(null);
   useEffectJr(() => {
     if (!open) return;
@@ -133,6 +134,18 @@ function JrActionsMenu({ offer, open, onToggle, onSnooze, onArchive, onEditNotes
             <Icon name="file_text" size={13} stroke={2} />
             <span>Éditer les notes</span>
           </button>
+          {!offer.closed_at && offer.status !== "applied" && (
+            <button className="jr-menu-item" role="menuitem" onClick={() => onClose(offer.id)}>
+              <Icon name="x" size={13} stroke={2} />
+              <span>Marquer clôturée</span>
+            </button>
+          )}
+          {offer.closed_at && (
+            <button className="jr-menu-item" role="menuitem" onClick={() => onReopen(offer.id)}>
+              <Icon name="refresh" size={13} stroke={2} />
+              <span>Rouvrir</span>
+            </button>
+          )}
           {offer.intel_depth === "light" && (
             <button className="jr-menu-item" role="menuitem" disabled title="Feature à venir — enrichira l'intel manquant via Jarvis">
               <Icon name="sparkles" size={13} stroke={2} />
@@ -407,7 +420,7 @@ function RubricBlock({ offer }) {
 }
 
 // ─── Hot lead card (big, intel déplié) ────────────────────
-function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, openMenu, onMenuToggle, notesEditing }) {
+function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, onClose, onReopen, openMenu, onMenuToggle, notesEditing }) {
   const intel = offer.intel;
   const isNotesOpen = notesEditing === offer.id;
   const targetRange = (window.PROFILE_DATA && window.PROFILE_DATA._values && window.PROFILE_DATA._values.target_salary_range) || null;
@@ -538,6 +551,8 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
             onSnooze={onSnooze}
             onArchive={onArchive}
             onEditNotes={onEditNotes}
+            onClose={onClose}
+            onReopen={onReopen}
           />
           {intel && intel.lead && intel.lead.linkedin && (
             <a className="jr-btn jr-btn--ghost" href={intel.lead.linkedin} target="_blank" rel="noopener noreferrer">
@@ -556,7 +571,7 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
 }
 
 // ─── List row (mid + low, dense) ──────────────────────────
-function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, openMenu, onMenuToggle, notesEditing }) {
+function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, onClose, onReopen, openMenu, onMenuToggle, notesEditing }) {
   const band = scoreBand(offer.score_total);
   const isNotesOpen = notesEditing === offer.id;
   return (
@@ -623,6 +638,8 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
           onSnooze={onSnooze}
           onArchive={onArchive}
           onEditNotes={onEditNotes}
+          onClose={onClose}
+          onReopen={onReopen}
         />
         <button className="jr-btn jr-btn--icon" onClick={() => onApply(offer)} disabled={!offer.url} title={offer.status === "applied" ? "Rouvrir sur LinkedIn" : "Postuler sur LinkedIn"}>
           <Icon name="arrow_right" size={14} stroke={2.2} />
@@ -893,6 +910,19 @@ function PanelJobsRadar({ data, onNavigate }) {
   const cancelEditNotes = () => setNotesEditing(null);
   const saveNotes = (id, notes) => { updateJob(id, { user_notes: notes }, "Notes enregistrées"); setNotesEditing(null); };
 
+  // Clôture manuelle — le front écrit closed_at (réversible via reopenJob). On
+  // track explicitement action:"close"/"reopen" (updateJob dériverait "closed_at").
+  const closeJob = (id) => {
+    try { window.track && window.track("jobs_action", { action: "close", job_id: String(id).slice(0, 64), value: "" }); } catch {}
+    persistJobPatch(id, { closed_at: new Date().toISOString() }, "Offre clôturée");
+    setOpenMenu(null);
+  };
+  const reopenJob = (id) => {
+    try { window.track && window.track("jobs_action", { action: "reopen", job_id: String(id).slice(0, 64), value: "" }); } catch {}
+    persistJobPatch(id, { closed_at: null }, "Offre rouverte");
+    setOpenMenu(null);
+  };
+
   const cardHandlers = {
     onApply: applyToJob,
     onSnooze: snoozeJob,
@@ -901,6 +931,8 @@ function PanelJobsRadar({ data, onNavigate }) {
     onSaveNotes: saveNotes,
     onCancelNotes: cancelEditNotes,
     onVote: voteJob,
+    onClose: closeJob,
+    onReopen: reopenJob,
     openMenu,
     onMenuToggle: setOpenMenu,
     notesEditing,
