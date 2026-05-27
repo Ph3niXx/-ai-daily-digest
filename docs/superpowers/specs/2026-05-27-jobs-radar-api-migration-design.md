@@ -20,23 +20,25 @@ Coût observé : **0,20-0,40 €/run**, 8-15 min, dépendance à un Chrome authe
 | Quel moteur ? | **Routine Claude Code planifiée** (remote agent, cron), pas Cowork, pas un pipeline Python. |
 | API primaire ? | **JSearch (RapidAPI)** — meilleure couverture des rôles produit/RTE scale-up Paris. |
 | Intel warm ? | **Abandonnée franchement** — on nettoie aussi le code UI mort (lead/réseau/angle). |
+| Combien de requêtes ? | **5 requêtes-rôles × 4 runs/semaine ≈ 87/mois** (sous le quota gratuit), `num_pages=1`. Rôles gardés : product manager, senior program manager, transformation PM, release train engineer, chief of staff. `head of product` + `senior PO fintech` retirés. |
+| Carte front ? | **Refonte vers la fiche éditoriale (Proposition C)** : note CV inline, skills scindés « tu as / à acquérir », salaire en encart. Match CV par skill conservé (cœur de la carte). Maquette : [2026-05-27-jobs-radar-card-proposals.html](2026-05-27-jobs-radar-card-proposals.html). |
 
 ## Architecture cible
 
 Le principe directeur : **on ne change que qui remplit les tables et comment.** Les tables `jobs` + `job_scans`, le front Jobs Radar et le realtime Supabase restent la cible et la source de vérité côté lecture.
 
 ```
-┌─ Routine Claude Code (cron, 1×/jour 8h Paris) ───────────────┐
+┌─ Routine Claude Code (cron, 4×/sem. 8h Paris) ───────────────┐
 │  Étape 0  Calibrage : lit job_pref_rules + job_pref_observed  │
 │           + verdicts récents (inchangé vs v3.2)               │
-│  Étape 1  Fetch JSearch (7 requêtes-rôles, country=fr) → JSON │
+│  Étape 1  Fetch JSearch (5 requêtes-rôles, country=fr) → JSON │
 │  Étape 2  Dédup sur external id + trigger (title, company)    │
 │  Étape 3  Scoring rubric /10 sur le TEXTE de la JD (calibré)  │
-│  Étape 4  Reco CV (pdf/docx) + estimation salaire (Top 3)     │
+│  Étape 4  Estimation salaire (Top 3) + skills JD × match CV   │
 │  Étape 5  UPSERT jobs + INSERT job_scans (Supabase MCP,       │
 │           service_role)                                        │
 └───────────────────────────────────────────────────────────────┘
-        │ (texte compact, ~30 JD/jour — plus aucun écran rendu)
+        │ (texte compact, ~30 JD/run — plus aucun écran rendu)
         ▼
    Supabase  jobs / job_scans  ──realtime──▶  Front Jobs Radar (inchangé)
 ```
@@ -45,14 +47,16 @@ Pas de navigateur, pas de session LinkedIn, pas de graphe social. Coût attendu 
 
 ### Couche source — JSearch (RapidAPI)
 
-- Endpoint `search` de JSearch, `country=fr`, une requête par rôle cible (les 7 requêtes-clés actuelles : product manager, chief of staff, head of product, senior product owner fintech, release train engineer, senior program manager, transformation program manager).
+- Endpoint `search` de JSearch, `country=fr`, `num_pages=1` (≈10 offres/requête). Une requête par rôle cible — **5 rôles** (réduits depuis les 7 d'origine : `head of product` et `senior product owner fintech` retirés, couverts/redondants avec `product manager`) : product manager, senior program manager, transformation program manager, release train engineer, chief of staff.
 - Retour JSON structuré par offre : `job_id`, `employer_name`, `job_title`, `job_description`, `job_city`, `job_posted_at`, `job_apply_link`, et parfois `job_min_salary`/`job_max_salary`.
 - Secret nouveau : `RAPIDAPI_KEY` (à documenter dans [docs/secrets.md](../../secrets.md)).
-- **Quota** : free tier JSearch = 200 req/mois. 7 requêtes/jour ≈ 210/mois → légèrement au-dessus. Au choix à l'implémentation : (a) tier payant JSearch (quelques $/mois), (b) réduire/fusionner des requêtes, ou (c) basculer Adzuna (100 % gratuit, couverture moindre) — le code de fetch est quasi identique. **Adzuna reste le plan B documenté.**
+- **Quota** : free tier JSearch ≈ **100 req/mois** (à confirmer à l'implémentation — les sources oscillent entre 100 et 200). Cadence retenue : **4 runs/semaine** × 5 requêtes = **~87 req/mois**, sous le cap même pessimiste (~13 de marge). `num_pages=1` ⇒ 1 requête = 1 appel (on évite la multiplication du quota par page, piège connu de JSearch). **Plan B** si le quota se révèle être 100 pile ou si le besoin de quotidien revient : Adzuna (quota gratuit bien plus large, couverture produit/RTE Paris moindre) — code de fetch quasi identique.
 
-### Couche scoring — inchangée sur le fond
+### Couche scoring — quasi inchangée (+ extraction skills)
 
-Les Étapes 0, 3, 4.5 du prompt v3.2 sont **reprises telles quelles** : calibrage `job_pref_rules` (autorité absolue) + `job_pref_observed`, rubric 3 axes (Séniorité /3, Secteur /3, Impact /4) + bonus, format `rubric_justif` à clés plates figées (`seniority`/`sector`/`impact`/`bonus`/`calibrage`), reco CV pdf/docx, estimation salaire calibrée sur le Top 3. La seule différence : le modèle score sur **le texte de la JD renvoyé par l'API**, plus sur une page rendue.
+Les Étapes 0, 3, 4.5 du prompt v3.2 sont **reprises telles quelles** : calibrage `job_pref_rules` (autorité absolue) + `job_pref_observed`, rubric 3 axes (Séniorité /3, Secteur /3, Impact /4) + bonus, format `rubric_justif` à clés plates figées (`seniority`/`sector`/`impact`/`bonus`/`calibrage`), estimation salaire calibrée sur le Top 3. La seule différence sur le scoring : le modèle score sur **le texte de la JD renvoyé par l'API**, plus sur une page rendue.
+
+**Ajout (carte Proposition C)** : au même passage, l'agent **extrait les skills/compétences mentionnés dans la JD** et les confronte à `skill_radar` + `user_profile` pour marquer chacun *présent sur le CV* ou *à acquérir*. Coût marginal quasi nul (le texte est déjà en contexte). Stocké dans `intel.skills_required[]` (cf. Impact données).
 
 ### Couche écriture — inchangée
 
@@ -67,21 +71,20 @@ UPSERT sur `jobs` (clé `linkedin_job_id`, qui stocke désormais l'ID externe de
 
 ## Impact données
 
-- `intel` jsonb ne contient plus que `salary_estimate` (Top 3). Les clés `signaux_boite` / `lead_identifie` / `reseau_warm` / `angle_approche` ne sont plus produites.
+- `intel` jsonb contient `salary_estimate` (Top 3) **+ `skills_required[]`** — les skills extraits de la JD, chacun avec un flag `on_cv` (présent/absent du CV, calculé côté routine via `skill_radar` + `user_profile`). Les clés warm `signaux_boite` / `lead_identifie` / `reseau_warm` / `angle_approche` ne sont plus produites.
 - `intel_depth` : devient `none` ou `light` (plus jamais `deep`).
 - `linkedin_job_id` (UNIQUE) stocke l'ID JSearch ; `url` = `job_apply_link`.
 - **Migration optionnelle** : ajouter une colonne `source text default 'jsearch'` sur `jobs` pour tracer la provenance (les 554 lignes historiques restent, provenance LinkedIn implicite). À trancher dans le plan — non bloquant, le front ne la lit pas.
 
-## Impact front
+## Impact front — refonte de la carte (Proposition C)
 
-Changement **minimal** — le front gère déjà l'absence des champs intel (guards `intel && (...)`), donc la carte hot dégrade proprement vers **score + rubric par axe + salaire estimé + boutons**.
+`HotLeadCard` est **refondue vers la fiche éditoriale** (maquette validée : [2026-05-27-jobs-radar-card-proposals.html](2026-05-27-jobs-radar-card-proposals.html), Proposition C) : titre + **note CV inline**, bloc **skills scindé « tu as / à acquérir »**, salaire en encart, rubric en bande compacte, actions (vote / clôturée / lien). Le guard `intel && (...)` reste utile pour les 554 lignes historiques (sans `skills_required`) : la carte y dégrade sans le bloc skills.
 
-Nettoyage à faire (décision « abandon franc ») dans [cockpit/panel-jobs-radar.jsx](../../../cockpit/panel-jobs-radar.jsx) + [cockpit/styles-jobs-radar.css](../../../cockpit/styles-jobs-radar.css) :
+Travail dans [cockpit/panel-jobs-radar.jsx](../../../cockpit/panel-jobs-radar.jsx) + [cockpit/styles-jobs-radar.css](../../../cockpit/styles-jobs-radar.css) :
 
-- Retirer de `HotLeadCard` le rendu des blocs `signaux_boite`, `lead_identifie`, `reseau_warm`, `angle_approche` (et le bouton « Ouvrir le lead »).
-- Retirer la normalisation correspondante dans `transformJobIntel` ([data-loader.js](../../../cockpit/lib/data-loader.js)) — garder uniquement `salary_estimate`.
-- Conserver intacts : `ScoreChip`, `RubricBlock`, `SalaryEstimate`, `JrVote`, le scan banner, les filtres, le bouton « Marquer clôturée ».
-- CSS : supprimer les règles `jr-intel-*` / `jr-lead-*` / `jr-warm-*` devenues orphelines.
+- **Nouveau** : bloc skills have/gap alimenté par `intel.skills_required[]` (flag `on_cv` par skill) ; normalisation dans `transformJobIntel` ([data-loader.js](../../../cockpit/lib/data-loader.js)).
+- **Retiré** (abandon intel warm) : rendu des blocs `signaux_boite`, `lead_identifie`, `reseau_warm`, `angle_approche` + bouton « Ouvrir le lead » ; règles CSS `jr-lead-*` / `jr-warm-*` orphelines.
+- **Conservé** : `ScoreChip`, `RubricBlock`, `SalaryEstimate`, `JrVote`, le scan banner, les filtres, le bouton « Marquer clôturée ».
 
 ## Impact doc / archi (règles cardinales)
 

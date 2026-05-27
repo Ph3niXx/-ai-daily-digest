@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Jobs Radar — migration vers une routine Claude Code</title>
+<style>
+  :root{
+    --bg:#0e1116; --surface:#161b22; --surface-2:#1c232d; --line:#2a323d;
+    --tx:#e6edf3; --tx-soft:#aeb9c5; --tx-dim:#7d8a99;
+    --brand:#f0883e; --brand-tint:rgba(240,136,62,.14);
+    --green:#3fb950; --green-tint:rgba(63,185,80,.13);
+    --red:#f85149; --red-tint:rgba(248,81,73,.12);
+    --blue:#58a6ff; --blue-tint:rgba(88,166,255,.12);
+    --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--tx);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:0 24px 96px}
+
+  /* ── Hero ── */
+  header.hero{
+    padding:64px 0 40px; border-bottom:1px solid var(--line); margin-bottom:48px;
+  }
+  .eyebrow{
+    display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600;
+    letter-spacing:.06em; text-transform:uppercase; color:var(--brand);
+    background:var(--brand-tint); padding:5px 12px; border-radius:999px;
+  }
+  h1{font-size:38px; line-height:1.12; margin:20px 0 16px; letter-spacing:-.02em; font-weight:700}
+  .pitch{font-size:19px; line-height:1.55; color:var(--tx-soft); max-width:760px; margin:0}
+  .pitch b{color:var(--tx); font-weight:600}
+  .meta{margin-top:24px; font-size:13.5px; color:var(--tx-dim)}
+  .meta code{background:var(--surface-2); padding:2px 7px; border-radius:6px; color:var(--tx-soft); font-size:12.5px}
+
+  /* ── Cost banner ── */
+  .costs{display:flex; gap:16px; margin-top:32px; flex-wrap:wrap}
+  .cost{
+    flex:1 1 0; min-width:230px; background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:20px 22px; position:relative; overflow:hidden;
+  }
+  .cost.before{border-color:rgba(248,81,73,.35)}
+  .cost.after{border-color:rgba(63,185,80,.35)}
+  .cost .tag{font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase}
+  .cost.before .tag{color:var(--red)}
+  .cost.after .tag{color:var(--green)}
+  .cost .big{font-size:30px; font-weight:700; margin:8px 0 4px; letter-spacing:-.01em}
+  .cost .sub{font-size:13.5px; color:var(--tx-dim); line-height:1.45}
+  .arrow{display:flex; align-items:center; justify-content:center; color:var(--tx-dim); font-size:26px; flex:0 0 auto}
+  @media(max-width:620px){.arrow{transform:rotate(90deg)}}
+
+  /* ── Sections ── */
+  section{margin-top:52px}
+  h2{
+    font-size:13px; font-weight:700; letter-spacing:.09em; text-transform:uppercase;
+    color:var(--tx-dim); margin:0 0 20px; display:flex; align-items:center; gap:10px;
+  }
+  h2::before{content:""; width:18px; height:2px; background:var(--brand); border-radius:2px}
+  h3{font-size:19px; margin:28px 0 10px; font-weight:650; letter-spacing:-.01em}
+  p{margin:0 0 14px; color:var(--tx-soft)}
+  p b, li b{color:var(--tx); font-weight:600}
+  a{color:var(--blue); text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace; font-size:.86em;
+    background:var(--surface-2); padding:1.5px 6px; border-radius:5px; color:var(--tx)}
+
+  ul{margin:0 0 14px; padding-left:0; list-style:none}
+  ul li{position:relative; padding-left:24px; margin-bottom:10px; color:var(--tx-soft)}
+  ul li::before{content:""; position:absolute; left:6px; top:11px; width:6px; height:6px;
+    border-radius:50%; background:var(--brand)}
+  ul.kill li::before{background:var(--red)}
+  ul.keep li::before{background:var(--green)}
+
+  /* ── Decisions table ── */
+  table{width:100%; border-collapse:collapse; margin:0 0 8px; font-size:15px}
+  th,td{text-align:left; padding:13px 16px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-size:12px; letter-spacing:.05em; text-transform:uppercase; color:var(--tx-dim); font-weight:600}
+  td:first-child{color:var(--tx-soft); width:42%}
+  td:last-child b{color:var(--brand)}
+  tr:last-child td{border-bottom:none}
+  .tablecard{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); overflow:hidden}
+
+  /* ── Diagram ── */
+  .diagram{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:26px}
+  .routine{border:1px dashed var(--brand); border-radius:12px; padding:6px 6px 14px; background:var(--brand-tint)}
+  .routine-title{font-size:12.5px; font-weight:700; color:var(--brand); letter-spacing:.05em;
+    text-transform:uppercase; padding:10px 14px 12px}
+  .steps{display:flex; flex-direction:column; gap:8px; padding:0 8px}
+  .step{display:flex; gap:14px; align-items:flex-start; background:var(--surface-2);
+    border:1px solid var(--line); border-radius:9px; padding:11px 14px}
+  .step .n{flex:0 0 auto; width:24px; height:24px; border-radius:7px; background:var(--brand);
+    color:#1a1206; font-weight:700; font-size:12.5px; display:flex; align-items:center; justify-content:center}
+  .step .t{font-size:14px; line-height:1.45; color:var(--tx-soft)}
+  .step .t b{color:var(--tx)}
+  .flowdown{text-align:center; color:var(--tx-dim); font-size:13px; padding:14px 0 8px; line-height:1.4}
+  .flowdown .ico{font-size:20px; display:block; color:var(--brand)}
+  .sink{display:flex; gap:14px; flex-wrap:wrap}
+  .sink .box{flex:1 1 0; min-width:200px; background:var(--surface-2); border:1px solid var(--line);
+    border-radius:9px; padding:13px 16px; font-size:14px; color:var(--tx-soft)}
+  .sink .box b{color:var(--tx)}
+  .sink .box .lbl{font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--blue); font-weight:700; margin-bottom:4px}
+
+  /* ── Callouts ── */
+  .note{border-left:3px solid var(--blue); background:var(--blue-tint); border-radius:0 10px 10px 0;
+    padding:14px 18px; margin:0 0 14px; font-size:14.5px; color:var(--tx-soft)}
+  .note b{color:var(--tx)}
+  .note.warn{border-left-color:var(--brand); background:var(--brand-tint)}
+
+  /* ── Two col cards ── */
+  .grid2{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+  @media(max-width:620px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:20px 22px}
+  .card h3{margin-top:0; font-size:16px}
+  .card.kill{border-color:rgba(248,81,73,.28)}
+  .card.keep{border-color:rgba(63,185,80,.28)}
+  .card .hd{font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; margin-bottom:12px}
+  .card.kill .hd{color:var(--red)}
+  .card.keep .hd{color:var(--green)}
+
+  footer{margin-top:64px; padding-top:24px; border-top:1px solid var(--line);
+    font-size:13px; color:var(--tx-dim)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <span class="eyebrow">Design validé · 27 mai 2026</span>
+    <h1>Jobs Radar : d'une routine Cowork token-vore<br>à une routine Claude Code sur API</h1>
+    <p class="pitch">On remplace la routine Cowork (<b>Sonnet + navigateur + session LinkedIn</b>) par une
+      <b>routine Claude Code planifiée</b> qui lit une <b>API jobs structurée en JSON</b> et
+      <b>abandonne l'intel réseau warm</b>. La token-vore venait des écrans LinkedIn rendus et du graphe
+      social navigué — les deux disparaissent.</p>
+    <div class="meta">
+      Spec markdown : <code>docs/superpowers/specs/2026-05-27-jobs-radar-api-migration-design.md</code>
+    </div>
+
+    <div class="costs">
+      <div class="cost before">
+        <span class="tag">Aujourd'hui — Cowork</span>
+        <div class="big">0,20–0,40 €<span style="font-size:16px;color:var(--tx-dim)"> / run</span></div>
+        <div class="sub">Sonnet lit des écrans LinkedIn rendus (DOM géant) + navigue le graphe social. 8–15 min, Chrome authentifié requis.</div>
+      </div>
+      <div class="arrow">→</div>
+      <div class="cost after">
+        <span class="tag">Cible — Claude Code</span>
+        <div class="big">cents<span style="font-size:16px;color:var(--tx-dim)"> / run</span></div>
+        <div class="sub">~30 fiches de poste en texte compact (JSON). Aucun écran, aucun navigateur, aucune session.</div>
+      </div>
+    </div>
+  </header>
+
+  <section>
+    <h2>Le problème</h2>
+    <p>La routine actuelle tourne dans Cowork desktop avec Sonnet et un navigateur sur une session LinkedIn
+      authentifiée. Elle est token-vore pour <b>deux raisons cumulées</b> :</p>
+    <ul class="kill">
+      <li><b>Lecture d'écrans LinkedIn rendus</b> — chaque page de recherche ou fiche de poste est un DOM
+        gigantesque plein de bruit, ingéré tel quel par le modèle.</li>
+      <li><b>Navigation du graphe social</b> — pour produire l'intel warm (lead identifié, réseau 1<sup>er</sup>/2<sup>e</sup>
+        degré, angle d'approche), l'agent visite des pages entreprise et des profils, multipliant les écrans lourds.</li>
+    </ul>
+    <p>S'y ajoute la dépendance opérationnelle : Cowork desktop allumé + un Chrome connecté à LinkedIn.</p>
+  </section>
+
+  <section>
+    <h2>Décisions de cadrage</h2>
+    <p>Issues du brainstorming du 27 mai — chaque ligne ferme une alternative.</p>
+    <div class="tablecard">
+      <table>
+        <thead><tr><th>Question</th><th>Décision</th></tr></thead>
+        <tbody>
+          <tr><td>Qu'est-ce qui a le plus de valeur ?</td><td><b>La découverte + le scoring.</b> L'intel warm est un bonus non vital.</td></tr>
+          <tr><td>D'où viennent les offres ?</td><td><b>API agrégateur structurée</b> (Google for Jobs) — plus de session LinkedIn ni de navigateur.</td></tr>
+          <tr><td>Quel moteur ?</td><td><b>Routine Claude Code planifiée</b> (remote agent, cron) — pas Cowork, pas un pipeline Python.</td></tr>
+          <tr><td>API primaire ?</td><td><b>JSearch (RapidAPI)</b> — meilleure couverture des rôles produit/RTE scale-up Paris.</td></tr>
+          <tr><td>Intel warm ?</td><td><b>Abandonnée franchement</b> — on nettoie aussi le code UI mort (lead/réseau/angle).</td></tr>
+          <tr><td>Combien de requêtes ?</td><td><b>5 requêtes-rôles × 4 runs/semaine ≈ 87/mois</b> (sous le quota gratuit), <code>num_pages=1</code>. <code>head of product</code> + <code>senior PO fintech</code> retirés.</td></tr>
+          <tr><td>Carte front ?</td><td><b>Refonte vers la fiche éditoriale (Proposition C)</b> : note CV inline, skills scindés « tu as / à acquérir », salaire en encart. Match CV par skill conservé. <a href="2026-05-27-jobs-radar-card-proposals.html">Maquettes →</a></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section>
+    <h2>Architecture cible</h2>
+    <p>Principe directeur : <b>on ne change que qui remplit les tables et comment.</b> Les tables
+      <code>jobs</code> + <code>job_scans</code>, le front Jobs Radar et le realtime Supabase restent la cible.</p>
+
+    <div class="diagram">
+      <div class="routine">
+        <div class="routine-title">⟳ Routine Claude Code — cron, 4×/semaine · 8h Paris</div>
+        <div class="steps">
+          <div class="step"><span class="n">0</span><span class="t"><b>Calibrage</b> — lit <code>job_pref_rules</code> + <code>job_pref_observed</code> + verdicts récents <i>(inchangé vs v3.2)</i></span></div>
+          <div class="step"><span class="n">1</span><span class="t"><b>Fetch JSearch</b> — 5 requêtes-rôles, <code>country=fr</code>, <code>num_pages=1</code> → JSON structuré</span></div>
+          <div class="step"><span class="n">2</span><span class="t"><b>Dédup</b> — sur ID externe + trigger <code>(title, company)</code></span></div>
+          <div class="step"><span class="n">3</span><span class="t"><b>Scoring rubric /10</b> sur le <b>texte</b> de la JD (calibré, format <code>rubric_justif</code> figé)</span></div>
+          <div class="step"><span class="n">4</span><span class="t"><b>Estimation salaire</b> (Top 3) + <b>skills JD × match CV</b> (skill_radar)</span></div>
+          <div class="step"><span class="n">5</span><span class="t"><b>UPSERT</b> <code>jobs</code> + <b>INSERT</b> <code>job_scans</code> via Supabase MCP (service_role)</span></div>
+        </div>
+      </div>
+      <div class="flowdown">
+        <span class="ico">↓</span>
+        texte compact · ~30 JD/run · <b style="color:var(--tx-soft)">plus aucun écran rendu</b>
+      </div>
+      <div class="sink">
+        <div class="box"><div class="lbl">Supabase</div><b>jobs</b> / <b>job_scans</b> — source de vérité côté lecture</div>
+        <div class="box"><div class="lbl">Realtime →</div>Front <b>Jobs Radar</b> — inchangé (la carte hot dégrade proprement)</div>
+      </div>
+    </div>
+
+    <h3>Couche source — JSearch (RapidAPI)</h3>
+    <ul>
+      <li>Endpoint <code>search</code>, <code>country=fr</code>, <code>num_pages=1</code> (≈10 offres/requête). Une requête par rôle cible — <b>5 rôles</b> : product manager, senior program manager, transformation program manager, release train engineer, chief of staff. (<code>head of product</code> + <code>senior PO fintech</code> retirés, couverts par <code>product manager</code>.)</li>
+      <li>JSON par offre : <code>job_id</code>, <code>employer_name</code>, <code>job_title</code>, <code>job_description</code>, <code>job_apply_link</code>, parfois le salaire.</li>
+      <li>Nouveau secret : <code>RAPIDAPI_KEY</code>.</li>
+    </ul>
+    <div class="note warn"><b>Quota.</b> Free tier ≈ 100 req/mois (à confirmer — sources entre 100 et 200). Cadence retenue : <b>4 runs/semaine × 5 requêtes ≈ 87/mois</b>, sous le cap même pessimiste (~13 de marge). <code>num_pages=1</code> ⇒ 1 requête = 1 appel (évite la multiplication du quota par page, piège connu de JSearch).
+      <b>Plan B</b> si le quota se révèle être 100 pile ou si le besoin de quotidien revient : bascule <b>Adzuna</b> (gratuit, quota bien plus large, couverture produit/RTE Paris moindre) — code de fetch quasi identique.</div>
+
+    <h3>Couches scoring & écriture — quasi inchangées (+ skills)</h3>
+    <p>Les Étapes 0, 3 et 4.5 du prompt v3.2 sont reprises telles quelles (calibrage, rubric 3 axes + bonus,
+      estimation salaire). Seule différence : le modèle score sur le <b>texte renvoyé par l'API</b>, plus
+      sur une page rendue. <b>Ajout</b> : au même passage, l'agent extrait les <b>skills de la JD</b> et les confronte à <code>skill_radar</code> + <code>user_profile</code> (présent / à acquérir), stockés dans <code>intel.skills_required[]</code>. UPSERT et garde-fous user-modifiables (<code>status</code>, <code>user_notes</code>,
+      <code>user_verdict*</code>) identiques ; le trigger <code>jobs_inherit_user_status</code> continue de marcher.</p>
+  </section>
+
+  <section>
+    <h2>Ce qui change concrètement</h2>
+    <div class="grid2">
+      <div class="card kill">
+        <div class="hd">✕ Disparaît du prompt</div>
+        <ul class="kill">
+          <li><b>Intel light + deep</b> (signaux boîte, lead, réseau warm, angle, maturité SAFe).</li>
+          <li><b>Fenêtre LinkedIn <code>f_TPR</code></b> → remplacée par la fraîcheur native de l'API.</li>
+          <li><b>Passe de fraîcheur par re-fetch de pages</b> (exigeait le navigateur).</li>
+        </ul>
+      </div>
+      <div class="card keep">
+        <div class="hd">✓ Conservé</div>
+        <ul class="keep">
+          <li><b>Nouveau — skills attendus × match CV</b> (✓ tu as / ↗ à acquérir), extraits de la JD.</li>
+          <li><b>Score + rubric par axe</b>, salaire estimé.</li>
+          <li><b>Bouton « Marquer clôturée »</b> manuel (ADR-18) — remplace la détection auto.</li>
+          <li><b>GUARD anti-injection</b> sur le texte des JD (par prudence).</li>
+        </ul>
+      </div>
+    </div>
+
+    <h3>Impact données</h3>
+    <ul>
+      <li><code>intel</code> jsonb = <code>salary_estimate</code> <b>+ <code>skills_required[]</code></b> (skills de la JD, flag <code>on_cv</code> par skill via <code>skill_radar</code> + <code>user_profile</code>) ; <code>intel_depth</code> ∈ {<code>none</code>, <code>light</code>}.</li>
+      <li><code>linkedin_job_id</code> (UNIQUE) stocke l'ID JSearch ; <code>url</code> = <code>job_apply_link</code>.</li>
+      <li><b>Migration optionnelle</b> : colonne <code>source</code> pour la provenance (les 554 lignes historiques restent). À trancher dans le plan — le front ne la lit pas.</li>
+    </ul>
+
+    <h3>Impact front — minimal</h3>
+    <p>Le front gère déjà l'absence des champs intel (guards <code>intel && (…)</code>), donc la carte hot dégrade
+      proprement vers <b>score + rubric + salaire + boutons</b>. Nettoyage du code mort : retirer le rendu intel
+      warm de <code>HotLeadCard</code>, la normalisation correspondante dans <code>transformJobIntel</code>, et les
+      règles CSS <code>jr-intel-*</code>/<code>jr-lead-*</code>/<code>jr-warm-*</code> orphelines. On conserve
+      <code>ScoreChip</code>, <code>RubricBlock</code>, <code>SalaryEstimate</code>, <code>JrVote</code>, le scan banner et les filtres.</p>
+
+    <h3>Impact doc / archi (règles cardinales)</h3>
+    <ul>
+      <li><b>Spec</b> : MAJ <code>docs/specs/tab-jobs.md</code> + bump <code>index.json</code>.</li>
+      <li><b>Routine</b> : réécrire <code>docs/cowork-routines/jobs-radar.md</code> en prompt Claude Code (renommage <code>cowork-routines/ → agent-routines/</code> à trancher).</li>
+      <li><b>Archi</b> : <code>pipelines.yaml</code> + <code>dependencies.yaml</code> + <b>ADR-19</b> dans <code>decisions.md</code>.</li>
+      <li><b>Secrets</b> : entrée <code>RAPIDAPI_KEY</code> dans <code>docs/secrets.md</code>.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Hors scope & risques</h2>
+    <div class="grid2">
+      <div class="card">
+        <h3>Hors scope (volontaire)</h3>
+        <ul>
+          <li>Enrichissement à la demande via Jarvis local — abandonné, pas remis en TODO.</li>
+          <li>Refonte du scan banner / filtres / vote.</li>
+          <li>Migration des 554 lignes historiques.</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3>Risques assumés</h3>
+        <ul>
+          <li><b>Couverture ≠ LinkedIn</b> : offres non 100 % LinkedIn, liens « Postuler » variés.</li>
+          <li><b>Quota free tier</b> → fallback Adzuna.</li>
+          <li><b>Perte de la clôture auto</b> → compensée par le bouton manuel.</li>
+          <li><b>JD tronquées</b> → fetch d'appoint de l'URL en dernier recours.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Document de design — Jarvis Cockpit · Jobs Radar. Généré depuis la spec markdown du 2026-05-27.
+    Prochaine étape : plan d'implémentation détaillé.
+  </footer>
+
+</div>
+</body>
+</html>
