@@ -131,7 +131,7 @@ panels:
     reads:
       - jobs
       - job_scans
-      - user_profile  # job_pref_rules (règles utilisateur verrouillées), job_pref_observed (profil inféré par Cowork) — Lot 2/3
+      - user_profile  # job_pref_rules (règles utilisateur verrouillées), job_pref_observed (profil inféré par la routine Jobs Radar) — Lot 2/3
     writes: [jobs]  # status + user_notes + user_verdict + user_verdict_reason + user_verdict_at + closed_at (whitelist)
     realtime:
       channel: jobs_radar_sub
@@ -300,18 +300,22 @@ tables:
     domain: jarvis
 
   - name: job_scans
-    owner_pipeline: cowork_external
+    owner_pipeline: jobs_radar_routine  # routine Claude Code distante (claude.ai, cron 4×/sem) via MCP Supabase — ADR-19 (ex-cowork_external)
     rls: public  # using(true) — pas aligné sur 006_rls_authenticated
     domain: business
 
   - name: jobs
-    owner_pipeline: cowork_external
+    owner_pipeline: jobs_radar_routine  # routine Claude Code distante (JSearch + Sonnet 4.6 + MCP Supabase) — ADR-19, remplace la routine Cowork LinkedIn
     rls: public  # using(true), update whitelist status + user_notes + user_verdict* + closed_at
     domain: business
     columns_notable:
+      - name: intel
+        type: jsonb
+        writer: jobs_radar_routine  # { salary_estimate, skills_required:[{name,on_cv}] } ; intel_depth='light'. Intel warm + cv_recommended/cv_reason abandonnés — ADR-19
+        reader: front  # carte fiche éditoriale : bloc skills have/gap + encart salaire
       - name: closed_at
         type: timestamptz
-        writer: cowork_external + front  # Cowork (auto, "ne recrute plus") OU bouton cockpit "Marquer clôturée" (réversible) — ADR-18
+        writer: front  # bouton cockpit "Marquer clôturée"/"Rouvrir" (réversible) — ADR-18. Détection auto abandonnée avec la migration JSearch (plus de navigateur) — ADR-19
         reader: front  # masquage feed + filtre Clôturées (migration 015)
 
   - name: learning_recommendations

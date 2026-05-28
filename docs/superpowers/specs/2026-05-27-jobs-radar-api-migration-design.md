@@ -2,6 +2,8 @@
 
 > Design validé le 2026-05-27. Remplace la routine Cowork token-vore (Sonnet + navigateur + session LinkedIn) par une routine Claude Code planifiée qui lit une API jobs structurée (JSON) et abandonne l'intel réseau warm.
 
+> **Réconciliation post-implémentation (2026-05-28, [ADR-19](../../architecture/decisions.md)).** Le moteur a shippé **tel que désigné ici** — une routine Claude Code distante (claude.ai, trigger `trig_01JtTsMm27eTAGxR5po5KmMQ`, Sonnet 4.6) qui fetch JSearch via `curl` et écrit `jobs`/`job_scans` via le connecteur MCP Supabase. Un plan intermédiaire (GitHub Actions + Gemini) a été écrit puis **abandonné** (voir son bandeau SUPERSEDED dans `docs/superpowers/plans/`). Corrections de détail vs ce design : la clé RapidAPI n'est **pas** un secret GitHub mais vit **inline dans le prompt** de la routine (un agent distant ne lit pas les secrets GitHub) ; `intel_depth` est toujours `'light'` ; `job_scans` n'écrit plus `signal_cv` (retiré côté front) ; la détection auto de clôture est abandonnée → `closed_at` front-only.
+
 ## Problème
 
 La routine actuelle ([docs/cowork-routines/jobs-radar.md](../../cowork-routines/jobs-radar.md)) tourne dans Cowork desktop avec **Sonnet + un navigateur sur une session LinkedIn authentifiée**. Elle est token-vore pour deux raisons cumulées :

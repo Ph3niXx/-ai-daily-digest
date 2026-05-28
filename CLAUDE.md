@@ -45,7 +45,7 @@ Tout nouveau secret GitHub Actions → entrée dans [docs/secrets.md](docs/secre
 ## Sécurité
 
 - **Auth obligatoire avant mount** : `cockpit/lib/bootstrap.js` attend `cockpitAuth.waitForAuth()` AVANT tout mount React. JWT injecté dans les headers REST, rotation auto sur `TOKEN_REFRESHED`.
-- **RLS `authenticated`** : toutes les tables exigent un utilisateur connecté pour SELECT (migration `sql/006_rls_authenticated.sql`). Exceptions assumées : `jobs` / `job_scans` en `using(true)` (routine Cowork externe).
+- **RLS `authenticated`** : toutes les tables exigent un utilisateur connecté pour SELECT (migration `sql/006_rls_authenticated.sql`). Exceptions assumées : `jobs` / `job_scans` en `using(true)` (routine Jobs Radar distante, écrit via MCP Supabase — ADR-19).
 - **Pipelines backend = `SUPABASE_SERVICE_KEY` uniquement** (bypass RLS). Jarvis refuse de démarrer sans.
 - **XSS** : DOMPurify via helper `safe()`. **CSP** : meta tag restrictif (`frame-src: none`, `'unsafe-eval'` requis pour Babel standalone).
 

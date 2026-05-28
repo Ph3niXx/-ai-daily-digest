@@ -254,3 +254,24 @@ local_pipelines:
     output_tables:
       - activity_briefs
     notes: "Seul le résumé HTML monte dans Supabase (privacy-first). Les données brutes d'activité restent locales."
+
+# Routines Claude Code distantes (claude.ai, hors GitHub Actions) — listées pour
+# la vue d'ensemble, NON incluses dans la timeline crons côté UI (le renderer ne
+# lit que `pipelines:`). Sandbox cloud Anthropic, planifiées via le skill `schedule`.
+external_routines:
+  - id: jobs_radar_routine
+    name: "Jobs Radar (JSearch + Sonnet, routine distante)"
+    trigger: "claude.ai routine trig_01JtTsMm27eTAGxR5po5KmMQ — cron 0 6 * * 1,3,5,0 (lun/mer/ven/dim 08:00 Paris)"
+    model: "claude-sonnet-4-6"
+    input_api: "JSearch (RapidAPI, tier gratuit, ~87 req/mois) — fetch via curl"
+    mcp: "Supabase (execute_sql, service_role)"
+    output_tables:
+      - jobs
+      - job_scans
+    read_tables:
+      - jobs
+      - user_profile
+      - skill_radar
+    budget_usd: 0   # couverte par le plan Max (pas de facturation par run)
+    status: active
+    notes: "Remplace la routine Cowork LinkedIn (ADR-19). 5 requêtes-rôles, dédup linkedin_job_id (=id JSearch), scoring rubric /10 + skills on_cv + salaire. Intel warm + reco CV abandonnés. Clé RapidAPI inline dans le prompt (pas un secret GitHub). Doc : docs/cowork-routines/jobs-radar.md."

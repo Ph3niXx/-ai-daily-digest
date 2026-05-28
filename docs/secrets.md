@@ -68,6 +68,16 @@ Setup : voir [steam-setup.md](steam-setup.md).
 | `STEAM_API_KEY` | Steam Web API key (https://steamcommunity.com/dev/apikey) |
 | `STEAM_ID` | Steam ID 64-bit (17 chiffres) |
 
+## Jobs Radar — routine Claude Code distante (aucun secret GitHub)
+
+La routine Jobs Radar ([cowork-routines/jobs-radar.md](cowork-routines/jobs-radar.md), ADR-19) **ne consomme aucun secret GitHub Actions** — elle tourne en remote sur claude.ai, pas dans un workflow.
+
+- **Clé RapidAPI (JSearch)** : portée **en clair dans le prompt de la routine** (config claude.ai privée), jamais dans `secrets`. Un agent distant ne peut pas lire les secrets GitHub. ⚠️ Si cette clé fuite (transcript, partage), la régénérer sur RapidAPI et mettre à jour le prompt de la routine.
+- **Supabase** : accès via le **connecteur MCP Supabase** (auth propre), pas via `SUPABASE_SERVICE_KEY` en env.
+- **LLM** : pas d'`ANTHROPIC_API_KEY` — la routine est couverte par le plan Max.
+
+> Ne pas ajouter de secret `RAPIDAPI_KEY` aux GitHub Actions : aucun workflow ne l'utilise (le plan GH Actions + Gemini a été abandonné, cf. ADR-19).
+
 ## Règle de maintenance
 
 Tout nouveau secret ajouté à GitHub Actions doit :

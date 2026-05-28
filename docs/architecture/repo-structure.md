@@ -105,7 +105,7 @@ Voir [jarvis/README.md](../../jarvis/README.md) pour la doc complète (vision, s
 | `specs/` | 29 specs onglets (`tab-*.md`) + `index.json` + `_template.md` + [`MAINTENANCE.md`](../specs/MAINTENANCE.md) |
 | `architecture/` | `layers.yaml`, `pipelines.yaml`, `dependencies.yaml`, `flows/`, `decisions.md`, `repo-structure.md`, `README.md` |
 | `audits/` · `veille-claude/` · `prompts/` | Outputs des routines Cowork (veille, audits, prompts) |
-| `cowork-routines/` | Procédures des routines automatisées Cowork |
+| `cowork-routines/` | Procédures des routines automatisées (Cowork desktop + routines Claude Code distantes, ex. Jobs Radar — ADR-19). Dossier non renommé `agent-routines/` (trop de refs). |
 | `*-setup.md` | Procédures de setup pour pipelines Strava / Withings / Last.fm / Steam |
 | [`secrets.md`](../secrets.md) | Liste des GitHub Secrets |
 | [`telemetry.md`](../telemetry.md) | Events `usage_events` instrumentés |
