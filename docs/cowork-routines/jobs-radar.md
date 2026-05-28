@@ -25,7 +25,8 @@
 `jobs` (UPSERT logique sur `linkedin_job_id` = id JSearch) :
 - Scoring : `score_seniority` /3, `score_sector` /3, `score_impact` /4, `score_bonus`, `score_total` /10.
 - `rubric_justif` jsonb — **clés plates figées** : `seniority` / `sector` / `impact` (+ `bonus`, `calibrage` optionnels). Jamais d'objet imbriqué (le front `transformJobRubric` attend ça — toute autre forme a crashé le 12/05).
-- `intel` jsonb = `{ salary_estimate: {min,max,target,currency,basis,rationale} | null, skills_required: [{name, on_cv}] }`. `intel_depth = 'light'`.
+- `intel` jsonb = `{ salary_estimate: {min,max,target,currency,basis,rationale} | null, skills_required: [{name, on_cv}], skills_source: 'highlights'|'description', employer_logo: url|null }`. `intel_depth = 'light'`.
+- Colonne `is_remote` (boolean, NULL = inconnu) — depuis JSearch `job_is_remote`. Seules les offres **FULLTIME** sont insérées (filtre amont, ADR-20).
 - `role_category` ∈ {produit,rte,pgm,pjm,cos} ; `company_stage` ∈ {seed,A,B,C,scale,grand_groupe}.
 - `status` = `new` si `score_total ≥ 5`, sinon `archived`.
 - **Jamais écrit ni écrasé** : `user_notes`, `user_verdict*`, `closed_at`, `cv_recommended`, `cv_reason`, et `status` après création.
@@ -59,7 +60,9 @@ job_pref_rules = regles ecrites par Jean : AUTORITE ABSOLUE, ne jamais les contr
 ETAPE 1 — Fetch JSearch (5 roles, via Bash curl). Pour chaque role, lance :
   curl -s --get 'https://jsearch.p.rapidapi.com/search' -H 'X-RapidAPI-Key: <CLE_RAPIDAPI>' -H 'X-RapidAPI-Host: jsearch.p.rapidapi.com' --data-urlencode 'query=<ROLE> in France' --data-urlencode 'page=1' --data-urlencode 'num_pages=1' --data-urlencode 'country=fr'
 Roles : product manager ; senior program manager ; transformation program manager ; release train engineer ; chief of staff.
-Chaque offre du tableau data[] porte : job_id, employer_name, job_title, job_description, job_city, job_posted_at_datetime_utc, job_apply_link, et parfois job_min_salary / job_max_salary. Si une requete echoue (non-200), continue avec les autres.
+Chaque offre du tableau data[] porte : job_id, employer_name, job_title, job_description, job_city, job_posted_at_datetime_utc, job_apply_link, job_is_remote (booleen), job_employment_types (tableau, ex ['FULLTIME']), job_highlights (objet {Qualifications, Responsibilities, Benefits}, souvent partiel ou vide), employer_logo (URL), et parfois job_min_salary / job_max_salary. Si une requete echoue (non-200), continue avec les autres.
+
+ETAPE 1.5 — Filtre type de contrat : ecarte (ne pas dedupliquer, scorer ni inserer) toute offre dont job_employment_types est renseigne ET ne contient PAS 'FULLTIME' (stages INTERN, temps partiel PARTTIME, freelance CONTRACTOR). Si job_employment_types est absent ou vide → GARDER l'offre (on ne jette jamais sur une donnee manquante). Compte les offres ecartees pour le resume final.
 
 ETAPE 2 — Dedup (avant scoring) :
 - SELECT linkedin_job_id FROM jobs WHERE last_seen_date >= CURRENT_DATE - INTERVAL '30 days';
@@ -78,13 +81,13 @@ Axes :
 - score_total = somme, arrondi 1 decimale, borne 0 a 10.
 CALIBRAGE : job_pref_rules prime sur la rubric ; job_pref_observed ajuste. Si une offre coche un motif de rejet recurrent de Jean → baisse sector/impact et explique dans la cle calibrage.
 rubric_justif (jsonb) = objet a CLES PLATES, une string courte par axe (JAMAIS d'objet imbrique). Cles exactes : seniority, sector, impact, et optionnellement bonus et calibrage. Aucune autre cle, pas de variante FR/EN.
-SKILLS : extrais 5 a 9 competences/exigences cles mentionnees DANS la description. Pour chacune, on_cv = true si le PROFIL de Jean (skill_radar + user_profile) la couvre clairement, sinon false.
+SKILLS : si job_highlights.Qualifications (et/ou Responsibilities) est renseigne, extrais 5 a 9 competences/exigences cles DE LA EN PRIORITE (c'est la liste structuree de l'annonce) ; sinon, extrais-les du job_description. Pour chacune, on_cv = true si le PROFIL de Jean (skill_radar + user_profile) la couvre clairement, sinon false. Note la provenance : skills_source = 'highlights' si tu as utilise job_highlights, sinon 'description'.
 SALAIRE : si la JD affiche une fourchette → basis = published, bornes de la JD. Sinon basis = inferred depuis role/stade/localisation (Head of Product 110-150 ; Senior PM 80-115 ; RTE 85-120 ; Sr PgM 90-125 ; CoS 90-140 k€). target dans [min,max] selon le fit, en k€ entiers. Si indeterminable → null.
 Classe aussi role_category parmi produit, rte, pgm, pjm, cos ; company_stage parmi seed, A, B, C, scale, grand_groupe ; et redige un pitch (1-2 phrases).
 
 ETAPE 4 — Ecriture de chaque NOUVELLE offre (MCP execute_sql, INSERT dans jobs) :
-Colonnes : linkedin_job_id (= job_id JSearch), first_seen_date = CURRENT_DATE, last_seen_date = CURRENT_DATE, title, company (= employer_name), url (= job_apply_link), posted_date (date issue de job_posted_at_datetime_utc), role_category, company_stage, pitch, compensation (fourchette JD si presente sinon NULL), score_seniority, score_sector, score_impact, score_bonus, score_total, rubric_justif (jsonb), intel (jsonb), intel_depth = 'light', status.
-- intel jsonb = un objet a deux cles : salary_estimate (objet min/max/target/currency/basis/rationale en k€, ou null) ; skills_required (tableau d'objets, chacun avec name string et on_cv booleen).
+Colonnes : linkedin_job_id (= job_id JSearch), first_seen_date = CURRENT_DATE, last_seen_date = CURRENT_DATE, title, company (= employer_name), url (= job_apply_link), posted_date (date issue de job_posted_at_datetime_utc), role_category, company_stage, pitch, compensation (fourchette JD si presente sinon NULL), is_remote (= job_is_remote, booleen ou NULL si absent), score_seniority, score_sector, score_impact, score_bonus, score_total, rubric_justif (jsonb), intel (jsonb), intel_depth = 'light', status.
+- intel jsonb = un objet a ces cles : salary_estimate (objet min/max/target/currency/basis/rationale en k€, ou null) ; skills_required (tableau d'objets, chacun avec name string et on_cv booleen) ; skills_source ('highlights' ou 'description') ; employer_logo (= employer_logo de l'offre, ou null).
 - status = 'new' si score_total >= 5, sinon 'archived'.
 - N'ecris JAMAIS user_notes, user_verdict, user_verdict_reason, user_verdict_at, closed_at, cv_recommended, cv_reason.
 - Echappe correctement les apostrophes dans les chaines. Le trigger DB jobs_inherit_user_status gere les republications (titre,boite) — ne t'en occupe pas.
@@ -95,7 +98,7 @@ INSERT INTO job_scans (scan_date, raw_count, dedup_strict_count, processed_count
 
 GARDE-FOUS : budget ~10 min ; jour calme (0 nouvelle offre) → ecris quand meme la ligne job_scans avec des 0 ; ne jamais ecraser les champs modifiables par Jean (status apres creation, user_notes, user_verdict*, closed_at).
 
-SORTIE : affiche un resume court — nombre d'offres fetchees / dedupliquees / archivees / hot leads, et le Top 3 (titre, score, ~target k€).
+SORTIE : affiche un resume court — nombre d'offres fetchees / ecartees (non-FULLTIME) / dedupliquees / archivees / hot leads, et le Top 3 (titre, score, ~target k€).
 ```
 
 ## Ce qui a disparu vs l'ère Cowork (ADR-19)
@@ -110,4 +113,5 @@ SORTIE : affiche un resume court — nombre d'offres fetchees / dedupliquees / a
 
 ## Dernière MAJ
 
+2026-05-28 — **v2.1 (ADR-20)** : exploitation des champs JSearch — filtre FULLTIME (Étape 1.5), skills depuis `job_highlights` en priorité (+ `skills_source`), colonne `is_remote`, `intel.employer_logo`. Prompt ci-dessus mis à jour (miroir de la routine live).
 2026-05-28 — **migration vers la routine Claude Code distante** (JSearch + Sonnet 4.6 + MCP Supabase, ADR-19). Réécriture complète de ce doc ; abandon intel warm / reco CV / détection auto clôture ; clé RapidAPI inline. Routine activée (`enabled: true`) après un test end-to-end concluant ; prochain run automatique lun/mer/ven/dim 08:00 Paris.

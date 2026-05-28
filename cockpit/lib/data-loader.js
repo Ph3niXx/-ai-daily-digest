@@ -1613,9 +1613,14 @@
       })
       .filter(Boolean);
 
+    // Logo employeur (affichage) + provenance des skills (highlights vs description) — Jobs Radar v2.1.
+    const employer_logo = (typeof intel.employer_logo === "string" && intel.employer_logo.trim()) ? intel.employer_logo.trim() : null;
+    const skills_source = intel.skills_source === "highlights" ? "highlights"
+                        : intel.skills_source === "description" ? "description" : null;
+
     // Rien d'exploitable → null (le guard `intel && (...)` masque la carte enrichie).
-    if (!salary_estimate && !skills_required.length) return null;
-    return { salary_estimate, skills_required };
+    if (!salary_estimate && !skills_required.length && !employer_logo) return null;
+    return { salary_estimate, skills_required, skills_source, employer_logo };
   }
 
   function transformJobRow(row){
@@ -1645,6 +1650,7 @@
       user_verdict_reason: row.user_verdict_reason || "",
       user_verdict_at: row.user_verdict_at || null,
       closed_at: row.closed_at || null,
+      is_remote: typeof row.is_remote === "boolean" ? row.is_remote : null,
     };
   }
 

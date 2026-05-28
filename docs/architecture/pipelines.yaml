@@ -274,4 +274,4 @@ external_routines:
       - skill_radar
     budget_usd: 0   # couverte par le plan Max (pas de facturation par run)
     status: active
-    notes: "Remplace la routine Cowork LinkedIn (ADR-19). 5 requêtes-rôles, dédup linkedin_job_id (=id JSearch), scoring rubric /10 + skills on_cv + salaire. Intel warm + reco CV abandonnés. Clé RapidAPI inline dans le prompt (pas un secret GitHub). Doc : docs/cowork-routines/jobs-radar.md."
+    notes: "Remplace la routine Cowork LinkedIn (ADR-19). 5 requêtes-rôles, dédup linkedin_job_id (=id JSearch), scoring rubric /10 + skills on_cv + salaire. v2.1 (ADR-20) : filtre FULLTIME pré-scoring, skills depuis job_highlights, colonne is_remote, logo employeur. Intel warm + reco CV abandonnés. Clé RapidAPI inline dans le prompt (pas un secret GitHub). Doc : docs/cowork-routines/jobs-radar.md."

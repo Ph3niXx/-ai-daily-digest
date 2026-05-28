@@ -311,8 +311,12 @@ tables:
     columns_notable:
       - name: intel
         type: jsonb
-        writer: jobs_radar_routine  # { salary_estimate, skills_required:[{name,on_cv}] } ; intel_depth='light'. Intel warm + cv_recommended/cv_reason abandonnés — ADR-19
-        reader: front  # carte fiche éditoriale : bloc skills have/gap + encart salaire
+        writer: jobs_radar_routine  # { salary_estimate, skills_required:[{name,on_cv}], skills_source, employer_logo } ; intel_depth='light'. Intel warm + cv_recommended/cv_reason abandonnés — ADR-19/20
+        reader: front  # carte fiche éditoriale : skills have/gap (+ source) + encart salaire + logo
+      - name: is_remote
+        type: boolean
+        writer: jobs_radar_routine  # = JSearch job_is_remote ; NULL = inconnu (migration 016, ADR-20)
+        reader: front  # badge « Remote » + filtre — lecture seule, hors whitelist PATCH
       - name: closed_at
         type: timestamptz
         writer: front  # bouton cockpit "Marquer clôturée"/"Rouvrir" (réversible) — ADR-18. Détection auto abandonnée avec la migration JSearch (plus de navigateur) — ADR-19

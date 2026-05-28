@@ -688,6 +688,23 @@
 .jr-skill--gap { color: var(--tx2); border: 1px dashed var(--bd2); }
 .jr-skill--gap::before { content: "↗ "; color: var(--brand-ink, var(--brand)); }
 .jr-skills-empty { font-family: var(--font-mono); font-size: 11.5px; color: var(--tx3); list-style: none; }
+.jr-skills-source {
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--tx3); margin-left: 8px; font-weight: 400;
+}
+
+/* Logo employeur + badge Remote (Jobs Radar v2.1) */
+.jr-hot-company { display: flex; align-items: center; gap: 8px; }
+.jr-hot-logo {
+  width: 22px; height: 22px; border-radius: 5px; object-fit: contain;
+  background: var(--bg); border: 1px solid var(--bd2); flex: 0 0 auto;
+}
+.jr-hot-remote {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 1px 7px; border-radius: 999px;
+  background: var(--brand-tint); color: var(--brand-ink, var(--brand)); white-space: nowrap;
+}
+.jr-tag--remote { background: var(--brand-tint); color: var(--brand-ink, var(--brand)); border-color: transparent; }
 
 /* Hot foot */
 .jr-hot-foot {

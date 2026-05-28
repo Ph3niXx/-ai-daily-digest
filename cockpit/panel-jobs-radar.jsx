@@ -414,13 +414,16 @@ function RubricBlock({ offer }) {
 }
 
 // ─── Skills attendus (split : présent sur le CV / à acquérir) ───
-function JrSkills({ skills }) {
+function JrSkills({ skills, source }) {
   if (!Array.isArray(skills) || !skills.length) return null;
   const have = skills.filter(s => s && s.on_cv);
   const gap  = skills.filter(s => s && !s.on_cv);
   return (
     <div className="jr-skills">
-      <div className="jr-section-kicker">Skills attendus dans l'offre</div>
+      <div className="jr-section-kicker">
+        Skills attendus dans l'offre
+        {source === "highlights" && <span className="jr-skills-source">d'après l'annonce</span>}
+      </div>
       <div className="jr-skills-split">
         <div className="jr-skills-col jr-skills-col--have">
           <div className="jr-skills-head">Tu as déjà <span className="jr-skills-count">{have.length}</span></div>
@@ -444,6 +447,7 @@ function JrSkills({ skills }) {
 // ─── Hot lead card (big, intel déplié) ────────────────────
 function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, onSaveNotes, onCancelNotes, onVote, onClose, onReopen, openMenu, onMenuToggle, notesEditing }) {
   const intel = offer.intel;
+  const logo = (intel && intel.employer_logo) || null;
   const isNotesOpen = notesEditing === offer.id;
   const targetRange = (window.PROFILE_DATA && window.PROFILE_DATA._values && window.PROFILE_DATA._values.target_salary_range) || null;
   return (
@@ -469,9 +473,16 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
             <span className="jr-hot-sep">·</span>
             <span className="jr-hot-comp">{offer.compensation}</span>
           </>)}
+          {offer.is_remote && (<>
+            <span className="jr-hot-sep">·</span>
+            <span className="jr-hot-remote">Remote</span>
+          </>)}
         </div>
         <h2 className="jr-hot-title">{offer.title}</h2>
-        <div className="jr-hot-company">{offer.company}</div>
+        <div className="jr-hot-company">
+          {logo && <img className="jr-hot-logo" src={logo} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = "none"; }} />}
+          <span>{offer.company}</span>
+        </div>
       </div>
 
       <p className="jr-hot-pitch">{offer.pitch}</p>
@@ -483,7 +494,7 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
       </div>
 
       {/* Skills attendus — tu as / à acquérir */}
-      {intel && <JrSkills skills={intel.skills_required} />}
+      {intel && <JrSkills skills={intel.skills_required} source={intel.skills_source} />}
 
       {/* Salary estimate — calibrated for this profile */}
       {intel && intel.salary_estimate && (
@@ -544,6 +555,7 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
           <div className="jr-row-tags">
             <span className="jr-tag jr-tag--cat">{CAT_LABEL[offer.role_category]}</span>
             <span className="jr-tag jr-tag--stage">{STAGE_LABEL[offer.company_stage]}</span>
+            {offer.is_remote && <span className="jr-tag jr-tag--remote">Remote</span>}
             {offer.status !== "new" && (
               <span className={`jr-tag jr-tag--status jr-tag--status-${offer.status}`}>
                 {STATUS_LABEL[offer.status]}
@@ -875,6 +887,7 @@ function PanelJobsRadar({ data, onNavigate }) {
   // Filters
   const [scoreFilter, setScoreFilter]   = useStateJr("all");  // all | hot | mid | low
   const [catFilter,   setCatFilter]     = useStateJr("all");
+  const [remoteFilter,setRemoteFilter]  = useStateJr("all");  // all | remote
   const [statusFilter,setStatusFilter]  = useStateJr("active"); // active = new+to_apply+applied (hide archived+snoozed)
   const [query,       setQuery]         = useStateJr("");
   const [sort,        setSort]          = useStateJr("score"); // score | recent
@@ -896,6 +909,9 @@ function PanelJobsRadar({ data, onNavigate }) {
     }
     if (catFilter !== "all") {
       arr = arr.filter(o => o.role_category === catFilter);
+    }
+    if (remoteFilter === "remote") {
+      arr = arr.filter(o => o.is_remote === true);
     }
     if (statusFilter === "closed") {
       arr = arr.filter(o => !!o.closed_at);
@@ -923,7 +939,7 @@ function PanelJobsRadar({ data, onNavigate }) {
       arr.sort((a, b) => a.posted_days_ago - b.posted_days_ago);
     }
     return arr;
-  }, [offers, hotLeads, scoreFilter, catFilter, statusFilter, query, sort]);
+  }, [offers, hotLeads, scoreFilter, catFilter, remoteFilter, statusFilter, query, sort]);
 
   // Stats line
   const totalCount = offers.length;
@@ -1019,6 +1035,13 @@ function PanelJobsRadar({ data, onNavigate }) {
                 { id: "pgm",     label: "PgM" },
                 { id: "pjm",     label: "PjM" },
                 { id: "cos",     label: "CoS" },
+              ]}
+            />
+            <FilterGroup
+              value={remoteFilter} onChange={setRemoteFilter}
+              options={[
+                { id: "all",    label: "Tous lieux" },
+                { id: "remote", label: "Remote" },
               ]}
             />
             <FilterGroup
