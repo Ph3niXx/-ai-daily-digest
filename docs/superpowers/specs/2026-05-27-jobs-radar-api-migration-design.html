@@ -155,6 +155,18 @@
     </div>
   </header>
 
+  <div class="note warn" style="margin-bottom:44px">
+    <b>Réconciliation post-implémentation (28 mai 2026 · <a href="../../architecture/decisions.md">ADR-19</a>).</b>
+    Le moteur a shippé <b>tel que désigné ici</b> — routine Claude Code distante (claude.ai, trigger
+    <code>trig_01JtTsMm27eTAGxR5po5KmMQ</code>, Sonnet 4.6) qui fetch JSearch via <code>curl</code> et écrit
+    <code>jobs</code>/<code>job_scans</code> via le connecteur MCP Supabase. Un plan intermédiaire
+    (GitHub Actions + Gemini) a été écrit puis <b>abandonné</b> (jamais construit). Corrections de détail :
+    la clé RapidAPI n'est <b>pas</b> un secret GitHub mais vit <b>inline dans le prompt</b> de la routine
+    (un agent distant ne lit pas les secrets GitHub) ; coût réel <b>couvert par le plan Max</b> (0 €/run, pas
+    « cents/run ») ; <code>intel_depth</code> toujours <code>light</code> ; <code>job_scans</code> sans
+    <code>signal_cv</code> ; détection auto de clôture abandonnée → <code>closed_at</code> front-only.
+  </div>
+
   <section>
     <h2>Le problème</h2>
     <p>La routine actuelle tourne dans Cowork desktop avec Sonnet et un navigateur sur une session LinkedIn
@@ -218,7 +230,7 @@
     <ul>
       <li>Endpoint <code>search</code>, <code>country=fr</code>, <code>num_pages=1</code> (≈10 offres/requête). Une requête par rôle cible — <b>5 rôles</b> : product manager, senior program manager, transformation program manager, release train engineer, chief of staff. (<code>head of product</code> + <code>senior PO fintech</code> retirés, couverts par <code>product manager</code>.)</li>
       <li>JSON par offre : <code>job_id</code>, <code>employer_name</code>, <code>job_title</code>, <code>job_description</code>, <code>job_apply_link</code>, parfois le salaire.</li>
-      <li>Nouveau secret : <code>RAPIDAPI_KEY</code>.</li>
+      <li>Clé RapidAPI : <b>inline dans le prompt</b> de la routine, <b>pas</b> un secret GitHub (un agent distant ne les lit pas).</li>
     </ul>
     <div class="note warn"><b>Quota.</b> Free tier ≈ 100 req/mois (à confirmer — sources entre 100 et 200). Cadence retenue : <b>4 runs/semaine × 5 requêtes ≈ 87/mois</b>, sous le cap même pessimiste (~13 de marge). <code>num_pages=1</code> ⇒ 1 requête = 1 appel (évite la multiplication du quota par page, piège connu de JSearch).
       <b>Plan B</b> si le quota se révèle être 100 pile ou si le besoin de quotidien revient : bascule <b>Adzuna</b> (gratuit, quota bien plus large, couverture produit/RTE Paris moindre) — code de fetch quasi identique.</div>
@@ -271,7 +283,7 @@
       <li><b>Spec</b> : MAJ <code>docs/specs/tab-jobs.md</code> + bump <code>index.json</code>.</li>
       <li><b>Routine</b> : réécrire <code>docs/cowork-routines/jobs-radar.md</code> en prompt Claude Code (renommage <code>cowork-routines/ → agent-routines/</code> à trancher).</li>
       <li><b>Archi</b> : <code>pipelines.yaml</code> + <code>dependencies.yaml</code> + <b>ADR-19</b> dans <code>decisions.md</code>.</li>
-      <li><b>Secrets</b> : entrée <code>RAPIDAPI_KEY</code> dans <code>docs/secrets.md</code>.</li>
+      <li><b>Secrets</b> : <b>aucun</b> secret <code>RAPIDAPI_KEY</code> (clé inline dans le prompt) — note dédiée dans <code>docs/secrets.md</code>.</li>
     </ul>
   </section>
 
