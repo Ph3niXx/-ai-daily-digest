@@ -97,7 +97,7 @@ Route id = `"jobs"`. **Panel Tier 2** ([data-loader.js:4528](cockpit/lib/data-lo
 
 ## Back — pipelines qui alimentent
 - **Routine Claude Code distante** (claude.ai, hors repo GitHub Actions — ADR-19) — responsable de :
-  1. Fetch JSearch (RapidAPI) 4×/semaine — 5 requêtes-rôles (`product manager`, `senior program manager`, `transformation program manager`, `release train engineer`, `chief of staff`), `num_pages=1`, `country=fr`
+  1. Fetch JSearch (RapidAPI) 4×/semaine — 8 requêtes-rôles (`product manager`, `chief of staff`, `release train engineer`, `senior program manager`, `AI product manager`, `AI program manager`, `head of AI product`, `generative AI product manager` — réorientation IA ADR-21), `num_pages=1`, `country=fr`
   2. Dedup strict via `linkedin_job_id` (= id JSearch) sur 30 jours glissants
   3. Scoring 10 points + `rubric_justif` à clés plates par axe
   4. **Extraction des skills** — en priorité depuis `job_highlights.Qualifications`/`Responsibilities` (sinon `job_description`) + match au profil (`skill_radar` + `user_profile`) → `intel.skills_required [{ name, on_cv }]` (+ `intel.skills_source`) — ADR-20
@@ -172,6 +172,7 @@ Route id = `"jobs"`. **Panel Tier 2** ([data-loader.js:4528](cockpit/lib/data-lo
 - [ ] **`window.JOBS_DATA.offers[idx] = { ...old, ...patch }` en mute direct** : potentiellement problématique si un re-render React lit la ref tout en la mutant. Ici l'effet est secondaire mais pas idiomatique.
 
 ## Dernière MAJ
+2026-05-29 — **réorientation IA (ADR-21)** : routine passe à 8 requêtes-rôles (+ `AI product manager`, `AI program manager`, `head of AI product`, `generative AI product manager`) ; ÉTAPE 3 « Roles cibles »/« Secteurs chauds » réorientées IA ; `user_profile.job_pref_rules` de Jean créée en base (pivot IA, CDI senior, plancher 80k fixe + 10k variable, exclusions conseil/ESN + expertise verticale manquante). Prompt live mis à jour via `RemoteTrigger`. Voir ADR-21.
 2026-05-28 — **Jobs Radar v2.1 (ADR-20)** : exploitation des champs JSearch — filtre FULLTIME pré-scoring, skills extraits en priorité de `job_highlights` (provenance `intel.skills_source`), nouvelle colonne `is_remote` (badge « Remote » + filtre lieu), logo employeur (`intel.employer_logo`). Migration `sql/016_jobs_is_remote.sql`. Front : carte (logo + badge Remote), filtre lieu, label « d'après l'annonce » sur les skills.
 2026-05-28 — **réconciliation back/routine (le « plan 2 »)** : le moteur est désormais une **routine Claude Code distante** (JSearch + Sonnet 4.6 + connecteur MCP Supabase, 4×/sem — ADR-19) en remplacement de l'agent Cowork LinkedIn. MAJ Finalité + sections back (pipeline, écriture via MCP, `intel_depth` none/light, `closed_at` front-only) + suppression des mentions intel warm / reco CV / détection auto de clôture. Routine activée (`enabled: true`) après test concluant. Voir ADR-19 + docs/cowork-routines/jobs-radar.md.
 2026-05-28 — refonte carte (fiche éditoriale) : bloc skills attendus « tu as déjà » / « à acquérir » (`intel.skills_required[{name,on_cv}]`, normalisé dans `transformJobIntel`) ; abandon de l'intel warm (signaux boîte/lead/réseau/angle/SAFe) et de la reco CV (badge CV, `cv_reason`, bloc « Signal CV » du banner → 3 colonnes). Les sections back/routine seront réconciliées au plan 2 (migration API structurée). Voir docs/superpowers/plans/2026-05-27-jobs-radar-front-card.md.

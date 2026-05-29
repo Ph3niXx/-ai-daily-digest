@@ -9,7 +9,7 @@
 - **Cadence** : cron `0 6 * * 1,3,5,0` = **lun/mer/ven/dim 06:00 UTC (08:00 Paris)**, 4×/semaine.
 - **Modèle** : `claude-sonnet-4-6`. **Coût** : couvert par le plan Max (pas de facturation par run).
 - **Outils** : `Bash` (curl JSearch) + `Read`/`Grep`/`Glob` (checkout repo en lecture) + **connecteur MCP Supabase** (`execute_sql`) pour lire/écrire la base (projet `mrmgptqpflzyavdfqwwv`).
-- **Source d'offres** : **JSearch (RapidAPI)**, tier gratuit. 5 requêtes-rôles × 4 runs ≈ **87 req/mois** (sous le quota). `num_pages=1`, `country=fr`.
+- **Source d'offres** : **JSearch (RapidAPI)**, tier gratuit (quota 200 req/mois, ADR-20). 8 requêtes-rôles × 4 runs ≈ **138 req/mois** (sous le quota). `num_pages=1`, `country=fr`.
 - **Clé RapidAPI** : **inline dans le prompt** (config claude.ai privée), jamais un secret GitHub — voir [docs/secrets.md](../secrets.md).
 
 ## Gérer la routine
@@ -57,9 +57,9 @@ ETAPE 0 — Calibrage (lecture seule, via MCP Supabase execute_sql, project_id m
 - SELECT title, company, role_category, score_total, user_verdict, user_verdict_reason FROM jobs WHERE user_verdict IS NOT NULL AND user_verdict_at >= now() - interval '90 days' ORDER BY user_verdict_at DESC;
 job_pref_rules = regles ecrites par Jean : AUTORITE ABSOLUE, ne jamais les contredire. job_pref_observed = tendances inferees (poids moindre). skill_radar + user_profile = le PROFIL de Jean, pour le match des skills (on_cv).
 
-ETAPE 1 — Fetch JSearch (5 roles, via Bash curl). Pour chaque role, lance :
+ETAPE 1 — Fetch JSearch (8 roles, via Bash curl). Pour chaque role, lance :
   curl -s --get 'https://jsearch.p.rapidapi.com/search' -H 'X-RapidAPI-Key: <CLE_RAPIDAPI>' -H 'X-RapidAPI-Host: jsearch.p.rapidapi.com' --data-urlencode 'query=<ROLE> in France' --data-urlencode 'page=1' --data-urlencode 'num_pages=1' --data-urlencode 'country=fr'
-Roles : product manager ; senior program manager ; transformation program manager ; release train engineer ; chief of staff.
+Roles : product manager ; chief of staff ; release train engineer ; senior program manager ; AI product manager ; AI program manager ; head of AI product ; generative AI product manager.
 Chaque offre du tableau data[] porte : job_id, employer_name, job_title, job_description, job_city, job_posted_at_datetime_utc, job_apply_link, job_is_remote (booleen), job_employment_types (tableau, ex ['FULLTIME']), job_highlights (objet {Qualifications, Responsibilities, Benefits}, souvent partiel ou vide), employer_logo (URL), et parfois job_min_salary / job_max_salary. Si une requete echoue (non-200), continue avec les autres.
 
 ETAPE 1.5 — Filtre type de contrat : ecarte (ne pas dedupliquer, scorer ni inserer) toute offre dont job_employment_types est renseigne ET ne contient PAS 'FULLTIME' (stages INTERN, temps partiel PARTTIME, freelance CONTRACTOR). Si job_employment_types est absent ou vide → GARDER l'offre (on ne jette jamais sur une donnee manquante). Compte les offres ecartees pour le resume final.
@@ -70,8 +70,8 @@ ETAPE 2 — Dedup (avant scoring) :
 - Sinon → NOUVELLE offre : scorer (Etape 3) puis inserer (Etape 4).
 
 ETAPE 3 — Scoring des NOUVELLES offres (rubric stricte, decimales autorisees).
-Roles cibles : Senior/Lead/Head Product Manager ; Chief of Staff (C-suite) ; Release Train Engineer (si train mature ou a structurer) ; (Senior) Program Manager (transfo ou scale-up tech) ; Project Manager senior (transfo majeure). Critere transverse : BUILD / TRANSFO / STRATEGIE, pas du RUN.
-Secteurs chauds : fintech, insurtech, SaaS B2B, payment, crypto serieux, AI tooling. Froids : conseil pur, ESN, defense.
+Roles cibles (PIVOT IA, salarie CDI senior) : AI / GenAI Product Manager, Head of AI Product, AI Product Lead ; AI program / transformation lead ; Chief of Staff ou role produit/strategie dans une boite dont l'IA est le coeur. Aussi : Senior/Lead/Head Product Manager, Release Train Engineer, (Senior) Program Manager UNIQUEMENT si la boite est tech/IA credible. Critere transverse : BUILD / TRANSFO / STRATEGIE autour de l'IA, pas du RUN.
+Secteurs chauds : IA / AI tooling / GenAI en priorite, puis SaaS B2B, fintech, insurtech, payment. Froids : conseil pur, ESN, defense, crypto/web3 pur. (Rappel : job_pref_rules de Jean prime sur cette liste.)
 Red flags (score bas, status archived) : run/BAU sans build ; PMO suivi de portefeuille sans ownership ; scrum master junior isole ; coordination sans objectifs metier/produit.
 Axes :
 - score_seniority sur 3 : fit seniorite (profil vs must-have de la JD).
@@ -113,5 +113,6 @@ SORTIE : affiche un resume court — nombre d'offres fetchees / ecartees (non-FU
 
 ## Dernière MAJ
 
+2026-05-29 — **réorientation IA des requêtes (ADR-21)** : ÉTAPE 1 passe de 5 à 8 requêtes-rôles (+ `AI product manager`, `AI program manager`, `head of AI product`, `generative AI product manager` ; `transformation program manager` fusionnée dans `senior program manager`) ; ÉTAPE 3 « Roles cibles »/« Secteurs chauds » réorientées IA (crypto/web3 retiré des secteurs chauds). Quota ≈ 138/mois (sous 200). `user_profile.job_pref_rules` de Jean créée en base le même jour (pivot IA, CDI senior, plancher 80k fixe + 10k variable, exclusions conseil/ESN + expertise verticale manquante). Prompt live mis à jour via `RemoteTrigger update` (miroir ci-dessus).
 2026-05-28 — **v2.1 (ADR-20)** : exploitation des champs JSearch — filtre FULLTIME (Étape 1.5), skills depuis `job_highlights` en priorité (+ `skills_source`), colonne `is_remote`, `intel.employer_logo`. Prompt ci-dessus mis à jour (miroir de la routine live).
 2026-05-28 — **migration vers la routine Claude Code distante** (JSearch + Sonnet 4.6 + MCP Supabase, ADR-19). Réécriture complète de ce doc ; abandon intel warm / reco CV / détection auto clôture ; clé RapidAPI inline. Routine activée (`enabled: true`) après un test end-to-end concluant ; prochain run automatique lun/mer/ven/dim 08:00 Paris.
