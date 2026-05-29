@@ -263,7 +263,7 @@ external_routines:
     name: "Jobs Radar (JSearch + Sonnet, routine distante)"
     trigger: "claude.ai routine trig_01JtTsMm27eTAGxR5po5KmMQ — cron 0 6 * * 1,3,5,0 (lun/mer/ven/dim 08:00 Paris)"
     model: "claude-sonnet-4-6"
-    input_api: "JSearch (RapidAPI, tier gratuit, ~138 req/mois sous quota 200) — fetch via curl"
+    input_api: "JSearch (RapidAPI, tier gratuit, ~156 req/mois sous quota 200) — fetch via curl. ATTENTION: 403 Host not in allowlist depuis le cloud (IP datacenter), ADR-21"
     mcp: "Supabase (execute_sql, service_role)"
     output_tables:
       - jobs
@@ -274,4 +274,4 @@ external_routines:
       - skill_radar
     budget_usd: 0   # couverte par le plan Max (pas de facturation par run)
     status: active
-    notes: "Remplace la routine Cowork LinkedIn (ADR-19). 8 requêtes-rôles (4 IA, ADR-21), dédup linkedin_job_id (=id JSearch), scoring rubric /10 + skills on_cv + salaire. v2.1 (ADR-20) : filtre FULLTIME pré-scoring, skills depuis job_highlights, colonne is_remote, logo employeur. v2.2 (ADR-21) : requêtes réorientées IA + job_pref_rules de Jean. Intel warm + reco CV abandonnés. Clé RapidAPI inline dans le prompt (pas un secret GitHub). Doc : docs/cowork-routines/jobs-radar.md."
+    notes: "Remplace la routine Cowork LinkedIn (ADR-19). 9 requêtes validées (5 IA, requête complète sans suffixe 'in France', ADR-21), dédup linkedin_job_id (=id JSearch), scoring rubric /10 + skills on_cv + salaire. v2.1 (ADR-20) : filtre FULLTIME pré-scoring, skills depuis job_highlights, colonne is_remote, logo employeur. v2.2 (ADR-21) : requêtes réorientées IA + job_pref_rules de Jean ; JSearch 403 en cloud (IP datacenter) → fetch local de secours. Intel warm + reco CV abandonnés. Clé RapidAPI inline dans le prompt (pas un secret GitHub). Doc : docs/cowork-routines/jobs-radar.md."
