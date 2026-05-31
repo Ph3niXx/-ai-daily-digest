@@ -951,6 +951,7 @@
 @media (max-width: 900px) {
   .jr-filterbar-row { padding: 8px 10px; gap: 8px; }
   .jr-fb-label { min-width: 0; }
+  .jr-filterbar-panel.is-open { max-height: 80vh; overflow-y: auto; }
 }
 
 /* ═══════════════════════════════════════════════════════════════

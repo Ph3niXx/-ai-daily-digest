@@ -980,11 +980,11 @@ function PanelJobsRadar({ data, onNavigate }) {
   // ─── Toolbar : compteur filtré + puces des filtres actifs (design §3-4) ───
   const filteredCount = heroLeads.length + listOffers.length;
   const activeChips = [];
-  if (scoreFilter !== "all")     activeChips.push({ key: "score",  label: `Score : ${JR_SCORE_LABEL[scoreFilter]}`,      clear: () => setScoreFilter("all") });
-  if (catFilter !== "all")       activeChips.push({ key: "cat",    label: `Rôle : ${CAT_LABEL[catFilter]}`,              clear: () => setCatFilter("all") });
+  if (scoreFilter !== "all")     activeChips.push({ key: "score",  label: `Score : ${JR_SCORE_LABEL[scoreFilter] ?? scoreFilter}`,      clear: () => setScoreFilter("all") });
+  if (catFilter !== "all")       activeChips.push({ key: "cat",    label: `Rôle : ${CAT_LABEL[catFilter] ?? catFilter}`,              clear: () => setCatFilter("all") });
   if (remoteFilter === "remote") activeChips.push({ key: "remote", label: "Remote",                                     clear: () => setRemoteFilter("all") });
-  if (statusFilter !== "active") activeChips.push({ key: "status", label: `Statut : ${JR_STATUS_LABEL[statusFilter]}`,   clear: () => setStatusFilter("active") });
-  if (freshFilter !== "all")     activeChips.push({ key: "fresh",  label: `🕒 ${JR_FRESH_LABEL[freshFilter]}`, fresh: true, clear: () => setFreshFilter("all") });
+  if (statusFilter !== "active") activeChips.push({ key: "status", label: `Statut : ${JR_STATUS_LABEL[statusFilter] ?? statusFilter}`,   clear: () => setStatusFilter("active") });
+  if (freshFilter !== "all")     activeChips.push({ key: "fresh",  label: `🕒 ${JR_FRESH_LABEL[freshFilter] ?? freshFilter}`, fresh: true, clear: () => setFreshFilter("all") });
   if (query.trim())              activeChips.push({ key: "q",      label: `🔍 « ${query.trim()} »`,                      clear: () => setQuery("") });
   const resetAllFilters = () => {
     setScoreFilter("all"); setCatFilter("all"); setRemoteFilter("all");
