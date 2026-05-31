@@ -69,13 +69,6 @@
 .jr-section-head {
   margin: 40px 0 18px;
 }
-.jr-section-head--list {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 24px;
-  flex-wrap: wrap;
-}
 .jr-section-kicker {
   font-family: var(--font-mono);
   font-size: 10.5px;
@@ -769,14 +762,8 @@
 .jr-btn--icon:hover { color: var(--tx); border-color: var(--tx2); background: var(--bg3); }
 
 /* ═══════════════════════════════════════════════════════════════
-   FILTERS
+   FILTER PRIMITIVES (recherche + groupes segmentés)
    ═══════════════════════════════════════════════════════════════ */
-.jr-filters {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: center;
-}
 .jr-search {
   display: flex;
   align-items: center;
@@ -826,28 +813,145 @@
   color: var(--bg);
 }
 
-.jr-sort {
-  display: flex;
+/* ═══════════════════════════════════════════════════════════════
+   FILTER TOOLBAR (sticky) — toolbar 2026-05-31
+   ═══════════════════════════════════════════════════════════════ */
+.jr-filterbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  margin: 0 0 24px;
+  background: var(--bg2);
+  backdrop-filter: blur(12px);
   border: 1px solid var(--bd);
   border-radius: var(--radius);
-  overflow: hidden;
-  background: var(--surface);
 }
-.jr-sort-btn {
-  background: transparent;
-  border: 0;
-  padding: 6px 10px;
+.jr-filterbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+}
+.jr-fb-hot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--brand-ink, var(--brand));
+  background: var(--brand-tint);
+  border: 1px solid var(--brand);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.jr-fb-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 120px;
+}
+.jr-fb-empty {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--tx3);
+  font-style: italic;
+}
+.jr-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: 0.04em;
   color: var(--tx2);
-  cursor: pointer;
-  border-right: 1px solid var(--bd);
+  background: var(--surface);
+  border: 1px solid var(--bd);
+  border-radius: var(--radius);
+  padding: 3px 6px 3px 9px;
 }
-.jr-sort-btn:last-child { border-right: 0; }
-.jr-sort-btn:hover { color: var(--tx); }
-.jr-sort-btn.is-active { background: var(--brand); color: #fff; }
-[data-theme="obsidian"] .jr-sort-btn.is-active { color: var(--bg); }
+.jr-chip--fresh {
+  color: var(--brand-ink, var(--brand));
+  border-color: var(--brand);
+}
+.jr-chip-x {
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: var(--tx3);
+  font-size: 14px;
+  line-height: 1;
+  padding: 0;
+}
+.jr-chip-x:hover { color: var(--tx); }
+.jr-fb-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tx3);
+  white-space: nowrap;
+}
+.jr-fb-toggle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--brand-ink, var(--brand));
+  background: var(--brand-tint);
+  border: 1px solid var(--brand);
+  border-radius: var(--radius);
+  padding: 6px 12px;
+  white-space: nowrap;
+}
+.jr-fb-toggle:hover { filter: brightness(1.05); }
+.jr-filterbar-panel {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.26s ease;
+}
+.jr-filterbar-panel.is-open {
+  max-height: 360px; /* doit dépasser la hauteur naturelle du panneau déplié */
+  border-top: 1px solid var(--bd);
+}
+.jr-filterbar-panel-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+}
+.jr-fb-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.jr-fb-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tx3);
+  min-width: 58px;
+}
+.jr-fb-label--gap { min-width: 0; margin-left: 10px; }
+.jr-fb-reset {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--tx3);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.jr-fb-reset:hover { color: var(--tx); }
+
+@media (max-width: 900px) {
+  .jr-filterbar-row { padding: 8px 10px; gap: 8px; }
+  .jr-fb-label { min-width: 0; }
+}
 
 /* ═══════════════════════════════════════════════════════════════
    LIST ROWS
@@ -1149,8 +1253,6 @@
 @media (max-width: 900px) {
   .panel-jobs-radar { padding: 24px 20px 60px; }
   .jr-title { font-size: 30px; }
-  .jr-section-head--list { flex-direction: column; align-items: stretch; }
-  .jr-filters { justify-content: flex-start; }
   .jr-row {
     grid-template-columns: auto 1fr;
     grid-template-areas:

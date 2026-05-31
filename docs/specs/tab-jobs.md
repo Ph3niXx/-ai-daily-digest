@@ -28,6 +28,7 @@ Panel de **tri d'offres d'emploi** — une **routine Claude Code distante** (cla
 - **Badge & filtre Remote** : les offres en télétravail portent un badge « Remote » (carte et ligne) ; un filtre « lieu » dédié permet de n'afficher que celles-ci.
 - **Scan banner** : trois blocs de synthèse en haut de page — volumes sur 7 jours en barres Lun→Dim, répartition par catégorie de rôle, actions du jour (relances + entretiens à préparer).
 - **Liste dense filtrable** : une ligne par offre avec recherche texte + quatre groupes de filtres (score / rôle / lieu / statut) + tri (score ou récence). Filtre statut « Actives » par défaut qui masque les snoozées et archivées.
+- **Barre de filtres collante** : les filtres restent accessibles en haut de page quand on fait défiler — un bandeau résume les filtres actifs sous forme d'étiquettes (retirables d'un clic) et se déplie pour tout régler (recherche, score, rôle, lieu, fraîcheur, statut, tri). Un filtre de **fraîcheur** permet de n'afficher que les offres repérées il y a moins de 24 h ou moins d'une semaine. Tous les filtres pilotent à la fois le bloc « hot leads » et la liste, et sont **mémorisés** d'une visite à l'autre (sauf la recherche texte, qui repart vide).
 - **Actions rapides par offre** : bouton Postuler (ouvre LinkedIn + marque appliquée + toast de confirmation), menu kebab (Snoozer 7 jours / Archiver / Éditer les notes) et zone de notes perso inline.
 - **Statuts + notes persistés** : passage en appliquée/snoozée/archivée et notes perso sauvegardés en base, avec mise à jour instantanée et toast de confirmation (ou toast d'erreur en cas de souci de synchro).
 - **Archivage durable face aux republications LinkedIn** : quand LinkedIn republie une offre déjà archivée (même titre + même boîte) sous une nouvelle annonce, la décision d'archivage est conservée — l'offre ne réapparaît pas dans la liste le lendemain. Idem pour une offre snoozée tant que le snooze n'est pas expiré. Les notes perso de la version archivée sont aussi récupérées si la nouvelle annonce n'en a pas.
@@ -47,9 +48,10 @@ Structure DOM :
     - `.jr-scan-block` volumes 7j (7 `.jr-sparkbar`)
     - `.jr-scan-block` répartition catégories (6 `.jr-ratbar`)
     - `.jr-scan-block--actions` actions du jour (liste `.jr-action-item`)
-  - `.jr-hot-section` (conditionnel si `hotLeads.length > 0`) → `.jr-hot-grid` avec `<HotLeadCard>` (intègre `<JrSkills>` entre rubric et salaire, puis `<SalaryEstimate>` quand `intel.salary_estimate` est présent)
+  - `<JrFilterBar>` → `.jr-filterbar` (toolbar collant `position:sticky;top:0;z-index:30` rendu au-dessus du hero) : ligne repliée (badge `🔥 hot` global + `.jr-fb-chips` puces des filtres actifs `.jr-chip` retirables + compteur filtré + bouton « Filtres ») et panneau dépliable `.jr-filterbar-panel` (recherche + 6 `<FilterGroup>` score/rôle/lieu/fraîcheur/statut/tri + « Tout réinitialiser »)
+  - `.jr-hot-section` (conditionnel si `heroLeads.length > 0`) → `.jr-hot-grid` avec `<HotLeadCard>` (intègre `<JrSkills>` entre rubric et salaire, puis `<SalaryEstimate>` quand `intel.salary_estimate` est présent)
   - `.jr-list-section`
-    - `.jr-section-head--list` → kicker + titre + `.jr-filters` (search + 3 `<FilterGroup>` + `.jr-sort`)
+    - `.jr-section-head` → kicker + titre (les filtres ont migré dans `<JrFilterBar>`)
     - `.jr-list` OR `.jr-empty` avec liste de `<OfferRow>`
   - `<JrToast>` (conditionnel)
 
@@ -58,7 +60,7 @@ Route id = `"jobs"`. **Panel Tier 2** ([data-loader.js:4528](cockpit/lib/data-lo
 ## Front — fonctions JS
 | Fonction | Rôle | Fichier/ligne |
 |----------|------|---------------|
-| `PanelJobsRadar({ data, onNavigate })` | Composant racine — state local `offers[]` mirror de `window.JOBS_DATA.offers`, split hot/rest, 4 filtres | [panel-jobs-radar.jsx:498](cockpit/panel-jobs-radar.jsx:498) |
+| `PanelJobsRadar({ data, onNavigate })` | Composant racine — state local `offers[]` mirror de `window.JOBS_DATA.offers`, prédicat partagé `passesFilters` (hero + liste), 5 facettes + recherche, persistées dans `localStorage["jr.filters.v1"]` (hors recherche) | [panel-jobs-radar.jsx:498](cockpit/panel-jobs-radar.jsx:498) |
 | `HotLeadCard({ offer, rank, ... })` | Card large : rubric + skills (`<JrSkills>`) + salaire + CTAs ; lit `window.PROFILE_DATA._values.target_salary_range` pour calibrer le badge in/out de l'estimation salaire | [panel-jobs-radar.jsx](cockpit/panel-jobs-radar.jsx) |
 | `SalaryEstimate({ estimate, targetRange })` | Encart "Salaire estimé" — affiche `target` + `range` issus de `intel.salary_estimate`, badge "dans/hors fourchette cible" en parsant `targetRange` ("90-130k€"). 3 tones de couleur : `--in` (vert positif), `--out` (gris pâle), `--neutral` (orange brand-tint, par défaut sans fourchette user). Le `rationale` + label de source sont exposés via un bouton `(i)` au hover : tooltip CSS custom 300px qui affiche "SOURCE LABEL" + rationale sur fond `--tx` avec flèche pointant vers le bouton (même pattern que `.jr-score-tip`). | [panel-jobs-radar.jsx:184](cockpit/panel-jobs-radar.jsx:184) |
 | `OfferRow({ offer, ... })` | Ligne dense pour mid/low — score + titre + rubric condensée | [panel-jobs-radar.jsx:340](cockpit/panel-jobs-radar.jsx:340) |
@@ -70,6 +72,7 @@ Route id = `"jobs"`. **Panel Tier 2** ([data-loader.js:4528](cockpit/lib/data-lo
 | `JrNotesEditor({ offer, onSave, onCancel })` | Textarea 3 lignes + boutons save/cancel | [panel-jobs-radar.jsx:130](cockpit/panel-jobs-radar.jsx:130) |
 | `JrToast({ message, tone })` | Toast aria-live 2.4s | [panel-jobs-radar.jsx:71](cockpit/panel-jobs-radar.jsx:71) |
 | `FilterGroup({ value, onChange, options })` | Segmented buttons | [panel-jobs-radar.jsx:768](cockpit/panel-jobs-radar.jsx:768) |
+| `JrFilterBar({ hotLeadsCount, filteredCount, activeChips, ... })` | Toolbar collant : badge hot global + puces des filtres actifs (retirables) + compteur filtré + panneau dépliable des `<FilterGroup>` (score/rôle/lieu/fraîcheur/statut/tri) + « Tout réinitialiser » | [cockpit/panel-jobs-radar.jsx](cockpit/panel-jobs-radar.jsx) |
 | `patchJobSupabase(id, patch)` | Whitelist `{status, user_notes}` puis `PATCH /rest/v1/jobs?id=eq.X` | [panel-jobs-radar.jsx:15](cockpit/panel-jobs-radar.jsx:15) |
 | `updateJob(id, patch, toastMsg)` | Optimistic mute state + mute global + track + PATCH + toast | [panel-jobs-radar.jsx:545](cockpit/panel-jobs-radar.jsx:545) |
 | `applyToJob(offer)` / `snoozeJob` / `archiveJob` / `saveNotes` | Handlers PATCH | [panel-jobs-radar.jsx:567-579](cockpit/panel-jobs-radar.jsx:567) |
@@ -172,6 +175,7 @@ Route id = `"jobs"`. **Panel Tier 2** ([data-loader.js:4528](cockpit/lib/data-lo
 - [ ] **`window.JOBS_DATA.offers[idx] = { ...old, ...patch }` en mute direct** : potentiellement problématique si un re-render React lit la ref tout en la mutant. Ici l'effet est secondaire mais pas idiomatique.
 
 ## Dernière MAJ
+2026-05-31 — **Barre de filtres collante + filtre fraîcheur + persistance** : les filtres remontent dans un bandeau collant (étiquettes des filtres actifs + dépliage à la demande), un nouveau filtre « fraîcheur » isole les offres de moins de 24 h / moins d'une semaine, et les réglages sont mémorisés entre visites (hors recherche). Iso-archi (pas d'ADR).
 2026-05-31 — **Trigger d'héritage de statut corrigé (ADR-23)** : `jobs_inherit_user_status` n'hérite plus que des décisions utilisateur (snooze, verdict 👎, ou archived à score ≥ 5) ; les archivages automatiques (score < 5) n'enterrent plus une offre re-scorée à la hausse lors d'une republication (cas AI6 « Head of Delivery » re-scoré 9.5 puis re-archivé à tort). Migration `sql/018_jobs_inherit_status_userdriven.sql`.
 2026-05-31 — **Filtres appliqués au hero « hot leads »** : le bloc hot leads (offres ≥ 7) suit désormais les filtres catégorie/lieu/statut/score/recherche (avant : toujours toutes catégories) et se masque s'il ne reste aucune offre correspondante. Compteur « hot leads » du header gardé global. Fix UX iso-archi (pas d'ADR).
 2026-05-31 — **Engagement Manager = rôle cible (ADR-22)** : la routine suit désormais les postes d'engagement / delivery / transformation manager en boîte tech/produit/IA crédible — 2 requêtes ajoutées, scoring qui ne les pénalise plus comme du « RUN », nouvelle catégorie « EM » (filtre + répartition du scan banner). Exclusion conseil/ESN inchangée. Migration `sql/017_jobs_em_category.sql`. Voir ADR-22.

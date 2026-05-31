@@ -69,6 +69,12 @@ const STATUS_LABEL = {
   archived:  "Archivé",
 };
 
+// Libellés des puces de filtres actifs (toolbar) — module-level pour éviter
+// la réallocation à chaque render. STATUS distinct de STATUS_LABEL (clés + libellés différents).
+const JR_SCORE_LABEL  = { hot: "Hot ≥7", mid: "Mid 5-7", low: "Low <5" };
+const JR_STATUS_LABEL = { new: "Nouvelles", to_apply: "À postuler", applied: "Candidaté", closed: "Clôturées", all: "Tout" };
+const JR_FRESH_LABEL  = { "24h": "< 24h", "7j": "< 7j" };
+
 // ─── Helpers ─────────────────────────────────────────────
 function scoreBand(score) {
   if (score >= 7) return "hot";
@@ -82,6 +88,15 @@ function dayLabel(n) {
   if (n === 0) return "aujourd'hui";
   if (n === 1) return "hier";
   return `il y a ${n}j`;
+}
+
+// ─── Persistance des filtres (localStorage) — toolbar 2026-05-31 ───
+const JR_FILTERS_KEY = "jr.filters.v1";
+function loadJrFilters() {
+  try {
+    const raw = localStorage.getItem(JR_FILTERS_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
 }
 
 function numberFmt(n) {
@@ -885,13 +900,23 @@ function PanelJobsRadar({ data, onNavigate }) {
     notesEditing,
   };
 
-  // Filters
-  const [scoreFilter, setScoreFilter]   = useStateJr("all");  // all | hot | mid | low
-  const [catFilter,   setCatFilter]     = useStateJr("all");
-  const [remoteFilter,setRemoteFilter]  = useStateJr("all");  // all | remote
-  const [statusFilter,setStatusFilter]  = useStateJr("active"); // active = new+to_apply+applied (hide archived+snoozed)
-  const [query,       setQuery]         = useStateJr("");
-  const [sort,        setSort]          = useStateJr("score"); // score | recent
+  // Filters — hydratés depuis localStorage (sauf la recherche), persistés via l'effet ci-dessous.
+  const f0 = useMemoJr(() => loadJrFilters(), []);
+  const [scoreFilter, setScoreFilter]   = useStateJr(f0.scoreFilter  ?? "all");   // all | hot | mid | low
+  const [catFilter,   setCatFilter]     = useStateJr(f0.catFilter    ?? "all");
+  const [remoteFilter,setRemoteFilter]  = useStateJr(f0.remoteFilter ?? "all");   // all | remote
+  const [statusFilter,setStatusFilter]  = useStateJr(f0.statusFilter ?? "active");// active = new+to_apply+applied
+  const [freshFilter, setFreshFilter]   = useStateJr(f0.freshFilter  ?? "all");   // all | 24h | 7j
+  const [query,       setQuery]         = useStateJr("");                          // non persisté (design §5)
+  const [sort,        setSort]          = useStateJr(f0.sort          ?? "score"); // score | recent
+
+  // Persistance des facettes (pas la recherche) — design §5.
+  useEffectJr(() => {
+    try {
+      localStorage.setItem(JR_FILTERS_KEY, JSON.stringify(
+        { scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, sort }));
+    } catch {}
+  }, [scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, sort]);
 
   // ─── Prédicat de filtrage partagé (hero + liste) — hero-filters 2026-05-31 ───
   // Couvre catégorie + remote + statut/clôturé + recherche. La bande de score est gérée par section.
@@ -914,6 +939,8 @@ function PanelJobsRadar({ data, onNavigate }) {
             o.company.toLowerCase().includes(q) ||
             (o.pitch || "").toLowerCase().includes(q))) return false;
     }
+    if (freshFilter === "24h" && o.posted_days_ago !== 0) return false;
+    if (freshFilter === "7j"  && !(o.posted_days_ago != null && o.posted_days_ago < 7)) return false;
     return true;
   };
 
@@ -928,7 +955,7 @@ function PanelJobsRadar({ data, onNavigate }) {
     showHero
       ? offers.filter(o => passesFilters(o) && o.score_total >= 7).sort((a, b) => b.score_total - a.score_total)
       : [],
-  [offers, scoreFilter, catFilter, remoteFilter, statusFilter, query]);
+  [offers, scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, query]);
 
   // Liste dense = set filtré, moins les membres du hero, avec le filtre de bande score.
   const listOffers = useMemoJr(() => {
@@ -943,12 +970,26 @@ function PanelJobsRadar({ data, onNavigate }) {
       arr.sort((a, b) => a.posted_days_ago - b.posted_days_ago);
     }
     return arr;
-  }, [offers, heroLeads, scoreFilter, catFilter, remoteFilter, statusFilter, query, sort]);
+  }, [offers, heroLeads, scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, query, sort]);
 
   // Stats line
   const totalCount = offers.length;
   const newCount = offers.filter(o => o.status === "new").length;
   const closedCount = offers.filter(jrIsDead).length;
+
+  // ─── Toolbar : compteur filtré + puces des filtres actifs (design §3-4) ───
+  const filteredCount = heroLeads.length + listOffers.length;
+  const activeChips = [];
+  if (scoreFilter !== "all")     activeChips.push({ key: "score",  label: `Score : ${JR_SCORE_LABEL[scoreFilter]}`,      clear: () => setScoreFilter("all") });
+  if (catFilter !== "all")       activeChips.push({ key: "cat",    label: `Rôle : ${CAT_LABEL[catFilter]}`,              clear: () => setCatFilter("all") });
+  if (remoteFilter === "remote") activeChips.push({ key: "remote", label: "Remote",                                     clear: () => setRemoteFilter("all") });
+  if (statusFilter !== "active") activeChips.push({ key: "status", label: `Statut : ${JR_STATUS_LABEL[statusFilter]}`,   clear: () => setStatusFilter("active") });
+  if (freshFilter !== "all")     activeChips.push({ key: "fresh",  label: `🕒 ${JR_FRESH_LABEL[freshFilter]}`, fresh: true, clear: () => setFreshFilter("all") });
+  if (query.trim())              activeChips.push({ key: "q",      label: `🔍 « ${query.trim()} »`,                      clear: () => setQuery("") });
+  const resetAllFilters = () => {
+    setScoreFilter("all"); setCatFilter("all"); setRemoteFilter("all");
+    setStatusFilter("active"); setFreshFilter("all"); setQuery("");
+  };
 
   return (
     <div className="panel panel-jobs-radar">
@@ -982,6 +1023,19 @@ function PanelJobsRadar({ data, onNavigate }) {
       {/* ─── CALIBRAGE ─── */}
       <JrCalibrage />
 
+      {/* ─── FILTRES (toolbar collant) ─── */}
+      <JrFilterBar
+        hotLeadsCount={hotLeadsCount} filteredCount={filteredCount}
+        activeChips={activeChips} resetAllFilters={resetAllFilters}
+        scoreFilter={scoreFilter} setScoreFilter={setScoreFilter}
+        catFilter={catFilter} setCatFilter={setCatFilter}
+        remoteFilter={remoteFilter} setRemoteFilter={setRemoteFilter}
+        statusFilter={statusFilter} setStatusFilter={setStatusFilter}
+        freshFilter={freshFilter} setFreshFilter={setFreshFilter}
+        query={query} setQuery={setQuery}
+        sort={sort} setSort={setSort}
+      />
+
       {/* ─── HOT LEADS HERO ─── */}
       {heroLeads.length > 0 && (
         <section className="jr-hot-section">
@@ -1004,71 +1058,11 @@ function PanelJobsRadar({ data, onNavigate }) {
 
       {/* ─── FILTERS + LIST ─── */}
       <section className="jr-list-section">
-        <div className="jr-section-head jr-section-head--list">
-          <div>
-            <div className="jr-section-kicker">Le reste du scan</div>
-            <h2 className="jr-section-title">
-              {listOffers.length} offre{listOffers.length > 1 ? "s" : ""} à trier
-            </h2>
-          </div>
-          <div className="jr-filters">
-            <div className="jr-search">
-              <Icon name="search" size={14} stroke={2} />
-              <input
-                className="jr-search-input"
-                placeholder="Titre, boîte, pitch…"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-              />
-            </div>
-            <FilterGroup
-              value={scoreFilter} onChange={setScoreFilter}
-              options={[
-                { id: "all", label: "Tous scores" },
-                { id: "hot", label: "Hot (≥7)" },
-                { id: "mid", label: "Mid (5-7)" },
-                { id: "low", label: "Low (<5)" },
-              ]}
-            />
-            <FilterGroup
-              value={catFilter} onChange={setCatFilter}
-              options={[
-                { id: "all",     label: "Tous rôles" },
-                { id: "produit", label: "Produit" },
-                { id: "rte",     label: "RTE" },
-                { id: "pgm",     label: "PgM" },
-                { id: "pjm",     label: "PjM" },
-                { id: "cos",     label: "CoS" },
-                { id: "em",      label: "EM" },
-              ]}
-            />
-            <FilterGroup
-              value={remoteFilter} onChange={setRemoteFilter}
-              options={[
-                { id: "all",    label: "Tous lieux" },
-                { id: "remote", label: "Remote" },
-              ]}
-            />
-            <FilterGroup
-              value={statusFilter} onChange={setStatusFilter}
-              options={[
-                { id: "active",   label: "Actives" },
-                { id: "new",      label: "Nouvelles" },
-                { id: "to_apply", label: "À postuler" },
-                { id: "applied",  label: "Candidaté" },
-                { id: "closed",   label: "Clôturées" },
-                { id: "all",      label: "Tout" },
-              ]}
-            />
-            <div className="jr-sort">
-              <button
-                className={`jr-sort-btn ${sort === "score" ? "is-active" : ""}`}
-                onClick={() => setSort("score")}>Score</button>
-              <button
-                className={`jr-sort-btn ${sort === "recent" ? "is-active" : ""}`}
-                onClick={() => setSort("recent")}>Récence</button>
-            </div>
-          </div>
+        <div className="jr-section-head">
+          <div className="jr-section-kicker">Le reste du scan</div>
+          <h2 className="jr-section-title">
+            {listOffers.length} offre{listOffers.length > 1 ? "s" : ""} à trier
+          </h2>
         </div>
 
         {listOffers.length === 0 ? (
@@ -1100,6 +1094,95 @@ function FilterGroup({ value, onChange, options }) {
           onClick={() => onChange(o.id)}
         >{o.label}</button>
       ))}
+    </div>
+  );
+}
+
+function JrFilterBar({
+  hotLeadsCount, filteredCount, activeChips, resetAllFilters,
+  scoreFilter, setScoreFilter, catFilter, setCatFilter,
+  remoteFilter, setRemoteFilter, statusFilter, setStatusFilter,
+  freshFilter, setFreshFilter, query, setQuery, sort, setSort,
+}) {
+  const [expanded, setExpanded] = useStateJr(false);
+  return (
+    <div className="jr-filterbar">
+      <div className="jr-filterbar-row">
+        <span className="jr-fb-hot" title="Total hot leads (non filtré)">🔥 {hotLeadsCount} hot</span>
+        <div className="jr-fb-chips">
+          {activeChips.length === 0
+            ? <span className="jr-fb-empty">Aucun filtre actif</span>
+            : activeChips.map(c => (
+                <span key={c.key} className={"jr-chip" + (c.fresh ? " jr-chip--fresh" : "")}>
+                  {c.label}
+                  <button className="jr-chip-x" onClick={c.clear} aria-label="Retirer ce filtre">×</button>
+                </span>
+              ))}
+        </div>
+        <span className="jr-fb-count">{filteredCount} offre{filteredCount > 1 ? "s" : ""}</span>
+        <button
+          className={"jr-fb-toggle" + (expanded ? " is-open" : "")}
+          onClick={() => setExpanded(v => !v)}
+          aria-expanded={expanded}
+        >Filtres {expanded ? "▴" : "▾"}</button>
+      </div>
+      <div className={"jr-filterbar-panel" + (expanded ? " is-open" : "")}>
+        <div className="jr-filterbar-panel-inner">
+          <div className="jr-fb-line">
+            <div className="jr-search">
+              <Icon name="search" size={14} stroke={2} />
+              <input
+                className="jr-search-input"
+                placeholder="Titre, boîte, pitch…"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+              />
+            </div>
+            {activeChips.length > 0 && (
+              <button className="jr-fb-reset" onClick={resetAllFilters}>Tout réinitialiser</button>
+            )}
+          </div>
+          <div className="jr-fb-line">
+            <span className="jr-fb-label">Score</span>
+            <FilterGroup value={scoreFilter} onChange={setScoreFilter} options={[
+              { id: "all", label: "Tous scores" }, { id: "hot", label: "Hot (≥7)" },
+              { id: "mid", label: "Mid (5-7)" }, { id: "low", label: "Low (<5)" },
+            ]} />
+          </div>
+          <div className="jr-fb-line">
+            <span className="jr-fb-label">Rôle</span>
+            <FilterGroup value={catFilter} onChange={setCatFilter} options={[
+              { id: "all", label: "Tous rôles" }, { id: "produit", label: "Produit" },
+              { id: "rte", label: "RTE" }, { id: "pgm", label: "PgM" },
+              { id: "pjm", label: "PjM" }, { id: "cos", label: "CoS" }, { id: "em", label: "EM" },
+            ]} />
+          </div>
+          <div className="jr-fb-line">
+            <span className="jr-fb-label">Lieu</span>
+            <FilterGroup value={remoteFilter} onChange={setRemoteFilter} options={[
+              { id: "all", label: "Tous lieux" }, { id: "remote", label: "Remote" },
+            ]} />
+            <span className="jr-fb-label jr-fb-label--gap">Fraîcheur</span>
+            <FilterGroup value={freshFilter} onChange={setFreshFilter} options={[
+              { id: "all", label: "Tout" }, { id: "24h", label: "< 24h" }, { id: "7j", label: "< 7j" },
+            ]} />
+          </div>
+          <div className="jr-fb-line">
+            <span className="jr-fb-label">Statut</span>
+            <FilterGroup value={statusFilter} onChange={setStatusFilter} options={[
+              { id: "active", label: "Actives" }, { id: "new", label: "Nouvelles" },
+              { id: "to_apply", label: "À postuler" }, { id: "applied", label: "Candidaté" },
+              { id: "closed", label: "Clôturées" }, { id: "all", label: "Tout" },
+            ]} />
+          </div>
+          <div className="jr-fb-line">
+            <span className="jr-fb-label">Tri</span>
+            <FilterGroup value={sort} onChange={setSort} options={[
+              { id: "score", label: "Score" }, { id: "recent", label: "Récence" },
+            ]} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
