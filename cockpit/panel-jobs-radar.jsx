@@ -893,54 +893,57 @@ function PanelJobsRadar({ data, onNavigate }) {
   const [query,       setQuery]         = useStateJr("");
   const [sort,        setSort]          = useStateJr("score"); // score | recent
 
-  // Split hot leads vs rest
-  const hotLeads = useMemoJr(() =>
-    offers.filter(o => o.score_total >= 7 && o.status !== "archived" && o.status !== "snoozed" && !jrIsDead(o))
-          .sort((a, b) => b.score_total - a.score_total),
-  [offers]);
-
-  // Filtered list (for the dense list below the hero)
-  const listOffers = useMemoJr(() => {
-    let arr = offers.slice();
-    // Hide hot leads from the list — they're in the hero
-    arr = arr.filter(o => !hotLeads.find(h => h.id === o.id));
-
-    if (scoreFilter !== "all") {
-      arr = arr.filter(o => scoreBand(o.score_total) === scoreFilter);
-    }
-    if (catFilter !== "all") {
-      arr = arr.filter(o => o.role_category === catFilter);
-    }
-    if (remoteFilter === "remote") {
-      arr = arr.filter(o => o.is_remote === true);
-    }
+  // ─── Prédicat de filtrage partagé (hero + liste) — hero-filters 2026-05-31 ───
+  // Couvre catégorie + remote + statut/clôturé + recherche. La bande de score est gérée par section.
+  const passesFilters = (o) => {
+    if (catFilter !== "all" && o.role_category !== catFilter) return false;
+    if (remoteFilter === "remote" && o.is_remote !== true) return false;
     if (statusFilter === "closed") {
-      arr = arr.filter(o => !!o.closed_at);
+      if (!o.closed_at) return false;
     } else {
-      // Masque les clôturées (sauf applied) de toutes les autres vues.
-      arr = arr.filter(o => !jrIsDead(o));
+      if (jrIsDead(o)) return false;  // masque les clôturées (sauf applied)
       if (statusFilter === "active") {
-        arr = arr.filter(o => o.status === "new" || o.status === "to_apply" || o.status === "applied");
+        if (!(o.status === "new" || o.status === "to_apply" || o.status === "applied")) return false;
       } else if (statusFilter !== "all") {
-        arr = arr.filter(o => o.status === statusFilter);
+        if (o.status !== statusFilter) return false;
       }
     }
     if (query.trim()) {
       const q = query.trim().toLowerCase();
-      arr = arr.filter(o =>
-        o.title.toLowerCase().includes(q) ||
-        o.company.toLowerCase().includes(q) ||
-        (o.pitch || "").toLowerCase().includes(q)
-      );
+      if (!(o.title.toLowerCase().includes(q) ||
+            o.company.toLowerCase().includes(q) ||
+            (o.pitch || "").toLowerCase().includes(q))) return false;
     }
+    return true;
+  };
 
+  // Compteur header GLOBAL (cohérent avec « nouvelles » et « total ») — non filtré.
+  const hotLeadsCount = useMemoJr(() =>
+    offers.filter(o => o.score_total >= 7 && o.status !== "archived" && o.status !== "snoozed" && !jrIsDead(o)).length,
+  [offers]);
+
+  // Hero = tranche ≥ 7 du set FILTRÉ. Affiché seulement si le filtre score autorise « hot ».
+  const showHero = scoreFilter === "all" || scoreFilter === "hot";
+  const heroLeads = useMemoJr(() =>
+    showHero
+      ? offers.filter(o => passesFilters(o) && o.score_total >= 7).sort((a, b) => b.score_total - a.score_total)
+      : [],
+  [offers, scoreFilter, catFilter, remoteFilter, statusFilter, query]);
+
+  // Liste dense = set filtré, moins les membres du hero, avec le filtre de bande score.
+  const listOffers = useMemoJr(() => {
+    const heroIds = new Set(heroLeads.map(h => h.id));
+    let arr = offers.filter(o => passesFilters(o) && !heroIds.has(o.id));
+    if (scoreFilter !== "all") {
+      arr = arr.filter(o => scoreBand(o.score_total) === scoreFilter);
+    }
     if (sort === "score") {
       arr.sort((a, b) => b.score_total - a.score_total);
     } else if (sort === "recent") {
       arr.sort((a, b) => a.posted_days_ago - b.posted_days_ago);
     }
     return arr;
-  }, [offers, hotLeads, scoreFilter, catFilter, remoteFilter, statusFilter, query, sort]);
+  }, [offers, heroLeads, scoreFilter, catFilter, remoteFilter, statusFilter, query, sort]);
 
   // Stats line
   const totalCount = offers.length;
@@ -956,7 +959,7 @@ function PanelJobsRadar({ data, onNavigate }) {
           <div className="jr-header-stats">
             <span><strong>{newCount}</strong> nouvelles</span>
             <span className="jr-sep">·</span>
-            <span><strong>{hotLeads.length}</strong> hot leads</span>
+            <span><strong>{hotLeadsCount}</strong> hot leads</span>
             <span className="jr-sep">·</span>
             <span><strong>{totalCount}</strong> au total dans le radar</span>
             {closedCount > 0 && (<>
@@ -980,7 +983,7 @@ function PanelJobsRadar({ data, onNavigate }) {
       <JrCalibrage />
 
       {/* ─── HOT LEADS HERO ─── */}
-      {hotLeads.length > 0 && (
+      {heroLeads.length > 0 && (
         <section className="jr-hot-section">
           <div className="jr-section-head">
             <div className="jr-section-kicker jr-section-kicker--hero">
@@ -988,13 +991,13 @@ function PanelJobsRadar({ data, onNavigate }) {
               Hot leads · score ≥ 7
             </div>
             <h2 className="jr-section-title">
-              {hotLeads.length === 1
+              {heroLeads.length === 1
                 ? "1 offre qui mérite ton matin"
-                : `${hotLeads.length} offres qui méritent ton matin`}
+                : `${heroLeads.length} offres qui méritent ton matin`}
             </h2>
           </div>
           <div className="jr-hot-grid">
-            {hotLeads.map((o, i) => <HotLeadCard key={o.id} offer={o} rank={i} {...cardHandlers} />)}
+            {heroLeads.map((o, i) => <HotLeadCard key={o.id} offer={o} rank={i} {...cardHandlers} />)}
           </div>
         </section>
       )}
