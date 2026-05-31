@@ -1680,6 +1680,7 @@
       { id: "pgm",     label: "PgM" },
       { id: "pjm",     label: "PjM" },
       { id: "cos",     label: "CoS" },
+      { id: "em",      label: "EM" },
     ];
     const ratios_category = CAT_DEF.map(c => {
       const count = activeJobs.filter(j => (j.role_category || "").toLowerCase() === c.id).length;

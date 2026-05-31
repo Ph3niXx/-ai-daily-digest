@@ -47,6 +47,7 @@ const CAT_LABEL = {
   pgm:     "PgM",
   pjm:     "PjM",
   cos:     "CoS",
+  em:      "EM",
 };
 
 const STAGE_LABEL = {
@@ -1035,6 +1036,7 @@ function PanelJobsRadar({ data, onNavigate }) {
                 { id: "pgm",     label: "PgM" },
                 { id: "pjm",     label: "PjM" },
                 { id: "cos",     label: "CoS" },
+                { id: "em",      label: "EM" },
               ]}
             />
             <FilterGroup
