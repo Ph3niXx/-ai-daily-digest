@@ -11,7 +11,7 @@ create table if not exists public.jobs (
   company           text not null,
   url               text not null,
   posted_date       date,
-  role_category     text check (role_category in ('produit','rte','pgm','pjm','cos')),
+  role_category     text check (role_category in ('produit','rte','pgm','pjm','cos','em')),
   company_stage     text check (company_stage in ('seed','A','B','C','scale','grand_groupe')),
   pitch             text,
   compensation      text,
