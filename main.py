@@ -801,8 +801,12 @@ def save_to_supabase(articles):
     total_saved = 0
     for i in range(0, len(rows), batch_size):
         batch = rows[i:i + batch_size]
+        # ?on_conflict=url + Prefer: resolution=ignore-duplicates (HEADERS) →
+        # INSERT ... ON CONFLICT (url) DO NOTHING. Requiert UNIQUE(url) en base
+        # (migration 019 / ADR-24) — sans le param, PostgREST résout sur la PK
+        # id (UUID neuf) et laisse passer les doublons. Aligné sur les satellites.
         resp = requests.post(
-            f"{SUPABASE_URL}/rest/v1/articles",
+            f"{SUPABASE_URL}/rest/v1/articles?on_conflict=url",
             headers=HEADERS,
             json=batch,
         )
