@@ -1,15 +1,15 @@
 # Routine Jobs Radar — Scan & Score (routine Claude Code distante)
 
-> Routine **distante** (claude.ai, cron 4×/semaine) qui alimente les tables `jobs` + `job_scans` (onglet Jobs Radar du cockpit). Remplace l'ancienne routine Cowork sur session LinkedIn (token-vore) — voir [ADR-19](../architecture/decisions.md). Moteur conçu dans [docs/superpowers/specs/2026-05-27-jobs-radar-api-migration-design.md](../superpowers/specs/2026-05-27-jobs-radar-api-migration-design.md).
+> Routine **distante** (claude.ai, cron 3×/semaine) qui alimente les tables `jobs` + `job_scans` (onglet Jobs Radar du cockpit). Remplace l'ancienne routine Cowork sur session LinkedIn (token-vore) — voir [ADR-19](../architecture/decisions.md). Moteur conçu dans [docs/superpowers/specs/2026-05-27-jobs-radar-api-migration-design.md](../superpowers/specs/2026-05-27-jobs-radar-api-migration-design.md).
 
 ## Ce que c'est
 
 - **Type** : routine Claude Code **distante** (sandbox cloud Anthropic) — pas Cowork desktop, pas un workflow GitHub Actions.
 - **Trigger** : `trig_01JtTsMm27eTAGxR5po5KmMQ` — gérable via le skill `schedule`, l'outil `RemoteTrigger`, ou https://claude.ai/code/routines.
-- **Cadence** : cron `0 6 * * 1,3,5,0` = **lun/mer/ven/dim 06:00 UTC (08:00 Paris)**, 4×/semaine.
+- **Cadence** : cron `0 6 * * 1,3,5` = **lun/mer/ven 06:00 UTC (08:00 Paris)**, 3×/semaine (réduit depuis `1,3,5,0` le 2026-06-26 — quota JSearch, ADR-27).
 - **Modèle** : `claude-sonnet-4-6`. **Coût** : couvert par le plan Max (pas de facturation par run).
 - **Outils** : `Bash` (curl JSearch) + `Read`/`Grep`/`Glob` (checkout repo en lecture) + **connecteur MCP Supabase** (`execute_sql`) pour lire/écrire la base (projet `mrmgptqpflzyavdfqwwv`).
-- **Source d'offres** : **JSearch (RapidAPI)**, tier gratuit (quota 200 req/mois, ADR-20). 11 requêtes × 4 runs ≈ **191 req/mois** (sous le quota 200, ADR-22). `num_pages=1`, `country=fr`. ⚠️ JSearch renvoie `403 Host not in allowlist` depuis le sandbox **cloud** (IP datacenter) — la routine ne fetch que depuis une IP autorisée (local / allowlist RapidAPI à réactiver, ADR-21).
+- **Source d'offres** : **JSearch (RapidAPI)**, tier gratuit (quota 200 req/mois, ADR-20). 11 requêtes × 3 runs ≈ **143 req/mois** (sous le quota 200 ; à 4 runs ≈191 le quota saturait → `429` le 2026-06-26, fréquence réduite, ADR-27). `num_pages=1`, `country=fr`. ⚠️ JSearch renvoie `403 Host not in allowlist` depuis le sandbox **cloud** (IP datacenter) — la routine ne fetch que depuis une IP autorisée (local / allowlist RapidAPI à réactiver, ADR-21).
 - **Clé RapidAPI** : **inline dans le prompt** (config claude.ai privée), jamais un secret GitHub — voir [docs/secrets.md](../secrets.md).
 
 ## Gérer la routine
@@ -129,6 +129,7 @@ SORTIE : affiche un resume court — nombre d'offres fetchees / ecartees (non-FU
 
 ## Dernière MAJ
 
+2026-06-26 — **fréquence réduite 4→3 runs/sem (ADR-27)** : cron `0 6 * * 1,3,5,0`→`0 6 * * 1,3,5` (retrait du dimanche) pour tenir sous le quota JSearch 200/mois — la conso 4×/sem (≈191) le saturait, `429 Too Many Requests` constaté le 2026-06-26 (fetch local, `X-RateLimit-Requests-Remaining: -1`), `raw_count` 110→0 depuis ~le 21/06. Conso ramenée à ≈143/mois. Cron MAJ via `RemoteTrigger` (prompt inchangé — la mention interne « 4x/semaine » est cosmétique). En parallèle, fix front du filtre « fraîcheur » (base = `first_seen_date` au lieu de `posted_date`, commit `b8383f6`). Voir ADR-27.
 2026-06-04 — **vieillissement auto (ADR-26)** : nouvelle **ÉTAPE 6** — auto-archive des leads `new` non revus depuis >30j (annonces fermées), gardée contre les échecs de fetch (ne tourne que si `total_fetche > 0`), ne touche jamais `applied`/`snoozed`/décisions utilisateur. Cleaning one-shot du stock le même jour : 120 leads périmés archivés (dont 12 hot leads). Prompt live MAJ via `RemoteTrigger`. Voir ADR-26.
 2026-06-04 — **dédup logique + URL durable (ADR-25)** : ÉTAPE 2 dédoublonne sur la clé `(employeur + titre normalisé)` (avec garde-fou employeur masqué) au lieu du seul `linkedin_job_id` — fini les 2-4 lignes par offre syndiquée ; ÉTAPE 4 choisit le lien le plus durable (`apply_options.is_direct` → host ATS/officiel → linkedin → agrégateur) et **rejette les URLs `jsearch.p.rapidapi.com`** (fallback recherche LinkedIn), palier tracé dans `intel.link_source`. ÉTAPE 1 lit désormais `apply_options`. Nettoyage one-shot du stock (BForBank repointé ATS, Pigment EM marqué fermé, ~25 doublons archivés ; Euronext + 2× Confidential laissés intacts). Prompt live MAJ via `RemoteTrigger`. Voir ADR-25.
 2026-05-31 — **Engagement Manager comme rôle cible (ADR-22)** : ÉTAPE 1 passe à **11 requêtes** (+ `engagement manager Paris`, `delivery manager Paris`) ; ÉTAPE 3 ajoute EM/delivery/transfo manager aux « Roles cibles » (si boîte tech/IA crédible + angle produit/transfo/IA, pas de RUN client pur ni ESN) + red flag dédié + band salaire EM 85-120 k€ ; nouvelle valeur `role_category` **`em`** (migration `sql/017_jobs_em_category.sql`). Exclusion conseil/ESN **maintenue**. Quota ≈ 191/mois. Prompt live MAJ via `RemoteTrigger`. Backfill curé du stock (Workday…). Voir ADR-22.
