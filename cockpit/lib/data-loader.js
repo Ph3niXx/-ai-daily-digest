@@ -1629,7 +1629,11 @@
       title: row.title || "",
       company: row.company || "",
       url: row.url || "",
-      posted_days_ago: daysSinceDate(row.posted_date || row.first_seen_date),
+      // Fraîcheur = entrée dans le radar (first_seen_date) : jamais null, jamais
+      // antidatée. posted_date (publication LinkedIn) sert l'affichage secondaire
+      // « publiée il y a Xj » et reste null si l'API ne l'a pas fournie (~30% des cas).
+      seen_days_ago: daysSinceDate(row.first_seen_date),
+      posted_days_ago: row.posted_date ? daysSinceDate(row.posted_date) : null,
       role_category: row.role_category || "produit",
       company_stage: row.company_stage || "C",
       pitch: row.pitch || "",

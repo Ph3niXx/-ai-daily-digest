@@ -484,7 +484,11 @@ function HotLeadCard({ offer, rank, onApply, onSnooze, onArchive, onEditNotes, o
           <span className="jr-hot-sep">·</span>
           <span className="jr-hot-stage">{STAGE_LABEL[offer.company_stage]}</span>
           <span className="jr-hot-sep">·</span>
-          <span className="jr-hot-age">Posté {dayLabel(offer.posted_days_ago)}</span>
+          <span className="jr-hot-age">Repérée {dayLabel(offer.seen_days_ago)}</span>
+          {offer.posted_days_ago != null && (<>
+            <span className="jr-hot-sep">·</span>
+            <span className="jr-hot-age">publiée {dayLabel(offer.posted_days_ago)}</span>
+          </>)}
           {offer.compensation && (<>
             <span className="jr-hot-sep">·</span>
             <span className="jr-hot-comp">{offer.compensation}</span>
@@ -602,7 +606,7 @@ function OfferRow({ offer, onApply, onSnooze, onArchive, onEditNotes, onSaveNote
 
       <div className="jr-row-meta">
         <div className="jr-row-meta-line">
-          <span className="jr-row-meta-age">{dayLabel(offer.posted_days_ago)}</span>
+          <span className="jr-row-meta-age" title={offer.posted_days_ago != null ? `Repérée ${dayLabel(offer.seen_days_ago)} · publiée ${dayLabel(offer.posted_days_ago)}` : undefined}>Repérée {dayLabel(offer.seen_days_ago)}</span>
           {offer.compensation && <span className="jr-row-meta-comp">{offer.compensation}</span>}
         </div>
       </div>
@@ -939,8 +943,10 @@ function PanelJobsRadar({ data, onNavigate }) {
             o.company.toLowerCase().includes(q) ||
             (o.pitch || "").toLowerCase().includes(q))) return false;
     }
-    if (freshFilter === "24h" && o.posted_days_ago !== 0) return false;
-    if (freshFilter === "7j"  && !(o.posted_days_ago != null && o.posted_days_ago < 7)) return false;
+    // Fraîcheur = depuis quand l'offre est dans le radar (first_seen_date), pas la
+    // date de publication LinkedIn (antidatée + souvent null → filtre quasi-vide).
+    if (freshFilter === "24h" && o.seen_days_ago !== 0) return false;
+    if (freshFilter === "7j"  && o.seen_days_ago >= 7) return false;
     return true;
   };
 
@@ -967,7 +973,7 @@ function PanelJobsRadar({ data, onNavigate }) {
     if (sort === "score") {
       arr.sort((a, b) => b.score_total - a.score_total);
     } else if (sort === "recent") {
-      arr.sort((a, b) => a.posted_days_ago - b.posted_days_ago);
+      arr.sort((a, b) => a.seen_days_ago - b.seen_days_ago);
     }
     return arr;
   }, [offers, heroLeads, scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, query, sort]);
