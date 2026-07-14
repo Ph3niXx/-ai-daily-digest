@@ -33,9 +33,9 @@ THRESHOLD_SESSION_GAP = 30            # Minutes gap to split sessions
 KNOWN_SECTIONS = {
     "anime", "brief", "challenges", "claude", "evening", "gaming",
     "gaming_news", "history", "ideas", "jarvis", "jarvis-lab", "jobs",
-    "music", "news", "opps", "perf", "profile", "radar", "recos", "review",
-    "search", "signals", "sport", "stacks", "top", "updates",
-    "veille-outils", "week", "wiki",
+    "mediatheque", "music", "news", "opps", "perf", "profile", "radar",
+    "recos", "review", "search", "signals", "sport", "stacks", "top",
+    "updates", "veille-outils", "week", "wiki",
 }
 
 TZ = timezone(timedelta(hours=2))
