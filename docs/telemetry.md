@@ -32,6 +32,8 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `hero_compact_toggled` | `{state}` (`"compact"` / `"full"`) | `cockpit/home.jsx::toggleHeroCompact()` quand l'utilisateur clique le toggle compact/plein du hero (préférence persistée dans `localStorage.cockpit-hero-compact`) |
 | `mediatheque_search` | `{q_len, results}` | `cockpit/panel-mediatheque.jsx` après réponse AniList (debounce 400 ms) |
 | `mediatheque_add` | `{franchise_root_id, entries, source}` | `cockpit/panel-mediatheque.jsx::addFranchise()` après persistance |
+| `mediatheque_progress` | `{entry_kind, delta, completed}` | `cockpit/panel-mediatheque.jsx::writeProgress()` après upsert réussi |
+| `mediatheque_remove` | `{franchise_root_id}` | `cockpit/panel-mediatheque.jsx::removeFranchise()` après DELETE |
 
 ## Règle de maintenance
 

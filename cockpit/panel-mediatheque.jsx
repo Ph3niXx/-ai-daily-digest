@@ -35,7 +35,31 @@ function mdtFmtDate(iso) {
   } catch { return iso; }
 }
 
-function MdtStepper() { return null; } // remplacé en Task 9
+function MdtStepper({ entry, progressById, onProgress }) {
+  const [editing, setEditing] = useMdtState(false);
+  const watched = progressById.get(entry.id) || 0;
+  const released = mdtReleased(entry);
+  const max = released;                       // plafonné aux épisodes sortis
+  const disabled = entry.airing_status === "NOT_YET_RELEASED" || max === 0;
+  const clamp = (v) => Math.max(0, Math.min(max, v));
+  return (
+    <div className="mdt-stepper">
+      <button disabled={disabled || watched <= 0} onClick={() => onProgress(entry, clamp(watched - 1))} aria-label="Un épisode de moins">−</button>
+      <span className="mdt-stepper-count" onClick={() => !disabled && setEditing(true)}>
+        {editing ? (
+          <input
+            autoFocus type="number" min="0" max={max} defaultValue={watched}
+            onBlur={(e) => { setEditing(false); onProgress(entry, clamp(Number(e.target.value) || 0)); }}
+            onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditing(false); }}
+          />
+        ) : `${watched}/${entry.episodes_total != null ? entry.episodes_total : "?"}`}
+      </span>
+      <button disabled={disabled || watched >= max} onClick={() => onProgress(entry, clamp(watched + 1))} aria-label="Un épisode de plus">+</button>
+      <button disabled={disabled || watched >= max} className="mdt-chip" style={{ marginLeft: 4 }}
+        onClick={() => onProgress(entry, max)} title="Marquer tous les épisodes sortis comme vus">✓ vue</button>
+    </div>
+  );
+}
 
 function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, onRemove }) {
   // Normalise les deux modes vers un shape commun d'affichage.
@@ -241,6 +265,56 @@ function PanelMediatheque({ data, onNavigate }) {
     }
   }
 
+  async function writeProgress(entry, value) {
+    const D2 = window.MEDIATHEQUE_DATA;
+    const prev = D2.progress.find((p) => p.entry_id === entry.id);
+    const prevValue = prev ? prev.episodes_watched : null;
+    // Optimiste : muter le global tout de suite.
+    if (prev) prev.episodes_watched = value;
+    else D2.progress.push({ entry_id: entry.id, episodes_watched: value, updated_at: new Date().toISOString() });
+    setTick((t) => t + 1);
+    try {
+      const url = window.SUPABASE_URL + "/rest/v1/media_progress?on_conflict=entry_id";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { ...window.sb.headers, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify([{ entry_id: entry.id, episodes_watched: value, updated_at: new Date().toISOString() }]),
+      });
+      if (!res.ok) throw new Error("progress " + res.status);
+      const released = mdtReleased(entry);
+      window.track && window.track("mediatheque_progress", { entry_kind: entry.kind, delta: value - (prevValue || 0), completed: value >= released && released > 0 });
+    } catch (e) {
+      // Rollback.
+      if (prevValue === null) { const i = D2.progress.findIndex((p) => p.entry_id === entry.id); if (i >= 0) D2.progress.splice(i, 1); }
+      else { const p = D2.progress.find((x) => x.entry_id === entry.id); if (p) p.episodes_watched = prevValue; }
+      setTick((t) => t + 1);
+      cockpitToast("Progression non enregistrée — réessaie.", { kind: "error" });
+    }
+  }
+
+  async function removeFranchise(franchiseId) {
+    const f = D.franchises.find((x) => x.id === franchiseId);
+    const ok = await cockpitConfirm(
+      `Retirer « ${f ? (f.title_english || f.title_romaji) : "cette franchise"} » ? La progression sera supprimée.`,
+      { danger: true });
+    if (!ok) return;
+    try {
+      const res = await window.sb.deleteRequest(window.SUPABASE_URL + "/rest/v1/media_franchises?id=eq." + franchiseId);
+      if (!res.ok) throw new Error("delete " + res.status);
+      const D2 = window.MEDIATHEQUE_DATA;
+      const entryIds = new Set(D2.entries.filter((e) => e.franchise_id === franchiseId).map((e) => e.id));
+      D2.franchises = D2.franchises.filter((x) => x.id !== franchiseId);
+      D2.entries = D2.entries.filter((e) => e.franchise_id !== franchiseId);
+      D2.progress = D2.progress.filter((p) => !entryIds.has(p.entry_id));
+      D2.releases = D2.releases.filter((r) => r.franchise_id !== franchiseId);
+      setTick((t) => t + 1);
+      setFiche(null);
+      window.track && window.track("mediatheque_remove", { franchise_root_id: f ? f.source_root_id : null });
+    } catch (e) {
+      cockpitToast("Suppression impossible — réessaie.", { kind: "error" });
+    }
+  }
+
   return (
     <div className="panel-mediatheque">
       <div className="mdt-kicker">Personnel · anime</div>
@@ -329,8 +403,8 @@ function PanelMediatheque({ data, onNavigate }) {
           fiche={fiche} D={D} progressById={progressById}
           onClose={() => setFiche(null)}
           onAdd={fiche.mode === "preview" && fiche.built ? () => addFranchise(fiche.built, fiche.mediaById) : null}
-          onProgress={null /* Task 9 */}
-          onRemove={null /* Task 9 */}
+          onProgress={fiche.mode === "library" ? writeProgress : null}
+          onRemove={fiche.mode === "library" ? () => removeFranchise(fiche.franchiseId) : null}
         />
       )}
     </div>

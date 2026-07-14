@@ -89,7 +89,7 @@
 .mdt-btn--ghost { background: transparent; color: var(--tx2); border-color: color-mix(in srgb, var(--tx) 20%, transparent); }
 .mdt-btn:disabled { opacity: .5; cursor: default; }
 .mdt-fiche-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
-.mdt-error { color: #c0392b; font-size: 13px; margin-top: 10px; }
+.mdt-error { color: var(--danger, #c0392b); font-size: 13px; margin-top: 10px; }
 .mdt-empty { padding: 60px 20px; text-align: center; color: var(--tx3); font-size: 14px; }
 .mdt-spinner { padding: 40px; text-align: center; color: var(--tx3); font-family: var(--font-mono); font-size: 12px; }
 
