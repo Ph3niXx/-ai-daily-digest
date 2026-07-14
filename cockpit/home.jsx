@@ -208,6 +208,21 @@ function MorningCard({ items = [], onNavigate }) {
   );
 }
 
+function MdtBriefCard({ releases = [], onNavigate }) {
+  if (!releases.length) return null;
+  return (
+    <section className="mdt-brief" aria-label="Sorties médiathèque">
+      <div className="mdt-brief-head">📺 Médiathèque — {releases.length} nouveauté{releases.length > 1 ? "s" : ""}</div>
+      <ul className="mdt-brief-list">
+        {releases.slice(0, 3).map((r) => (
+          <li key={r.id}>{r.title}{r.event_date ? ` · ${r.event_date}` : ""}</li>
+        ))}
+      </ul>
+      <button className="mdt-brief-cta" onClick={() => onNavigate && onNavigate("mediatheque")}>Ouvrir la médiathèque →</button>
+    </section>
+  );
+}
+
 function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
   const { macro, top, signals, stats, date, user, radar, week } = data;
   const morningItems = data.morning_card || [];
@@ -380,6 +395,8 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
           >Brief complet</button>
         </div>
       )}
+
+      <MdtBriefCard releases={data.media_releases || []} onNavigate={onNavigate} />
 
       {viewMode === "morning" && morningItems.length > 0 ? (
         <MorningCard items={morningItems} onNavigate={onNavigate} />

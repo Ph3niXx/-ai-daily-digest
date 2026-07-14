@@ -159,6 +159,46 @@ function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, on
   );
 }
 
+function MdtReleasesStrip({ D, tick, onAck }) {
+  const events = D.releases.filter((r) => !r.acknowledged);
+  const calendar = useMdtMemo(() => {
+    const items = [];
+    const now = Date.now();
+    for (const e of D.entries) {
+      if (e.airing_status === "RELEASING" && e.next_episode_airing_at) {
+        items.push({ key: e.id, when: new Date(e.next_episode_airing_at).getTime(),
+          label: e.title_english || e.title_romaji,
+          detail: `ép. ${e.next_episode_number} · ${mdtFmtDate(e.next_episode_airing_at)}` });
+      } else if (e.airing_status === "NOT_YET_RELEASED" && e.start_date && new Date(e.start_date).getTime() > now - 86400000) {
+        items.push({ key: e.id, when: new Date(e.start_date).getTime(),
+          label: e.title_english || e.title_romaji, detail: `première le ${mdtFmtDate(e.start_date)}` });
+      }
+    }
+    return items.sort((a, b) => a.when - b.when).slice(0, 8);
+  }, [D.entries, tick]);
+
+  if (!events.length && !calendar.length) return null;
+  return (
+    <section className="mdt-releases" aria-label="Sorties">
+      <div className="mdt-releases-head">Sorties de ta bibliothèque</div>
+      {events.map((r) => (
+        <div key={r.id} className="mdt-release">
+          <span>🆕 {r.title}</span>
+          <span className="mdt-release-date">{r.event_date ? mdtFmtDate(r.event_date) : mdtFmtDate(r.detected_at)}</span>
+          <button className="mdt-release-ack" onClick={() => onAck(r)} title="Marquer comme vu" aria-label="Acquitter">✓</button>
+        </div>
+      ))}
+      {calendar.length > 0 && (
+        <div className="mdt-calendar">
+          {calendar.map((c) => (
+            <span key={c.key} className="mdt-calendar-item">📅 <strong>{c.label}</strong> — {c.detail}</span>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function PanelMediatheque({ data, onNavigate }) {
   const D = window.MEDIATHEQUE_DATA || { franchises: [], entries: [], progress: [], releases: [] };
   const [tick, setTick] = useMdtState(0);            // bump après mutation locale de D
@@ -315,12 +355,28 @@ function PanelMediatheque({ data, onNavigate }) {
     }
   }
 
+  async function ackRelease(release) {
+    release.acknowledged = true;            // optimiste
+    setTick((t) => t + 1);
+    try {
+      const res = await window.sb.patchJSON(
+        window.SUPABASE_URL + "/rest/v1/media_releases?id=eq." + release.id,
+        { acknowledged: true });
+      if (!res.ok) throw new Error("ack " + res.status);
+      window.track && window.track("mediatheque_release_ack", { event_type: release.event_type });
+    } catch (e) {
+      release.acknowledged = false;
+      setTick((t) => t + 1);
+      cockpitToast("Acquittement non enregistré — réessaie.", { kind: "error" });
+    }
+  }
+
   return (
     <div className="panel-mediatheque">
       <div className="mdt-kicker">Personnel · anime</div>
       <h1 className="mdt-title">Médiathèque</h1>
 
-      {/* Bandeau Sorties — rempli en Task 10 */}
+      <MdtReleasesStrip D={D} tick={tick} onAck={ackRelease} />
 
       <div className="mdt-toolbar">
         <input
