@@ -332,6 +332,26 @@ tables:
     rls: authenticated
     domain: jarvis
 
+  - name: media_entries
+    owner_pipeline: anime_tracker_sync
+    rls: authenticated
+    domain: perso
+
+  - name: media_franchises
+    owner_pipeline: front
+    rls: authenticated
+    domain: perso
+
+  - name: media_progress
+    owner_pipeline: front
+    rls: authenticated
+    domain: perso
+
+  - name: media_releases
+    owner_pipeline: anime_tracker_sync
+    rls: authenticated
+    domain: perso
+
   - name: music_artist_tags
     owner_pipeline: lastfm_sync
     rls: authenticated
