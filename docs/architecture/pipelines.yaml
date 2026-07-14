@@ -194,6 +194,25 @@ pipelines:
     status: active
     notes: "Pipeline TMDB (pipelines/tmdb_sync.py) scaffoldé mais pas de workflow actif — nécessite TMDB_API_KEY."
 
+  - id: anime_tracker_sync
+    name: "Médiathèque anime (tracker AniList)"
+    cron: "30 7 * * *"
+    human_time: "Quotidien 07:30 UTC"
+    workflow_file: ".github/workflows/anime-tracker-sync.yml"
+    script: "pipelines/anime_tracker_sync.py"
+    input_api: "AniList GraphQL (public, sans clé)"
+    output_tables:
+      - media_entries
+      - media_releases
+      - media_franchises
+    read_tables:
+      - media_franchises
+      - media_entries
+    avg_duration_s: 60
+    budget_usd: 0
+    status: active
+    notes: "Ne rafraîchit QUE les franchises de la bibliothèque. Batchs id_in de 25, throttle 2,5 s (< 30 req/min AniList). Événements dédupliqués par UNIQUE(entry_id,event_type). Walk = contrat commun avec cockpit/lib/anilist.js (tests/fixtures/franchise_graphs.json)."
+
   - id: news_sync
     name: "Actualités généralistes RSS"
     cron: "15 7 * * *"
