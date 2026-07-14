@@ -154,6 +154,21 @@
     return out;
   }
 
+  // Un id disparu d'AniList est tombstoné {id, type:"OTHER"} pour arrêter le
+  // walk — mais les edges qui le référencent le déclarent encore ANIME. On
+  // élague ces edges pour qu'aucun fantôme n'entre dans la franchise.
+  function pruneDanglingEdges(mediaById) {
+    for (const m of Object.values(mediaById)) {
+      const edges = m.relations && m.relations.edges;
+      if (!edges) continue;
+      m.relations.edges = edges.filter((edge) => {
+        const target = mediaById[(edge.node || {}).id];
+        return !target || target.type === "ANIME";
+      });
+    }
+    return mediaById;
+  }
+
   const franchiseCache = new Map();
   async function fetchFranchiseLive(anchorId) {
     if (franchiseCache.has(anchorId)) return franchiseCache.get(anchorId);
@@ -167,6 +182,7 @@
       for (const mid of missing) if (!fetched[mid]) fetched[mid] = { id: mid, type: "OTHER" };
       Object.assign(mediaById, fetched);
     }
+    pruneDanglingEdges(mediaById);
     const built = buildFranchise(mediaById, anchorId);
     const result = { built, mediaById };
     franchiseCache.set(anchorId, result);
@@ -229,7 +245,7 @@
   }
 
   const api = { chainIds, missingIds, buildFranchise, gql, searchAnime,
-    fetchFranchiseLive, fuzzyDate, toFranchiseRow, toEntryRows };
+    fetchFranchiseLive, pruneDanglingEdges, fuzzyDate, toFranchiseRow, toEntryRows };
   if (typeof window !== "undefined") window.anilist = Object.assign(window.anilist || {}, api);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })();
