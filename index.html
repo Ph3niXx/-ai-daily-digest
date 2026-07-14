@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://mrmgptqpflzyavdfqwwv.supabase.co wss://mrmgptqpflzyavdfqwwv.supabase.co http://localhost:8765 https://*.trycloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://ws.audioscrobbler.com https://api.frankfurter.dev; img-src 'self' data: https://raw.communitydragon.org https://lastfm.freetls.fastly.net https://*.lastfm.freetls.fastly.net https://coverartarchive.org https://*.archive.org https://*.dzcdn.net https://cdn-images.dzcdn.net https://*.steamstatic.com https://media.steampowered.com https://cdn.akamai.steamstatic.com; frame-src 'none'; object-src 'none'; base-uri 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://mrmgptqpflzyavdfqwwv.supabase.co wss://mrmgptqpflzyavdfqwwv.supabase.co http://localhost:8765 https://*.trycloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://ws.audioscrobbler.com https://api.frankfurter.dev https://graphql.anilist.co; img-src 'self' data: https://raw.communitydragon.org https://lastfm.freetls.fastly.net https://*.lastfm.freetls.fastly.net https://coverartarchive.org https://*.archive.org https://*.dzcdn.net https://cdn-images.dzcdn.net https://*.steamstatic.com https://media.steampowered.com https://cdn.akamai.steamstatic.com https://s4.anilist.co; frame-src 'none'; object-src 'none'; base-uri 'self';">
 <title>AI Cockpit</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C2410C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><circle cx='12' cy='12' r='4'/></svg>">
 <link rel="manifest" href="manifest.json">
@@ -61,6 +61,7 @@
 <script src="cockpit/lib/dialog.js?v=1"></script>
 <script src="cockpit/lib/data-loader.js?v=36"></script>
 <script src="cockpit/lib/wiki-tooltip.js?v=2"></script>
+<script src="cockpit/lib/anilist.js?v=1"></script>
 
 <!-- Fallback fake data (remains in place as shape reference; tier 1 overrides these) -->
 <script src="cockpit/data.js"></script>
