@@ -468,8 +468,8 @@
     }
   ],
   "cockpit_tabs": {
-    "summary": "Catalogue des 27 onglets du cockpit, leur rôle, leurs sources de données et leur cadence de mise à jour.",
-    "updated_at": "2026-04-25",
+    "summary": "Catalogue des 30 onglets du cockpit, leur rôle, leurs sources de données et leur cadence de mise à jour.",
+    "updated_at": "2026-07-14",
     "groups": [
       {
         "id": "aujourdhui",
@@ -762,6 +762,16 @@
             "data_sources": ["steam_games_snapshot", "gaming_stats_daily", "steam_achievements", "tft_matches", "tft_rank_history"],
             "frequency": "mixed",
             "update_details": "Sync Steam quotidien 05:30 UTC · Sync TFT toutes les 2h"
+          },
+          {
+            "id": "mediatheque",
+            "label": "Médiathèque",
+            "icon": "tv",
+            "description": "Bibliothèque anime personnelle : recherche AniList, franchises regroupées (saisons + films/OVA), progression par saison, statuts dérivés, sorties détectées quotidiennement + encart Brief.",
+            "panel_file": "cockpit/panel-mediatheque.jsx",
+            "data_sources": ["media_franchises", "media_entries", "media_progress", "media_releases"],
+            "frequency": "daily",
+            "update_details": "Pipeline anime_tracker_sync 07:30 UTC (AniList GraphQL) — rafraîchit uniquement les franchises suivies"
           }
         ]
       },

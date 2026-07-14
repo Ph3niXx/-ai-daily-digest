@@ -1,0 +1,33 @@
+# Flow : Médiathèque anime (tracker AniList)
+# STUB — voir pipelines.yaml::anime_tracker_sync.
+
+id: perso-mediatheque
+label: "Médiathèque anime (bibliothèque + sorties)"
+domain: perso
+status: todo
+
+source_api:
+  - name: "AniList GraphQL"
+    detail: "graphql.anilist.co — recherche + Media(id_in) avec relations ; public sans clé ; walk franchise = contrat commun front/pipeline"
+
+pipeline:
+  id: anime_tracker_sync
+  workflow: ".github/workflows/anime-tracker-sync.yml"
+  script: "pipelines/anime_tracker_sync.py"
+  cron: "30 7 * * *"
+
+tables:
+  - name: media_franchises
+    write: true
+  - name: media_entries
+    write: true
+  - name: media_releases
+    write: true
+  - name: media_progress
+    write: false   # user-owned, front uniquement
+
+panels:
+  - id: mediatheque
+    detail: "Panel Médiathèque — bandeau Sorties + calendrier, grille bibliothèque (statuts dérivés), recherche AniList, fiche franchise avec steppers"
+  - id: brief
+    detail: "Encart MdtBriefCard (media_releases non acquittées < 7j, Tier 1)"

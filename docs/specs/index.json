@@ -272,9 +272,19 @@
       "last_updated": "2026-04-24"
     },
     {
+      "slug": "mediatheque",
+      "title": "Médiathèque",
+      "order": 28,
+      "group": "Personnel",
+      "dom_id": "mediatheque",
+      "scope": "perso",
+      "status": "documented",
+      "last_updated": "2026-07-14"
+    },
+    {
       "slug": "stacks",
       "title": "Stacks & Limits",
-      "order": 28,
+      "order": 29,
       "group": "Système",
       "dom_id": "stacks",
       "scope": "mixte",
@@ -284,7 +294,7 @@
     {
       "slug": "history",
       "title": "Historique",
-      "order": 29,
+      "order": 30,
       "group": "Système",
       "dom_id": "history",
       "scope": "mixte",

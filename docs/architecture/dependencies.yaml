@@ -194,6 +194,11 @@ panels:
       - gaming_wishlist
     writes: [gaming_wishlist]
 
+  - id: mediatheque
+    file: cockpit/panel-mediatheque.jsx
+    reads: [media_franchises, media_entries, media_progress, media_releases]
+    writes: [media_franchises, media_entries, media_progress, media_releases, usage_events]  # ajout/progression/ack ; entries créées à l'ajout puis pipeline-owned
+
   - id: stacks
     file: cockpit/panel-stacks.jsx
     reads: [weekly_analysis, articles, user_profile]
