@@ -236,7 +236,7 @@
         start_date: fuzzyDate(m.startDate),
         end_date: fuzzyDate(m.endDate),
         next_episode_number: releasing ? m.nextAiringEpisode.episode : null,
-        next_episode_airing_at: releasing ? new Date(m.nextAiringEpisode.airingAt * 1000).toISOString() : null,
+        next_episode_airing_at: releasing && m.nextAiringEpisode.airingAt ? new Date(m.nextAiringEpisode.airingAt * 1000).toISOString() : null,
         cover_url: (m.coverImage && m.coverImage.large) || null,
         sort_order: e.sort_order,
         updated_at: new Date().toISOString(),

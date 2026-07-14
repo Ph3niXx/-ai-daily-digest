@@ -59,6 +59,7 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - [ ] v1 anime uniquement — mangas/livres/films/séries prévus (schéma media_type prêt)
 - [ ] pas de note/score ni statut manuel « Abandonné »
 - [ ] import d'historique MAL/AniList non couvert
+- [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
 2026-07-14 — spec initiale (Task 11 SDD, doc conformité onglet Médiathèque).

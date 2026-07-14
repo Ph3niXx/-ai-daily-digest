@@ -85,7 +85,7 @@ function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, on
         status: m.status, episodes_total: m.episodes != null ? m.episodes : (m.format === "MOVIE" ? 1 : null),
         start_date: window.anilist.fuzzyDate(m.startDate),
         next_episode_number: m.nextAiringEpisode && m.nextAiringEpisode.episode,
-        next_episode_airing_at: m.nextAiringEpisode ? new Date(m.nextAiringEpisode.airingAt * 1000).toISOString() : null,
+        next_episode_airing_at: m.nextAiringEpisode && m.nextAiringEpisode.airingAt ? new Date(m.nextAiringEpisode.airingAt * 1000).toISOString() : null,
         entry: null,
       };
     });
