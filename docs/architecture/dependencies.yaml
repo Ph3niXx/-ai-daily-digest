@@ -327,11 +327,6 @@ tables:
     rls: authenticated
     domain: apprentissage
 
-  - name: memories_vectors
-    owner_pipeline: jarvis_indexer
-    rls: authenticated
-    domain: jarvis
-
   - name: media_entries
     owner_pipeline: anime_tracker_sync
     rls: authenticated
@@ -351,6 +346,11 @@ tables:
     owner_pipeline: anime_tracker_sync
     rls: authenticated
     domain: perso
+
+  - name: memories_vectors
+    owner_pipeline: jarvis_indexer
+    rls: authenticated
+    domain: jarvis
 
   - name: music_artist_tags
     owner_pipeline: lastfm_sync
