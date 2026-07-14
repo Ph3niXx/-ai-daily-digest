@@ -35,6 +35,106 @@ function mdtFmtDate(iso) {
   } catch { return iso; }
 }
 
+function MdtStepper() { return null; } // remplacé en Task 9
+
+function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, onRemove }) {
+  // Normalise les deux modes vers un shape commun d'affichage.
+  let head, rows;
+  if (fiche.mode === "preview") {
+    if (fiche.loading) return (
+      <div className="mdt-modal-backdrop" onClick={onClose}>
+        <div className="mdt-modal" onClick={(e) => e.stopPropagation()}><div className="mdt-spinner">Construction de la fiche franchise…</div></div>
+      </div>
+    );
+    const root = fiche.mediaById[fiche.built.root_id];
+    head = {
+      cover: root.coverImage && root.coverImage.large,
+      title: (root.title && (root.title.english || root.title.romaji)) || "?",
+      romaji: root.title && root.title.romaji, native: root.title && root.title.native,
+      genres: (root.genres || []).join(" · "), synopsis: null,
+    };
+    rows = fiche.built.entries.map((e) => {
+      const m = fiche.mediaById[e.source_id];
+      return {
+        key: e.source_id, in_main_chain: e.in_main_chain, kind: e.kind, season_number: e.season_number,
+        title: (m.title && (m.title.english || m.title.romaji)) || "?",
+        status: m.status, episodes_total: m.episodes != null ? m.episodes : (m.format === "MOVIE" ? 1 : null),
+        start_date: window.anilist.fuzzyDate(m.startDate),
+        next_episode_number: m.nextAiringEpisode && m.nextAiringEpisode.episode,
+        next_episode_airing_at: m.nextAiringEpisode ? new Date(m.nextAiringEpisode.airingAt * 1000).toISOString() : null,
+        entry: null,
+      };
+    });
+  } else {
+    const f = D.franchises.find((x) => x.id === fiche.franchiseId);
+    if (!f) return null;
+    const entries = D.entries.filter((e) => e.franchise_id === f.id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+    head = { cover: f.cover_url, title: f.title_english || f.title_romaji, romaji: f.title_romaji,
+      native: f.title_native, genres: (f.genres || []).join(" · "), synopsis: f.synopsis, franchise: f };
+    rows = entries.map((e) => ({
+      key: e.id, in_main_chain: e.in_main_chain, kind: e.kind, season_number: e.season_number,
+      title: e.title_english || e.title_romaji, status: e.airing_status, episodes_total: e.episodes_total,
+      start_date: e.start_date, next_episode_number: e.next_episode_number,
+      next_episode_airing_at: e.next_episode_airing_at, entry: e,
+    }));
+  }
+  const chain = rows.filter((r) => r.in_main_chain);
+  const bonus = rows.filter((r) => !r.in_main_chain);
+  const rowLabel = (r) => r.kind === "season" ? `S${r.season_number}` : (r.kind === "movie" ? "Film" : r.kind.toUpperCase());
+  const STATUS_FR = { FINISHED: "Terminée", RELEASING: "En diffusion", NOT_YET_RELEASED: "Annoncée", CANCELLED: "Annulée", HIATUS: "En pause" };
+
+  return (
+    <div className="mdt-modal-backdrop" onClick={onClose}>
+      <div className="mdt-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="mdt-fiche-head">
+          {head.cover ? <img className="mdt-fiche-cover" src={head.cover} alt="" /> : <div className="mdt-fiche-cover" />}
+          <div className="mdt-fiche-titles">
+            <h2>{head.title}</h2>
+            <p className="mdt-fiche-native">{head.romaji}{head.native ? ` · ${head.native}` : ""}</p>
+            <p className="mdt-fiche-meta">{head.genres}</p>
+            {head.synopsis && <p className="mdt-fiche-synopsis">{head.synopsis}</p>}
+          </div>
+        </div>
+
+        <div className="mdt-section-label">Saisons & films canon</div>
+        {chain.map((r) => (
+          <div key={r.key} className="mdt-entry">
+            <div className="mdt-entry-info">
+              <strong>{rowLabel(r)}</strong> · {r.title}
+              <div className="mdt-entry-sub">
+                {r.start_date ? r.start_date.slice(0, 4) : "date ?"} · {r.episodes_total != null ? `${r.episodes_total} ép.` : "ép. ?"} · {STATUS_FR[r.status] || r.status}
+                {r.status === "RELEASING" && r.next_episode_number
+                  ? ` · ép. ${r.next_episode_number} le ${mdtFmtDate(r.next_episode_airing_at)}` : ""}
+              </div>
+            </div>
+            {r.entry && onProgress && <MdtStepper entry={r.entry} progressById={progressById} onProgress={onProgress} />}
+          </div>
+        ))}
+
+        {bonus.length > 0 && <>
+          <div className="mdt-section-label">Bonus (hors progression)</div>
+          {bonus.map((r) => (
+            <div key={r.key} className="mdt-entry">
+              <div className="mdt-entry-info">
+                <strong>{rowLabel(r)}</strong> · {r.title}
+                <div className="mdt-entry-sub">{r.start_date ? r.start_date.slice(0, 4) : "date ?"} · {r.episodes_total != null ? `${r.episodes_total} ép.` : "ép. ?"}</div>
+              </div>
+              {r.entry && onProgress && <MdtStepper entry={r.entry} progressById={progressById} onProgress={onProgress} />}
+            </div>
+          ))}
+        </>}
+
+        <div className="mdt-fiche-actions">
+          {fiche.mode === "preview"
+            ? <button className="mdt-btn" onClick={onAdd}>+ Ajouter à ma bibliothèque</button>
+            : <button className="mdt-btn mdt-btn--ghost" onClick={onRemove}>Retirer de ma bibliothèque</button>}
+          <button className="mdt-btn mdt-btn--ghost" onClick={onClose}>Fermer</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PanelMediatheque({ data, onNavigate }) {
   const D = window.MEDIATHEQUE_DATA || { franchises: [], entries: [], progress: [], releases: [] };
   const [tick, setTick] = useMdtState(0);            // bump après mutation locale de D
@@ -42,6 +142,26 @@ function PanelMediatheque({ data, onNavigate }) {
   const [sort, setSort] = useMdtState("activity");
   const [query, setQuery] = useMdtState("");          // >= 3 chars => vue recherche (Task 8)
   const [fiche, setFiche] = useMdtState(null);        // {mode:"library"|"preview", ...} (Tasks 8-9)
+  const searching = query.trim().length >= 3;
+  const [results, setResults] = useMdtState(null);   // null = idle, [] = zéro résultat
+  const [searchErr, setSearchErr] = useMdtState(null);
+
+  useMdtEffect(() => {
+    if (!searching) { setResults(null); setSearchErr(null); return; }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const media = await window.anilist.searchAnime(query.trim());
+        if (cancelled) return;
+        setResults(media);
+        setSearchErr(null);
+        window.track && window.track("mediatheque_search", { q_len: query.trim().length, results: media.length });
+      } catch (e) {
+        if (!cancelled) { setResults([]); setSearchErr("AniList ne répond pas — réessaie dans un instant."); }
+      }
+    }, 400);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [query, searching]);
 
   const entriesByFranchise = useMdtMemo(() => {
     const map = new Map();
@@ -58,6 +178,8 @@ function PanelMediatheque({ data, onNavigate }) {
     for (const p of D.progress) map.set(p.entry_id, p.episodes_watched || 0);
     return map;
   }, [D.progress, tick]);
+
+  const libSourceIds = useMdtMemo(() => new Set(D.entries.map((e) => e.source_id)), [D.entries, tick]);
 
   const cards = useMdtMemo(() => {
     return D.franchises.map((f) => {
@@ -85,7 +207,39 @@ function PanelMediatheque({ data, onNavigate }) {
     return [...list].sort(bySort[sort] || bySort.activity);
   }, [cards, statusFilter, sort]);
 
-  const searching = query.trim().length >= 3;
+  async function openPreview(anchorId) {
+    setFiche({ mode: "preview", loading: true });
+    try {
+      const { built, mediaById } = await window.anilist.fetchFranchiseLive(anchorId);
+      const existing = D.franchises.find((f) => f.source_root_id === built.root_id);
+      if (existing) { setFiche({ mode: "library", franchiseId: existing.id }); return; }
+      setFiche({ mode: "preview", built, mediaById });
+    } catch (e) {
+      setFiche(null);
+      window.cockpitToast && cockpitToast("Fiche AniList indisponible — réessaie.", { kind: "error" });
+    }
+  }
+
+  async function addFranchise(built, mediaById) {
+    const base = window.SUPABASE_URL + "/rest/v1/";
+    const frRow = window.anilist.toFranchiseRow(built, mediaById);
+    let created = null;
+    try {
+      const [fr] = await window.sb.postJSON(base + "media_franchises", frRow);
+      created = fr;
+      const entryRows = window.anilist.toEntryRows(built, mediaById).map((r) => ({ ...r, franchise_id: fr.id }));
+      const savedEntries = await window.sb.postJSON(base + "media_entries", entryRows);
+      window.MEDIATHEQUE_DATA.franchises.unshift(fr);
+      window.MEDIATHEQUE_DATA.entries.push(...savedEntries);
+      setTick((t) => t + 1);
+      setFiche({ mode: "library", franchiseId: fr.id });
+      window.track && window.track("mediatheque_add", { franchise_root_id: built.root_id, entries: savedEntries.length, source: "anilist" });
+      cockpitToast(`${fr.title_english || fr.title_romaji} ajouté à ta bibliothèque.`, { kind: "success" });
+    } catch (e) {
+      if (created) { try { await window.sb.deleteRequest(base + "media_franchises?id=eq." + created.id); } catch (_) {} }
+      cockpitToast("Échec de l'ajout — réessaie.", { kind: "error" });
+    }
+  }
 
   return (
     <div className="panel-mediatheque">
@@ -119,7 +273,30 @@ function PanelMediatheque({ data, onNavigate }) {
       </div>
 
       {searching ? (
-        <div className="mdt-empty">Recherche branchée en Task 8.</div>
+        results === null ? <div className="mdt-spinner">Recherche…</div> :
+        searchErr ? <div className="mdt-error">{searchErr}</div> :
+        results.length === 0 ? <div className="mdt-empty">Aucun résultat pour « {query.trim()} ».</div> : (
+          <div className="mdt-results">
+            {results.map((m) => {
+              const inLib = libSourceIds.has(m.id);
+              return (
+                <button key={m.id} className="mdt-result" onClick={() => openPreview(m.id)}>
+                  {m.coverImage && m.coverImage.large ? <img src={m.coverImage.large} alt="" loading="lazy" /> : <div style={{ width: 56 }} />}
+                  <div>
+                    <p className="mdt-result-title">{(m.title && (m.title.english || m.title.romaji)) || "?"}</p>
+                    <p className="mdt-result-sub">
+                      {m.format || "?"} · {(m.startDate && m.startDate.year) || "?"}
+                      {m.averageScore ? ` · ${m.averageScore}%` : ""}
+                      {m.title && m.title.native ? ` · ${m.title.native}` : ""}
+                    </p>
+                    <p className="mdt-result-genres">{(m.genres || []).slice(0, 3).join(" · ")}</p>
+                    {inLib && <span className="mdt-inlib">déjà dans ta bibliothèque</span>}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )
       ) : visible.length === 0 ? (
         <div className="mdt-empty">
           {D.franchises.length === 0
@@ -147,7 +324,15 @@ function PanelMediatheque({ data, onNavigate }) {
         </div>
       )}
 
-      {/* Fiche franchise (modale) — Tasks 8-9 */}
+      {fiche && (
+        <FicheFranchise
+          fiche={fiche} D={D} progressById={progressById}
+          onClose={() => setFiche(null)}
+          onAdd={fiche.mode === "preview" && fiche.built ? () => addFranchise(fiche.built, fiche.mediaById) : null}
+          onProgress={null /* Task 9 */}
+          onRemove={null /* Task 9 */}
+        />
+      )}
     </div>
   );
 }
