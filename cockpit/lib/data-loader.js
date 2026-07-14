@@ -1140,7 +1140,7 @@
 
   // ── Tier 1 boot — runs BEFORE <App/> mounts ──────────────
   async function bootTier1(){
-    const [articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis] = await Promise.all([
+    const [articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis, mediaReleases] = await Promise.all([
       once("articles_today", loadArticlesToday).catch(() => []),
       once("daily_brief", loadDailyBrief).catch(() => null),
       once("signals", loadSignals).catch(() => []),
@@ -1148,6 +1148,10 @@
       once("user_profile", loadUserProfile).catch(() => []),
       once("recent_articles", () => loadRecentArticles(30)).catch(() => []),
       once("weekly_analysis", () => loadWeeklyAnalysis(8)).catch(() => []),
+      once("media_releases_fresh", () => {
+        const from = new Date(Date.now() - 7 * 86400000).toISOString();
+        return q("media_releases", `acknowledged=eq.false&detected_at=gte.${from}&order=detected_at.desc&limit=5`);
+      }).catch(() => []),
     ]);
 
     const stats = buildStats(articlesToday, signals);
@@ -1183,6 +1187,7 @@
       week: buildWeek(recent),
       recos: [],       // Tier 2
       challenges: [],  // Tier 2
+      media_releases: mediaReleases,  // encart Médiathèque du Brief (T1 léger)
     };
 
     // Morning Card — 3 choses qui comptent aujourd'hui
@@ -1190,7 +1195,7 @@
 
     // Expose raw tables for tier-2 loaders that may want them
     window.__COCKPIT_RAW = {
-      articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis,
+      articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis, mediaReleases,
     };
 
     // Shape exposed as window.COCKPIT_DATA — panels read from it directly.
@@ -1278,6 +1283,13 @@
     async gaming_news(){ return once("gaming_articles", () => q("gaming_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
     async anime(){ return once("anime_articles", () => q("anime_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
     async news(){ return once("news_articles", () => q("news_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
+    async media_franchises(){ return once("media_franchises", () => q("media_franchises", "select=*&order=added_at.desc&limit=500")); },
+    async media_entries(){ return once("media_entries", () => q("media_entries", "select=*&order=sort_order.asc&limit=5000")); },
+    async media_progress(){ return once("media_progress", () => q("media_progress", "select=*&limit=5000")); },
+    async media_releases(){
+      const from = new Date(Date.now() - 30 * 86400000).toISOString();
+      return once("media_releases", () => q("media_releases", `detected_at=gte.${from}&order=detected_at.desc&limit=100`));
+    },
     async veille_outils(){ return once("veille_outils", () => q("claude_veille", "order=created_at.desc&limit=200")); },
     async claude_ecosystem(){ return once("claude_ecosystem", () => q("claude_ecosystem", "order=is_pinned.desc.nullslast,name.asc&limit=500")); },
     async jarvis_messages(){ return once("jarvis_messages", () => q("jarvis_conversations", "order=created_at.desc&limit=200")); },
@@ -4712,6 +4724,21 @@
         }
         return { jobs: allJobs, todayScan, last7Scans };
       }
+      case "mediatheque": {
+        const [franchises, entries, progress, releases] = await Promise.all([
+          T2.media_franchises().catch(() => []),
+          T2.media_entries().catch(() => []),
+          T2.media_progress().catch(() => []),
+          T2.media_releases().catch(() => []),
+        ]);
+        if (window.MEDIATHEQUE_DATA) {
+          window.MEDIATHEQUE_DATA.franchises = franchises;
+          window.MEDIATHEQUE_DATA.entries = entries;
+          window.MEDIATHEQUE_DATA.progress = progress;
+          window.MEDIATHEQUE_DATA.releases = releases;
+        }
+        return { franchises, entries, progress, releases };
+      }
       default:
         // No Tier 2 work for this panel — return null so the App effect
         // can skip the dataVersion bump (avoids a cosmetic re-mount on
@@ -4727,7 +4754,7 @@
     "updates", "claude", "wiki", "radar", "recos", "challenges", "opps", "ideas",
     "profile", "perf", "music", "gaming", "stacks", "history", "jobs",
     "sport", "gaming_news", "anime", "news", "jarvis", "signals",
-    "veille-outils",
+    "veille-outils", "mediatheque",
   ]);
 
   // Hydrate globals with real data on boot (Tier 1 already fetched the
