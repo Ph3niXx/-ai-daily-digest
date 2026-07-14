@@ -339,22 +339,26 @@ def run_sync(dry_run):
             for ev in events:
                 print(f"    [dry-run] {ev[0]}: {ev[1]}")
             continue
-        saved = sb_upsert(url, headers, "media_entries", fresh_rows, "source,source_id")
-        id_by_sid = {r["source_id"]: r["id"] for r in saved}
-        release_rows = [{
-            "franchise_id": fr["id"],
-            "entry_id": id_by_sid.get(sid),
-            "event_type": etype,
-            "title": title,
-            "event_date": edate,
-        } for (etype, title, edate, sid) in events if id_by_sid.get(sid)]
-        sb_upsert(url, headers, "media_releases", release_rows, "entry_id,event_type", ignore_dupes=True)
-        root = graph.get(fr["source_root_id"]) or {}
-        sb_patch(url, headers, "media_franchises", f"id=eq.{fr['id']}", {
-            "updated_at": datetime.now(timezone.utc).isoformat(),
-            "synopsis": strip_synopsis(root.get("description")),
-            "cover_url": (root.get("coverImage") or {}).get("large"),
-        })
+        try:
+            saved = sb_upsert(url, headers, "media_entries", fresh_rows, "source,source_id")
+            id_by_sid = {r["source_id"]: r["id"] for r in saved}
+            release_rows = [{
+                "franchise_id": fr["id"],
+                "entry_id": id_by_sid.get(sid),
+                "event_type": etype,
+                "title": title,
+                "event_date": edate,
+            } for (etype, title, edate, sid) in events if id_by_sid.get(sid)]
+            sb_upsert(url, headers, "media_releases", release_rows, "entry_id,event_type", ignore_dupes=True)
+            root = graph.get(fr["source_root_id"]) or {}
+            sb_patch(url, headers, "media_franchises", f"id=eq.{fr['id']}", {
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "synopsis": strip_synopsis(root.get("description")),
+                "cover_url": (root.get("coverImage") or {}).get("large"),
+            })
+        except Exception as exc:
+            print(f"  WARN {name}: écriture Supabase KO ({exc}) — franchise sautée, rattrapée au prochain run")
+            continue
     print(f"\nDone. {total_new} nouvelles entrées, {total_events} événements.")
 
 
