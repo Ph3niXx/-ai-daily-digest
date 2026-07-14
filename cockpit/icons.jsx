@@ -24,6 +24,7 @@ const ICON_PATHS = {
   activity: <path d="M2 12h4l3-9 6 18 3-9h4"/>,
   music: <path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z"/>,
   gamepad: <><rect x="2" y="7" width="20" height="12" rx="4"/><path d="M7 12h3M8.5 10.5v3M15 12h.01M18 13h.01"/></>,
+  tv: <><rect x="2" y="7" width="20" height="13" rx="2"/><path d="M8 2l4 5 4-5"/></>,
   wallet: <><rect x="2" y="6" width="20" height="14" rx="2"/><path d="M16 12h4M2 10h20"/></>,
   clock: <><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></>,
   arrow_up: <path d="M12 19V5M5 12l7-7 7 7"/>,

@@ -52,6 +52,7 @@ window.COCKPIT_NAV = [
     { id: "perf", label: "Forme", icon: "activity" },
     { id: "music", label: "Musique", icon: "music" },
     { id: "gaming", label: "Gaming", icon: "gamepad" },
+    { id: "mediatheque", label: "Médiathèque", icon: "tv" },
   ]},
   { group: "Système", items: [
     { id: "stacks", label: "Stacks & Limits", icon: "wallet" },

@@ -488,6 +488,7 @@ function App() {
   else if (activePanel === "perf") content = <PanelForme key={panelKey} data={data} onNavigate={handleNavigate} />;
   else if (activePanel === "music") content = <PanelMusique key={panelKey} data={data} onNavigate={handleNavigate} />;
   else if (activePanel === "gaming") content = <PanelGaming key={panelKey} data={data} onNavigate={handleNavigate} />;
+  else if (activePanel === "mediatheque") content = <PanelMediatheque key={panelKey} data={data} onNavigate={handleNavigate} />;
   else if (activePanel === "stacks") content = <PanelStacks key={panelKey} data={data} onNavigate={handleNavigate} />;
   else if (activePanel === "history") content = <PanelHistory key={panelKey} data={data} onNavigate={handleNavigate} />;
   else if (activePanel === "search") content = <PanelSearch key={panelKey} data={data} onNavigate={handleNavigate} />;
