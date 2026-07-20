@@ -42,6 +42,16 @@ function MdtStepper({ entry, progressById, onProgress }) {
   const max = released;                       // plafonné aux épisodes sortis
   const disabled = entry.airing_status === "NOT_YET_RELEASED" || max === 0;
   const clamp = (v) => Math.max(0, Math.min(max, v));
+  // Dénominateur : pour une saison en diffusion on montre les épisodes SORTIS
+  // à date (released), pas le total planifié — évite le « x/? » quand AniList
+  // n'a pas encore renseigné episodes_total. Le total prévu reste en contexte.
+  const total = entry.episodes_total;
+  const countLabel =
+    entry.airing_status === "RELEASING"
+      ? (total != null && total > released ? `${watched}/${released} · ${total} prévus` : `${watched}/${released}`)
+      : entry.airing_status === "NOT_YET_RELEASED"
+        ? `${watched}/${total != null ? total : "—"}`
+        : `${watched}/${total != null ? total : (released || "?")}`;
   return (
     <div className="mdt-stepper">
       <button disabled={disabled || watched <= 0} onClick={() => onProgress(entry, clamp(watched - 1))} aria-label="Un épisode de moins">−</button>
@@ -52,7 +62,7 @@ function MdtStepper({ entry, progressById, onProgress }) {
             onBlur={(e) => { setEditing(false); onProgress(entry, clamp(Number(e.target.value) || 0)); }}
             onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditing(false); }}
           />
-        ) : `${watched}/${entry.episodes_total != null ? entry.episodes_total : "?"}`}
+        ) : countLabel}
       </span>
       <button disabled={disabled || watched >= max} onClick={() => onProgress(entry, clamp(watched + 1))} aria-label="Un épisode de plus">+</button>
       <button disabled={disabled || watched >= max} className="mdt-chip" style={{ marginLeft: 4 }}

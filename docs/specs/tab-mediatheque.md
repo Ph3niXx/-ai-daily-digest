@@ -20,7 +20,7 @@ Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec 
 - **Recherche en direct** : résultats AniList (titres anglais/romaji/japonais, format, année, genres, score) pendant la frappe ; les fiches déjà en bibliothèque sont signalées.
 - **Fiche franchise** : toutes les saisons regroupées et numérotées avec dates et nombre d'épisodes, films canon à leur place chronologique, OVA/bonus à part ; prochaine diffusion datée pour les saisons en cours.
 - **Bibliothèque** : grille de cartes (jaquette, statut dérivé, barre de progression), filtres par statut, tri par activité/ajout/alphabétique.
-- **Progression par saison** : compteur « vu jusqu'à l'épisode N », plafonné aux épisodes réellement sortis ; le statut de la franchise en découle automatiquement.
+- **Progression par saison** : compteur « vu jusqu'à l'épisode N », plafonné aux épisodes réellement sortis ; pour une saison en cours de diffusion, le compteur affiche les épisodes sortis à date (et le total prévu s'il est connu) plutôt qu'un total inconnu ; le statut de la franchise en découle automatiquement.
 - **Sorties** : bandeau des événements détectés (nouvelle saison, diffusion commencée, date annoncée) avec acquittement, calendrier des prochaines diffusions de sa liste, et encart dans le Brief du jour.
 
 ## Front — structure UI
@@ -62,4 +62,4 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
-2026-07-14 — spec initiale (Task 11 SDD, doc conformité onglet Médiathèque).
+2026-07-15 — compteur « vu / sortis · N prévus » pour les saisons en diffusion (fin du « x/? »).
