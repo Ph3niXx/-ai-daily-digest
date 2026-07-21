@@ -10,21 +10,21 @@ Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec 
 
 ## Parcours utilisateur
 1. Clic sidebar « Médiathèque » — la bibliothèque s'affiche avec, en haut, les sorties récentes et le calendrier des prochaines diffusions de sa liste.
-2. Tape le nom d'un anime dans le champ de recherche — les résultats apparaissent en direct.
+2. Tape le nom d'un anime dans le champ de recherche — les résultats apparaissent en direct ; une bascule « Ma bibliothèque | Résultats (N) » permet de revenir à sa liste suivie et d'y retourner sans perdre la recherche.
 3. Clic sur un résultat — la fiche franchise se construit : saisons numérotées et datées, films canon, bonus, prochaines sorties.
 4. Clic « Ajouter à ma bibliothèque » — la franchise rejoint la grille avec le statut « À voir ».
 5. Ouvre une fiche de sa bibliothèque et déclare sa progression saison par saison (+1, saisie directe, « ✓ vue ») — le statut global (À voir / En cours / En cours · à jour / Vu) se met à jour tout seul.
 6. Le lendemain d'une annonce de nouvelle saison, lit l'encart Médiathèque du Brief du jour, ouvre l'onglet et acquitte l'événement d'un ✓.
 
 ## Fonctionnalités
-- **Recherche en direct** : résultats AniList (titres anglais/romaji/japonais, format, année, genres, score) pendant la frappe ; les fiches déjà en bibliothèque sont signalées.
+- **Recherche en direct** : résultats AniList (titres anglais/romaji/japonais, format, année, genres, score) pendant la frappe ; les fiches déjà en bibliothèque sont signalées. Recherche et bibliothèque sont deux vues explicitement alternables via une bascule segmentée « Ma bibliothèque | Résultats (N) » : revenir à sa liste suivie ne vide pas la recherche, et les filtres/tri restent accessibles côté bibliothèque.
 - **Fiche franchise** : toutes les saisons regroupées et numérotées avec dates et nombre d'épisodes, films canon à leur place chronologique, OVA/bonus à part ; prochaine diffusion datée pour les saisons en cours.
 - **Bibliothèque** : grille de cartes (jaquette, statut dérivé, barre de progression), filtres par statut, tri par activité/ajout/alphabétique.
 - **Progression par saison** : compteur « vu jusqu'à l'épisode N », plafonné aux épisodes réellement sortis ; pour une saison en cours de diffusion, le compteur affiche les épisodes sortis à date (et le total prévu s'il est connu) plutôt qu'un total inconnu ; le statut de la franchise en découle automatiquement.
 - **Sorties** : bandeau des événements détectés (nouvelle saison, diffusion commencée, date annoncée) avec acquittement, calendrier des prochaines diffusions de sa liste, et encart dans le Brief du jour.
 
 ## Front — structure UI
-`cockpit/panel-mediatheque.jsx` (`window.PanelMediatheque`) : toolbar (`.mdt-search`, chips statut, select tri), bandeau `<MdtReleasesStrip>`, grille `.mdt-grid` de `.mdt-card`, modale `<FicheFranchise>` (préversion et bibliothèque), stepper `<MdtStepper>`. Encart Brief : `<MdtBriefCard>` dans `cockpit/home.jsx`. Styles : `cockpit/styles-mediatheque.css` (préfixe `mdt-`).
+`cockpit/panel-mediatheque.jsx` (`window.PanelMediatheque`) : toolbar (`.mdt-search`, chips statut, select tri), bascule segmentée `.mdt-viewtoggle` (état `view` = `library`/`search`, visible dès qu'une recherche est active), bandeau `<MdtReleasesStrip>`, grille `.mdt-grid` de `.mdt-card`, modale `<FicheFranchise>` (préversion et bibliothèque), stepper `<MdtStepper>`. Encart Brief : `<MdtBriefCard>` dans `cockpit/home.jsx`. Styles : `cockpit/styles-mediatheque.css` (préfixe `mdt-`).
 
 ## Front — fonctions JS
 | Fonction | Rôle | Fichier |
@@ -62,4 +62,4 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
-2026-07-15 — compteur « vu / sortis · N prévus » pour les saisons en diffusion (fin du « x/? »).
+2026-07-21 — bascule segmentée « Ma bibliothèque | Résultats (N) » : recherche et liste suivie deviennent deux vues alternables sans vider la recherche.

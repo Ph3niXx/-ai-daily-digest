@@ -214,14 +214,17 @@ function PanelMediatheque({ data, onNavigate }) {
   const [tick, setTick] = useMdtState(0);            // bump après mutation locale de D
   const [statusFilter, setStatusFilter] = useMdtState("all");
   const [sort, setSort] = useMdtState("activity");
-  const [query, setQuery] = useMdtState("");          // >= 3 chars => vue recherche (Task 8)
+  const [query, setQuery] = useMdtState("");          // >= 3 chars => recherche AniList (Task 8)
+  const [view, setView] = useMdtState("library");     // "library" | "search" — bascule explicite recherche/bibliothèque
   const [fiche, setFiche] = useMdtState(null);        // {mode:"library"|"preview", ...} (Tasks 8-9)
   const searching = query.trim().length >= 3;
   const [results, setResults] = useMdtState(null);   // null = idle, [] = zéro résultat
   const [searchErr, setSearchErr] = useMdtState(null);
+  const inSearchView = searching && view === "search"; // corps = résultats ; sinon = grille bibliothèque
 
   useMdtEffect(() => {
-    if (!searching) { setResults(null); setSearchErr(null); return; }
+    if (!searching) { setResults(null); setSearchErr(null); setView("library"); return; }
+    setView("search");            // taper (ou éditer la requête) ramène sur les résultats
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
@@ -397,7 +400,7 @@ function PanelMediatheque({ data, onNavigate }) {
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Rechercher un anime"
         />
-        {!searching && (<>
+        {!inSearchView && (<>
           <div className="mdt-filters" role="group" aria-label="Filtrer par statut">
             {[["all", "Tous"], ["to_watch", "À voir"], ["watching", "En cours"], ["seen", "Vu"]].map(([id, label]) => (
               <button key={id} className={`mdt-chip ${statusFilter === id ? "is-active" : ""}`}
@@ -412,7 +415,18 @@ function PanelMediatheque({ data, onNavigate }) {
         </>)}
       </div>
 
-      {searching ? (
+      {searching && (
+        <div className="mdt-viewtoggle" role="group" aria-label="Basculer entre ma bibliothèque et les résultats de recherche">
+          <button className={`mdt-viewtoggle-btn ${view === "library" ? "is-active" : ""}`}
+            aria-pressed={view === "library"} onClick={() => setView("library")}>◀ Ma bibliothèque</button>
+          <button className={`mdt-viewtoggle-btn ${view === "search" ? "is-active" : ""}`}
+            aria-pressed={view === "search"} onClick={() => setView("search")}>
+            Résultats « {query.trim()} »{results ? ` (${results.length})` : ""}
+          </button>
+        </div>
+      )}
+
+      {inSearchView ? (
         results === null ? <div className="mdt-spinner">Recherche…</div> :
         searchErr ? <div className="mdt-error">{searchErr}</div> :
         results.length === 0 ? <div className="mdt-empty">Aucun résultat pour « {query.trim()} ».</div> : (
