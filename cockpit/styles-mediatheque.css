@@ -130,12 +130,16 @@
 .mdt-modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 60; display: flex; align-items: flex-start; justify-content: center; padding: 6vh 16px; overflow-y: auto; }
 .mdt-modal { width: min(760px, 100%); background: var(--bg); border: 1px solid color-mix(in srgb, var(--tx) 15%, transparent);
   border-radius: 14px; padding: 24px 26px 28px; }
-.mdt-fiche-head { display: flex; gap: 18px; margin-bottom: 18px; }
-.mdt-fiche-cover { width: 110px; aspect-ratio: 2/3; object-fit: cover; border-radius: 8px; }
-.mdt-fiche-titles h2 { font-family: var(--font-display); font-size: 26px; margin: 0 0 2px; }
-.mdt-fiche-native { font-size: 13px; color: var(--tx3); margin: 0 0 8px; }
-.mdt-fiche-meta { font-family: var(--font-mono); font-size: 11px; color: var(--tx2); }
-.mdt-fiche-synopsis { font-size: 13px; line-height: 1.55; color: var(--tx2); max-height: 5.2em; overflow: hidden; margin: 10px 0 0; }
+.mdt-fiche-head { position: relative; margin: -24px -26px 4px; min-height: 200px; display: flex;
+  align-items: flex-end; background-size: cover; background-position: center 28%; background-color: var(--bg2);
+  border-radius: 14px 14px 0 0; overflow: hidden; }
+.mdt-fiche-scrim { position: absolute; inset: 0;
+  background: linear-gradient(to top, var(--bg) 3%, rgba(0,0,0,.6) 40%, rgba(0,0,0,.1) 85%); }
+.mdt-fiche-head-inner { position: relative; z-index: 1; padding: 22px 24px; }
+.mdt-fiche-head-inner h2 { font-family: var(--font-display); font-size: 28px; margin: 0 0 2px; color: #fff; text-shadow: 0 2px 14px rgba(0,0,0,.4); }
+.mdt-fiche-native { font-size: 13px; color: rgba(255,255,255,.82); margin: 0 0 6px; }
+.mdt-fiche-meta { font-family: var(--font-mono); font-size: 11px; color: rgba(255,255,255,.75); }
+.mdt-fiche-synopsis { font-size: 13px; line-height: 1.55; color: var(--tx2); margin: 14px 0 0; }
 .mdt-section-label { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--tx3); margin: 18px 0 8px; }
 .mdt-entry { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid color-mix(in srgb, var(--tx) 8%, transparent); font-size: 13.5px; }
 .mdt-entry-info { flex: 1; min-width: 0; }
@@ -172,5 +176,4 @@
 
 @media (max-width: 720px) {
   .panel-mediatheque { padding: 24px 16px 60px; }
-  .mdt-fiche-head { flex-direction: column; }
 }

@@ -179,6 +179,7 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
     const root = fiche.mediaById[fiche.built.root_id];
     head = {
       cover: root.coverImage && root.coverImage.large,
+      banner: root.bannerImage || (root.coverImage && root.coverImage.large) || null,
       title: (root.title && (root.title.english || root.title.romaji)) || "?",
       romaji: root.title && root.title.romaji, native: root.title && root.title.native,
       genres: (root.genres || []).join(" · "), synopsis: null,
@@ -199,7 +200,7 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
     const f = D.franchises.find((x) => x.id === fiche.franchiseId);
     if (!f) return null;
     const entries = D.entries.filter((e) => e.franchise_id === f.id).sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-    head = { cover: f.cover_url, title: f.title_english || f.title_romaji, romaji: f.title_romaji,
+    head = { cover: f.cover_url, banner: f.banner_url || f.cover_url || null, title: f.title_english || f.title_romaji, romaji: f.title_romaji,
       native: f.title_native, genres: (f.genres || []).join(" · "), synopsis: f.synopsis, franchise: f };
     rows = entries.map((e) => ({
       key: e.id, in_main_chain: e.in_main_chain, kind: e.kind, season_number: e.season_number,
@@ -216,17 +217,17 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
   return (
     <div className="mdt-modal-backdrop" onClick={onClose}>
       <div className="mdt-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="mdt-fiche-head">
-          {head.cover ? <img className="mdt-fiche-cover" src={head.cover} alt="" /> : <div className="mdt-fiche-cover" />}
-          <div className="mdt-fiche-titles">
+        <div className="mdt-fiche-head" style={head.banner ? { backgroundImage: `url(${head.banner})` } : undefined}>
+          <div className="mdt-fiche-scrim" />
+          <div className="mdt-fiche-head-inner">
             <h2>{head.title}</h2>
             <p className="mdt-fiche-native">{head.romaji}{head.native ? ` · ${head.native}` : ""}</p>
             <p className="mdt-fiche-meta">{head.genres}</p>
             {head.franchise && head.franchise.shelved &&
               <span className="mdt-badge mdt-badge--shelved" style={{ marginTop: 6, display: "inline-block" }}>Mis de côté</span>}
-            {head.synopsis && <p className="mdt-fiche-synopsis">{head.synopsis}</p>}
           </div>
         </div>
+        {head.synopsis && <p className="mdt-fiche-synopsis">{head.synopsis}</p>}
 
         <div className="mdt-section-label">Saisons & films canon</div>
         {chain.map((r) => (
