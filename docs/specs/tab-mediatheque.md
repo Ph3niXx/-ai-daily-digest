@@ -19,19 +19,20 @@ Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec 
 ## Fonctionnalités
 - **Recherche en direct** : résultats AniList (titres anglais/romaji/japonais, format, année, genres, score) pendant la frappe ; les fiches déjà en bibliothèque sont signalées. Recherche et bibliothèque sont deux vues explicitement alternables via une bascule segmentée « Ma bibliothèque | Résultats (N) » : revenir à sa liste suivie ne vide pas la recherche, et les filtres/tri restent accessibles côté bibliothèque.
 - **Fiche franchise** : toutes les saisons regroupées et numérotées avec dates et nombre d'épisodes, films canon à leur place chronologique, OVA/bonus à part ; prochaine diffusion datée pour les saisons en cours.
-- **Bibliothèque** : grille de cartes (jaquette, statut dérivé, barre de progression), filtres par statut, tri par activité/ajout/alphabétique.
+- **Bibliothèque** : hero cinématique mettant en avant le titre le plus pertinent (à reprendre / prochain épisode / à découvrir / vu), puis grille de posters (jaquette, badge de statut, barre de progression) avec actions rapides au survol (cocher un épisode de la saison courante sans ouvrir la fiche), filtres par statut, tri par activité/ajout/alphabétique.
 - **Statut manuel « mis de côté »** : ranger une franchise qu'on ne suit plus (bouton dans la fiche). Elle sort des buckets actifs (À voir / En cours / Vu / « Tous ») et n'apparaît que sous son chip dédié « Mis de côté » ; progression et notes conservées, réactivable à tout moment.
 - **Progression par saison** : compteur « vu jusqu'à l'épisode N », plafonné aux épisodes réellement sortis ; pour une saison en cours de diffusion, le compteur affiche les épisodes sortis à date (et le total prévu s'il est connu) plutôt qu'un total inconnu ; le statut de la franchise en découle automatiquement.
 - **Note par saison** : chaque saison/film/bonus est notable sur 0–100 (échelle AniList) via une pastille inline dans la fiche ; champ vidé = note retirée. Stockée sur `media_progress` (user-owned).
 - **Sorties** : bandeau des événements détectés (nouvelle saison, diffusion commencée, date annoncée) avec acquittement, calendrier des prochaines diffusions de sa liste, et encart dans le Brief du jour.
 
 ## Front — structure UI
-`cockpit/panel-mediatheque.jsx` (`window.PanelMediatheque`) : toolbar (`.mdt-search`, chips statut, select tri), bascule segmentée `.mdt-viewtoggle` (état `view` = `library`/`search`, visible dès qu'une recherche est active), bandeau `<MdtReleasesStrip>`, grille `.mdt-grid` de `.mdt-card`, modale `<FicheFranchise>` (préversion et bibliothèque), stepper `<MdtStepper>`. Encart Brief : `<MdtBriefCard>` dans `cockpit/home.jsx`. Styles : `cockpit/styles-mediatheque.css` (préfixe `mdt-`).
+`cockpit/panel-mediatheque.jsx` (`window.PanelMediatheque`) : toolbar (`.mdt-search`, chips statut, select tri), bascule segmentée `.mdt-viewtoggle` (état `view` = `library`/`search`, visible dès qu'une recherche est active), bandeau `<MdtReleasesStrip>`, hero `<MdtHero>` (billboard bannière, titre mis en avant via `pickHero`, CTA + `+1` inline), grille `.mdt-grid` de `<MdtCard>` (poster, badge de statut, barre de progression, actions rapides +1/✓ au survol sur la saison courante sans ouvrir la modale), modale `<FicheFranchise>` (en-tête bannière) (préversion et bibliothèque), stepper `<MdtStepper>`. Encart Brief : `<MdtBriefCard>` dans `cockpit/home.jsx`. Styles : `cockpit/styles-mediatheque.css` (préfixe `mdt-`).
 
 ## Front — fonctions JS
 | Fonction | Rôle | Fichier |
 |----------|------|---------|
 | `mdtStatus()` / `mdtReleased()` | statuts dérivés (À voir/En cours/À jour/Vu), épisodes sortis | `cockpit/panel-mediatheque.jsx` |
+| `pickHero()` / `currentEntryOf()` | choix du titre hero (table de priorité) / saison courante d'une franchise | `cockpit/panel-mediatheque.jsx` |
 | `openPreview()` / `addFranchise()` | walk live + ajout atomique (rollback si échec) | `cockpit/panel-mediatheque.jsx` |
 | `writeProgress()` | upsert optimiste de la progression | `cockpit/panel-mediatheque.jsx` |
 | `ackRelease()` / `removeFranchise()` | acquittement / retrait cascade | `cockpit/panel-mediatheque.jsx` |
@@ -67,4 +68,4 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
-2026-07-22 — statut manuel « mis de côté » (franchise, exclu des buckets actifs) + note /100 par saison (`media_progress.rating`) ; « Vu » recalé sur l'absence de diffusion en cours (aucune `RELEASING`) au lieu du tout-terminé, « à jour » réservé aux saisons en diffusion rattrapées.
+2026-07-22 — redesign « Apple TV+ » : hero billboard + grille de posters + actions rapides au survol (cocher un épisode sans ouvrir la modale) + en-tête bannière de la fiche. Adaptatif aux 3 thèmes, aucune migration.
