@@ -20,12 +20,18 @@ function mdtReleased(e) {
 function mdtStatus(chainEntries, progressById) {
   const watched = chainEntries.reduce((s, e) => s + (progressById.get(e.id) || 0), 0);
   const released = chainEntries.reduce((s, e) => s + mdtReleased(e), 0);
-  const allFinished = chainEntries.every((e) => e.airing_status === "FINISHED" || e.airing_status === "CANCELLED");
+  // « Vu » vs « à jour » : la nuance dépend de si une saison DIFFUSE ACTUELLEMENT
+  // (RELEASING), pas de si tout est FINISHED. Rien en cours de diffusion + tous les
+  // épisodes sortis vus = « Vu » — y compris avec une saison future annoncée mais pas
+  // encore diffusée (NOT_YET_RELEASED ne compte pas comme « en cours de diffusion »).
+  // L'anime repasse « En cours » dès qu'un nouvel épisode sort non vu (released remonté
+  // par le pipeline quotidien anime_tracker_sync). « à jour » = saison en diffusion rattrapée.
+  const anyReleasing = chainEntries.some((e) => e.airing_status === "RELEASING");
   if (watched === 0) return { id: "to_watch", label: "À voir", watched, released };
   if (watched < released) return { id: "watching", label: "En cours", watched, released };
-  return allFinished
-    ? { id: "seen", label: "Vu", watched, released }
-    : { id: "up_to_date", label: "En cours · à jour", watched, released };
+  return anyReleasing
+    ? { id: "up_to_date", label: "En cours · à jour", watched, released }
+    : { id: "seen", label: "Vu", watched, released };
 }
 
 function mdtFmtDate(iso) {

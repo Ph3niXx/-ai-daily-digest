@@ -58,6 +58,7 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - Saison annoncée sans date → numérotée en dernier, stepper désactivé. Épisodes plafonnés aux sortis pour une saison en diffusion.
 - Un report de date met à jour le calendrier sans re-déclencher d'événement.
 - Mettre de côté depuis un bucket actif → la carte disparaît de la vue courante (sauf filtre « Mis de côté »). Réactiver → retour dans le bucket dérivé de la progression.
+- « Vu » vs « En cours · à jour » : un anime bascule « Vu » dès qu'**aucune saison ne diffuse actuellement** (aucune `RELEASING`) et que tous les épisodes sortis sont vus — y compris s'il a une saison future annoncée mais pas encore diffusée. Il repasse « En cours » quand un nouvel épisode sort non vu (`released` remonté par le pipeline quotidien). « En cours · à jour » est réservé au cas « saison en diffusion et rattrapée ».
 
 ## Limitations connues / TODO
 - [ ] v1 anime uniquement — mangas/livres/films/séries prévus (schéma media_type prêt)
@@ -66,4 +67,4 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
-2026-07-22 — statut manuel « mis de côté » (franchise, exclu des buckets actifs) + note /100 par saison (`media_progress.rating`).
+2026-07-22 — statut manuel « mis de côté » (franchise, exclu des buckets actifs) + note /100 par saison (`media_progress.rating`) ; « Vu » recalé sur l'absence de diffusion en cours (aucune `RELEASING`) au lieu du tout-terminé, « à jour » réservé aux saisons en diffusion rattrapées.
