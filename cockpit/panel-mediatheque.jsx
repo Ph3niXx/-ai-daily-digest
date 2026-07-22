@@ -487,7 +487,10 @@ function PanelMediatheque({ data, onNavigate }) {
     return [...list].sort(bySort[sort] || bySort.activity);
   }, [cards, statusFilter, sort]);
 
-  const hero = useMdtMemo(() => (searching ? null : pickHero(cards)), [cards, searching]);
+  // Le gate de rendu ({!inSearchView && …}) porte seul la visibilité ; on calcule
+  // toujours le vrai pick pour éviter que le hero d'accueil vide s'affiche par-dessus
+  // une grille pleine quand on revient sur « Ma bibliothèque » pendant une recherche.
+  const hero = useMdtMemo(() => pickHero(cards), [cards]);
 
   async function openPreview(anchorId) {
     setFiche({ mode: "preview", loading: true });

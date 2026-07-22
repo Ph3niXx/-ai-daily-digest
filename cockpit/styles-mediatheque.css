@@ -29,7 +29,7 @@
 .mdt-hero-bar > div { height: 100%; background: var(--brand); }
 .mdt-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .mdt-hero-cta { background: #fff; color: #111; border-color: #fff; }
-.mdt-hero-quick { color: #fff; border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.08); }
+.mdt-hero-quick { color: #fff; border-color: rgba(255,255,255,.6); background: rgba(0,0,0,.35); }
 .mdt-hero--empty { background: var(--bg2); }
 .mdt-hero--empty .mdt-hero-kicker,
 .mdt-hero--empty .mdt-hero-title,
