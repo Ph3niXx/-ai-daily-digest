@@ -94,6 +94,12 @@
 .mdt-stepper-count { font-family: var(--font-mono); font-size: 12px; min-width: 58px; text-align: center; cursor: pointer; }
 .mdt-stepper-count input { width: 44px; font: inherit; text-align: center; color: var(--tx); background: transparent;
   border: 1px solid var(--brand); border-radius: 4px; }
+.mdt-rating { display: inline-flex; align-items: center; margin-left: 4px; }
+.mdt-rating-pill { font-family: var(--font-mono); font-size: 11px; padding: 4px 9px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tx) 18%, transparent); background: transparent; color: var(--tx3); cursor: pointer; }
+.mdt-rating-pill.is-rated { color: var(--brand); border-color: var(--brand); }
+.mdt-rating input { width: 46px; font: inherit; font-family: var(--font-mono); font-size: 12px; text-align: center;
+  color: var(--tx); background: transparent; border: 1px solid var(--brand); border-radius: 6px; }
 .mdt-btn { padding: 9px 16px; border-radius: 8px; border: 1px solid var(--tx); background: var(--tx); color: var(--bg);
   font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; }
 .mdt-btn--ghost { background: transparent; color: var(--tx2); border-color: color-mix(in srgb, var(--tx) 20%, transparent); }

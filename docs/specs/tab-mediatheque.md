@@ -22,6 +22,7 @@ Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec 
 - **Bibliothèque** : grille de cartes (jaquette, statut dérivé, barre de progression), filtres par statut, tri par activité/ajout/alphabétique.
 - **Statut manuel « mis de côté »** : ranger une franchise qu'on ne suit plus (bouton dans la fiche). Elle sort des buckets actifs (À voir / En cours / Vu / « Tous ») et n'apparaît que sous son chip dédié « Mis de côté » ; progression et notes conservées, réactivable à tout moment.
 - **Progression par saison** : compteur « vu jusqu'à l'épisode N », plafonné aux épisodes réellement sortis ; pour une saison en cours de diffusion, le compteur affiche les épisodes sortis à date (et le total prévu s'il est connu) plutôt qu'un total inconnu ; le statut de la franchise en découle automatiquement.
+- **Note par saison** : chaque saison/film/bonus est notable sur 0–100 (échelle AniList) via une pastille inline dans la fiche ; champ vidé = note retirée. Stockée sur `media_progress` (user-owned).
 - **Sorties** : bandeau des événements détectés (nouvelle saison, diffusion commencée, date annoncée) avec acquittement, calendrier des prochaines diffusions de sa liste, et encart dans le Brief du jour.
 
 ## Front — structure UI
@@ -34,6 +35,7 @@ Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec 
 | `openPreview()` / `addFranchise()` | walk live + ajout atomique (rollback si échec) | `cockpit/panel-mediatheque.jsx` |
 | `writeProgress()` | upsert optimiste de la progression | `cockpit/panel-mediatheque.jsx` |
 | `ackRelease()` / `removeFranchise()` | acquittement / retrait cascade | `cockpit/panel-mediatheque.jsx` |
+| `writeRating()` / `toggleShelved()` | upsert note optimiste / bascule mis de côté | `cockpit/panel-mediatheque.jsx` |
 | `searchAnime()` / `fetchFranchiseLive()` / `buildFranchise()` | client AniList + walk franchise (contrat commun pipeline) | `cockpit/lib/anilist.js` |
 
 ## Back — sources de données
@@ -64,4 +66,4 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
-2026-07-21 — bascule segmentée « Ma bibliothèque | Résultats (N) » : recherche et liste suivie deviennent deux vues alternables sans vider la recherche.
+2026-07-22 — statut manuel « mis de côté » (franchise, exclu des buckets actifs) + note /100 par saison (`media_progress.rating`).

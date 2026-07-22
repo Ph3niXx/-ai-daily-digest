@@ -71,7 +71,37 @@ function MdtStepper({ entry, progressById, onProgress }) {
   );
 }
 
-function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, onRemove, onShelve }) {
+function MdtRating({ entry, ratingById, onRating }) {
+  const [editing, setEditing] = useMdtState(false);
+  const rating = ratingById.get(entry.id);
+  const clamp = (v) => Math.max(0, Math.min(100, v));
+  if (editing) {
+    return (
+      <span className="mdt-rating">
+        <input
+          autoFocus type="number" min="0" max="100"
+          defaultValue={rating != null ? rating : ""}
+          onBlur={(e) => {
+            setEditing(false);
+            const raw = e.target.value.trim();
+            onRating(entry, raw === "" ? null : clamp(Number(raw) || 0));
+          }}
+          onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditing(false); }}
+        />
+      </span>
+    );
+  }
+  return (
+    <span className="mdt-rating">
+      <button className={`mdt-rating-pill ${rating != null ? "is-rated" : ""}`}
+        onClick={() => setEditing(true)} title="Noter (0–100)">
+        {rating != null ? rating : "Noter"}
+      </button>
+    </span>
+  );
+}
+
+function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, onProgress, onRemove, onShelve, onRating }) {
   // Normalise les deux modes vers un shape commun d'affichage.
   let head, rows;
   if (fiche.mode === "preview") {
@@ -144,6 +174,7 @@ function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, on
               </div>
             </div>
             {r.entry && onProgress && <MdtStepper entry={r.entry} progressById={progressById} onProgress={onProgress} />}
+            {r.entry && onRating && <MdtRating entry={r.entry} ratingById={ratingById} onRating={onRating} />}
           </div>
         ))}
 
@@ -156,6 +187,7 @@ function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, on
                 <div className="mdt-entry-sub">{r.start_date ? r.start_date.slice(0, 4) : "date ?"} · {r.episodes_total != null ? `${r.episodes_total} ép.` : "ép. ?"}</div>
               </div>
               {r.entry && onProgress && <MdtStepper entry={r.entry} progressById={progressById} onProgress={onProgress} />}
+              {r.entry && onRating && <MdtRating entry={r.entry} ratingById={ratingById} onRating={onRating} />}
             </div>
           ))}
         </>}
@@ -262,6 +294,12 @@ function PanelMediatheque({ data, onNavigate }) {
     return map;
   }, [D.progress, tick]);
 
+  const ratingById = useMdtMemo(() => {
+    const map = new Map();
+    for (const p of D.progress) if (p.rating != null) map.set(p.entry_id, p.rating);
+    return map;
+  }, [D.progress, tick]);
+
   const libSourceIds = useMdtMemo(() => new Set(D.entries.map((e) => e.source_id)), [D.entries, tick]);
 
   const cards = useMdtMemo(() => {
@@ -354,6 +392,31 @@ function PanelMediatheque({ data, onNavigate }) {
       else { const p = D2.progress.find((x) => x.entry_id === entry.id); if (p) p.episodes_watched = prevValue; }
       setTick((t) => t + 1);
       cockpitToast("Progression non enregistrée — réessaie.", { kind: "error" });
+    }
+  }
+
+  async function writeRating(entry, value) {
+    const D2 = window.MEDIATHEQUE_DATA;
+    const prev = D2.progress.find((p) => p.entry_id === entry.id);
+    const prevRating = prev ? (prev.rating != null ? prev.rating : null) : undefined; // undefined = aucune ligne
+    // Optimiste. On n'envoie PAS episodes_watched → merge-duplicates préserve la valeur existante.
+    if (prev) prev.rating = value;
+    else D2.progress.push({ entry_id: entry.id, episodes_watched: 0, rating: value, updated_at: new Date().toISOString() });
+    setTick((t) => t + 1);
+    try {
+      const url = window.SUPABASE_URL + "/rest/v1/media_progress?on_conflict=entry_id";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { ...window.sb.headers, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify([{ entry_id: entry.id, rating: value, updated_at: new Date().toISOString() }]),
+      });
+      if (!res.ok) throw new Error("rating " + res.status);
+      window.track && window.track("mediatheque_rate", { entry_kind: entry.kind, rating: value, cleared: value === null });
+    } catch (e) {
+      if (prevRating === undefined) { const i = D2.progress.findIndex((p) => p.entry_id === entry.id); if (i >= 0) D2.progress.splice(i, 1); }
+      else { const p = D2.progress.find((x) => x.entry_id === entry.id); if (p) p.rating = prevRating; }
+      setTick((t) => t + 1);
+      cockpitToast("Note non enregistrée — réessaie.", { kind: "error" });
     }
   }
 
@@ -511,12 +574,13 @@ function PanelMediatheque({ data, onNavigate }) {
 
       {fiche && (
         <FicheFranchise
-          fiche={fiche} D={D} progressById={progressById}
+          fiche={fiche} D={D} progressById={progressById} ratingById={ratingById}
           onClose={() => setFiche(null)}
           onAdd={fiche.mode === "preview" && fiche.built ? () => addFranchise(fiche.built, fiche.mediaById) : null}
           onProgress={fiche.mode === "library" ? writeProgress : null}
           onRemove={fiche.mode === "library" ? () => removeFranchise(fiche.franchiseId) : null}
           onShelve={fiche.mode === "library" ? () => toggleShelved(fiche.franchiseId) : null}
+          onRating={fiche.mode === "library" ? writeRating : null}
         />
       )}
     </div>
