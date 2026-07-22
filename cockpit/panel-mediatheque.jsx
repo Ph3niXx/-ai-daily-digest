@@ -34,6 +34,25 @@ function mdtStatus(chainEntries, progressById) {
     : { id: "seen", label: "Vu", watched, released };
 }
 
+function currentEntryOf(entries, progressById) {
+  const chain = entries
+    .filter((e) => e.in_main_chain)
+    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  for (const e of chain) {
+    if ((progressById.get(e.id) || 0) < mdtReleased(e)) return e;
+  }
+  return null; // tout rattrapé (à jour ou vu)
+}
+
+// Libellé court de la saison courante pour hero/carte : « S2 · 12/28 ».
+function mdtCurLabel(cur, progressById) {
+  if (!cur) return null;
+  const w = progressById.get(cur.id) || 0;
+  const rel = mdtReleased(cur);
+  const tag = cur.kind === "season" ? `S${cur.season_number}` : (cur.kind === "movie" ? "Film" : cur.kind.toUpperCase());
+  return `${tag} · ${w}/${rel || "?"}`;
+}
+
 function mdtFmtDate(iso) {
   if (!iso) return null;
   try {
@@ -250,6 +269,31 @@ function MdtReleasesStrip({ D, tick, onAck }) {
         </div>
       )}
     </section>
+  );
+}
+
+function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress }) {
+  const chainLen = entries.filter((e) => e.in_main_chain).length;
+  const pct = st.released ? Math.min(100, Math.round((100 * st.watched) / st.released)) : 0;
+  const showBar = st.watched > 0 && st.id !== "to_watch";
+  const curLabel = mdtCurLabel(cur, progressById);
+  return (
+    <div className="mdt-card">
+      <button className="mdt-card-poster" onClick={() => onOpen(f)}
+        aria-label={`Ouvrir ${f.title_english || f.title_romaji}`}>
+        {f.cover_url
+          ? <img className="mdt-card-cover" src={f.cover_url} alt="" loading="lazy" />
+          : <div className="mdt-card-cover" />}
+        <span className={`mdt-card-badge mdt-badge--${st.id}`}>{st.label}</span>
+        {showBar && (
+          <div className="mdt-card-bar" aria-hidden="true"><div style={{ width: pct + "%" }} /></div>
+        )}
+      </button>
+      <div className="mdt-card-meta">
+        <p className="mdt-card-title">{f.title_english || f.title_romaji}</p>
+        <p className="mdt-card-sub">{curLabel || st.label} · {chainLen} entrée{chainLen > 1 ? "s" : ""}</p>
+      </div>
+    </div>
   );
 }
 
@@ -560,20 +604,11 @@ function PanelMediatheque({ data, onNavigate }) {
       ) : (
         <div className="mdt-grid">
           {visible.map(({ f, entries, st }) => (
-            <button key={f.id} className="mdt-card" onClick={() => setFiche({ mode: "library", franchiseId: f.id })}>
-              {f.cover_url
-                ? <img className="mdt-card-cover" src={f.cover_url} alt="" loading="lazy" />
-                : <div className="mdt-card-cover" />}
-              <div className="mdt-card-body">
-                <p className="mdt-card-title">{f.title_english || f.title_romaji}</p>
-                <p className="mdt-card-sub">{f.title_romaji}</p>
-                <span className={`mdt-badge mdt-badge--${st.id}`}>{st.label}</span>
-                <div className="mdt-progressbar" aria-hidden="true">
-                  <div style={{ width: (st.released ? Math.min(100, Math.round(100 * st.watched / st.released)) : 0) + "%" }} />
-                </div>
-                <div className="mdt-card-count">{st.watched}/{st.released || "?"} ép. · {entries.filter((e) => e.in_main_chain).length} entrées</div>
-              </div>
-            </button>
+            <MdtCard key={f.id} f={f} entries={entries} st={st}
+              cur={currentEntryOf(entries, progressById)}
+              progressById={progressById}
+              onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
+              onProgress={writeProgress} />
           ))}
         </div>
       )}
