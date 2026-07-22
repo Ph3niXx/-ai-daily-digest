@@ -289,6 +289,13 @@ function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress }) {
           <div className="mdt-card-bar" aria-hidden="true"><div style={{ width: pct + "%" }} /></div>
         )}
       </button>
+      <div className="mdt-card-actions" onClick={(e) => e.stopPropagation()}>
+        {cur
+          ? <MdtStepper entry={cur} progressById={progressById} onProgress={onProgress} />
+          : st.id === "seen"
+            ? <button className="mdt-chip" onClick={() => onOpen(f)}>Revoir</button>
+            : <span className="mdt-card-actions-note">à jour</span>}
+      </div>
       <div className="mdt-card-meta">
         <p className="mdt-card-title">{f.title_english || f.title_romaji}</p>
         <p className="mdt-card-sub">{curLabel || st.label} · {chainLen} entrée{chainLen > 1 ? "s" : ""}</p>
