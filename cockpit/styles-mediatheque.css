@@ -57,6 +57,7 @@
 .mdt-badge--watching { color: var(--brand); border-color: var(--brand); }
 .mdt-badge--up_to_date { color: var(--brand); border-color: color-mix(in srgb, var(--brand) 45%, transparent); }
 .mdt-badge--seen { color: var(--tx3); border-color: color-mix(in srgb, var(--tx) 18%, transparent); }
+.mdt-badge--shelved { color: var(--tx3); border-color: color-mix(in srgb, var(--tx) 15%, transparent); opacity: .75; }
 .mdt-progressbar { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--tx) 10%, transparent); margin-top: 8px; overflow: hidden; }
 .mdt-progressbar > div { height: 100%; background: var(--brand); }
 .mdt-card-count { font-family: var(--font-mono); font-size: 10.5px; color: var(--tx3); margin-top: 5px; }

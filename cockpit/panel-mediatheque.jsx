@@ -71,7 +71,7 @@ function MdtStepper({ entry, progressById, onProgress }) {
   );
 }
 
-function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, onRemove }) {
+function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, onRemove, onShelve }) {
   // Normalise les deux modes vers un shape commun d'affichage.
   let head, rows;
   if (fiche.mode === "preview") {
@@ -126,6 +126,8 @@ function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, on
             <h2>{head.title}</h2>
             <p className="mdt-fiche-native">{head.romaji}{head.native ? ` · ${head.native}` : ""}</p>
             <p className="mdt-fiche-meta">{head.genres}</p>
+            {head.franchise && head.franchise.shelved &&
+              <span className="mdt-badge mdt-badge--shelved" style={{ marginTop: 6, display: "inline-block" }}>Mis de côté</span>}
             {head.synopsis && <p className="mdt-fiche-synopsis">{head.synopsis}</p>}
           </div>
         </div>
@@ -161,7 +163,11 @@ function FicheFranchise({ fiche, D, progressById, onClose, onAdd, onProgress, on
         <div className="mdt-fiche-actions">
           {fiche.mode === "preview"
             ? <button className="mdt-btn" onClick={onAdd}>+ Ajouter à ma bibliothèque</button>
-            : <button className="mdt-btn mdt-btn--ghost" onClick={onRemove}>Retirer de ma bibliothèque</button>}
+            : <>
+                {onShelve && <button className="mdt-btn mdt-btn--ghost" onClick={onShelve}>
+                  {head.franchise && head.franchise.shelved ? "Réactiver" : "Mettre de côté"}</button>}
+                <button className="mdt-btn mdt-btn--ghost" onClick={onRemove}>Retirer de ma bibliothèque</button>
+              </>}
           <button className="mdt-btn mdt-btn--ghost" onClick={onClose}>Fermer</button>
         </div>
       </div>
@@ -262,7 +268,8 @@ function PanelMediatheque({ data, onNavigate }) {
     return D.franchises.map((f) => {
       const entries = entriesByFranchise.get(f.id) || [];
       const chain = entries.filter((e) => e.in_main_chain);
-      const st = mdtStatus(chain, progressById);
+      const derived = mdtStatus(chain, progressById);
+      const st = f.shelved ? { ...derived, id: "shelved", label: "Mis de côté" } : derived;
       const lastTouch = Math.max(
         new Date(f.added_at || 0).getTime(),
         ...entries.map((e) => progressById.has(e.id) ? new Date(D.progress.find((p) => p.entry_id === e.id)?.updated_at || 0).getTime() : 0)
@@ -273,9 +280,14 @@ function PanelMediatheque({ data, onNavigate }) {
 
   const visible = useMdtMemo(() => {
     let list = cards;
-    if (statusFilter === "to_watch") list = list.filter((c) => c.st.id === "to_watch");
-    else if (statusFilter === "watching") list = list.filter((c) => c.st.id === "watching" || c.st.id === "up_to_date");
-    else if (statusFilter === "seen") list = list.filter((c) => c.st.id === "seen");
+    if (statusFilter === "shelved") {
+      list = list.filter((c) => c.f.shelved);
+    } else {
+      list = list.filter((c) => !c.f.shelved);   // "Tous" + buckets actifs excluent les mis de côté
+      if (statusFilter === "to_watch") list = list.filter((c) => c.st.id === "to_watch");
+      else if (statusFilter === "watching") list = list.filter((c) => c.st.id === "watching" || c.st.id === "up_to_date");
+      else if (statusFilter === "seen") list = list.filter((c) => c.st.id === "seen");
+    }
     const bySort = {
       activity: (a, b) => b.lastTouch - a.lastTouch,
       added: (a, b) => new Date(b.f.added_at || 0) - new Date(a.f.added_at || 0),
@@ -368,6 +380,25 @@ function PanelMediatheque({ data, onNavigate }) {
     }
   }
 
+  async function toggleShelved(franchiseId) {
+    const f = window.MEDIATHEQUE_DATA.franchises.find((x) => x.id === franchiseId);
+    if (!f) return;
+    const next = !f.shelved;
+    f.shelved = next;                         // optimiste
+    setTick((t) => t + 1);
+    try {
+      const res = await window.sb.patchJSON(
+        window.SUPABASE_URL + "/rest/v1/media_franchises?id=eq." + franchiseId,
+        { shelved: next });
+      if (!res.ok) throw new Error("shelve " + res.status);
+      window.track && window.track("mediatheque_shelve", { shelved: next, franchise_root_id: f.source_root_id });
+    } catch (e) {
+      f.shelved = !next;                      // rollback
+      setTick((t) => t + 1);
+      cockpitToast("Statut non enregistré — réessaie.", { kind: "error" });
+    }
+  }
+
   async function ackRelease(release) {
     release.acknowledged = true;            // optimiste
     setTick((t) => t + 1);
@@ -402,7 +433,7 @@ function PanelMediatheque({ data, onNavigate }) {
         />
         {!inSearchView && (<>
           <div className="mdt-filters" role="group" aria-label="Filtrer par statut">
-            {[["all", "Tous"], ["to_watch", "À voir"], ["watching", "En cours"], ["seen", "Vu"]].map(([id, label]) => (
+            {[["all", "Tous"], ["to_watch", "À voir"], ["watching", "En cours"], ["seen", "Vu"], ["shelved", "Mis de côté"]].map(([id, label]) => (
               <button key={id} className={`mdt-chip ${statusFilter === id ? "is-active" : ""}`}
                 onClick={() => setStatusFilter(id)}>{label}</button>
             ))}
@@ -485,6 +516,7 @@ function PanelMediatheque({ data, onNavigate }) {
           onAdd={fiche.mode === "preview" && fiche.built ? () => addFranchise(fiche.built, fiche.mediaById) : null}
           onProgress={fiche.mode === "library" ? writeProgress : null}
           onRemove={fiche.mode === "library" ? () => removeFranchise(fiche.franchiseId) : null}
+          onShelve={fiche.mode === "library" ? () => toggleShelved(fiche.franchiseId) : null}
         />
       )}
     </div>

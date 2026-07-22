@@ -20,6 +20,7 @@ Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec 
 - **Recherche en direct** : résultats AniList (titres anglais/romaji/japonais, format, année, genres, score) pendant la frappe ; les fiches déjà en bibliothèque sont signalées. Recherche et bibliothèque sont deux vues explicitement alternables via une bascule segmentée « Ma bibliothèque | Résultats (N) » : revenir à sa liste suivie ne vide pas la recherche, et les filtres/tri restent accessibles côté bibliothèque.
 - **Fiche franchise** : toutes les saisons regroupées et numérotées avec dates et nombre d'épisodes, films canon à leur place chronologique, OVA/bonus à part ; prochaine diffusion datée pour les saisons en cours.
 - **Bibliothèque** : grille de cartes (jaquette, statut dérivé, barre de progression), filtres par statut, tri par activité/ajout/alphabétique.
+- **Statut manuel « mis de côté »** : ranger une franchise qu'on ne suit plus (bouton dans la fiche). Elle sort des buckets actifs (À voir / En cours / Vu / « Tous ») et n'apparaît que sous son chip dédié « Mis de côté » ; progression et notes conservées, réactivable à tout moment.
 - **Progression par saison** : compteur « vu jusqu'à l'épisode N », plafonné aux épisodes réellement sortis ; pour une saison en cours de diffusion, le compteur affiche les épisodes sortis à date (et le total prévu s'il est connu) plutôt qu'un total inconnu ; le statut de la franchise en découle automatiquement.
 - **Sorties** : bandeau des événements détectés (nouvelle saison, diffusion commencée, date annoncée) avec acquittement, calendrier des prochaines diffusions de sa liste, et encart dans le Brief du jour.
 
@@ -54,10 +55,11 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - Ajout interrompu → rien n'est persisté (rollback), toast « réessaie ». Franchise déjà présente → ouverture de sa fiche (dédup par racine).
 - Saison annoncée sans date → numérotée en dernier, stepper désactivé. Épisodes plafonnés aux sortis pour une saison en diffusion.
 - Un report de date met à jour le calendrier sans re-déclencher d'événement.
+- Mettre de côté depuis un bucket actif → la carte disparaît de la vue courante (sauf filtre « Mis de côté »). Réactiver → retour dans le bucket dérivé de la progression.
 
 ## Limitations connues / TODO
 - [ ] v1 anime uniquement — mangas/livres/films/séries prévus (schéma media_type prêt)
-- [ ] pas de note/score ni statut manuel « Abandonné »
+- [ ] pas de note/score au niveau franchise (agrégée)
 - [ ] import d'historique MAL/AniList non couvert
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
