@@ -9,6 +9,34 @@
 .mdt-kicker { font-family: var(--font-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--tx3); }
 .mdt-title { font-family: var(--font-display); font-weight: 500; font-size: 40px; line-height: 1.1; margin: 4px 0 20px; }
 
+/* Hero cinématique — bannière + voile dark-over-image, adaptatif aux 3 thèmes */
+.mdt-hero { position: relative; margin: 0 0 28px; border-radius: var(--radius-lg, 12px);
+  overflow: hidden; min-height: clamp(280px, 34vw, 440px); display: flex; align-items: flex-end;
+  background-size: cover; background-position: center 30%; background-color: var(--bg2); }
+.mdt-hero-scrim { position: absolute; inset: 0;
+  background:
+    linear-gradient(to top, var(--bg) 2%, rgba(0,0,0,.55) 34%, rgba(0,0,0,.05) 78%),
+    linear-gradient(to right, rgba(0,0,0,.72) 0%, rgba(0,0,0,.28) 42%, rgba(0,0,0,0) 72%); }
+.mdt-hero-inner { position: relative; z-index: 1; padding: 32px 36px; max-width: 720px; }
+.mdt-hero-kicker { font-family: var(--font-mono); font-size: 11px; letter-spacing: .16em;
+  text-transform: uppercase; color: #fff; opacity: .82; margin-bottom: 8px; }
+.mdt-hero-title { font-family: var(--font-display); font-weight: 600; color: #fff;
+  font-size: clamp(28px, 4vw, 46px); line-height: 1.05; margin: 0 0 8px;
+  text-shadow: 0 2px 18px rgba(0,0,0,.4); }
+.mdt-hero-meta { font-size: 14px; color: rgba(255,255,255,.9); margin: 0 0 12px; }
+.mdt-hero-bar { height: 5px; width: min(320px, 60%); border-radius: 3px; background: rgba(255,255,255,.25);
+  overflow: hidden; margin-bottom: 16px; }
+.mdt-hero-bar > div { height: 100%; background: var(--brand); }
+.mdt-hero-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.mdt-hero-cta { background: #fff; color: #111; border-color: #fff; }
+.mdt-hero-quick { color: #fff; border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.08); }
+.mdt-hero--empty { background: var(--bg2); }
+.mdt-hero--empty .mdt-hero-kicker,
+.mdt-hero--empty .mdt-hero-title,
+.mdt-hero--empty .mdt-hero-meta { color: var(--tx); }
+.mdt-hero--empty .mdt-hero-kicker { color: var(--tx3); }
+.mdt-hero--empty .mdt-hero-meta { color: var(--tx2); }
+
 /* Toolbar : recherche + filtres + tri */
 .mdt-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 24px; }
 .mdt-search { flex: 1 1 260px; max-width: 420px; padding: 9px 14px; font: inherit; font-size: 14px;

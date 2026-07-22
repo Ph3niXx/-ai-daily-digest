@@ -44,6 +44,47 @@ function currentEntryOf(entries, progressById) {
   return null; // tout rattrapé (à jour ou vu)
 }
 
+function nextAiringOf(card) {
+  let min = null;
+  for (const e of card.entries) {
+    if (e.airing_status === "RELEASING" && e.next_episode_airing_at) {
+      const t = new Date(e.next_episode_airing_at).getTime();
+      if (min == null || t < min) min = t;
+    }
+  }
+  return min;
+}
+
+function pickHero(cards) {
+  const active = cards.filter((c) => !c.f.shelved);
+  if (!active.length) return null;
+  const byTouch = (a, b) => b.lastTouch - a.lastTouch;
+  const watching = active.filter((c) => c.st.id === "watching").sort(byTouch);
+  if (watching.length) return { card: watching[0], kind: "resume" };
+  const upToDate = active.filter((c) => c.st.id === "up_to_date");
+  const withNext = upToDate.map((c) => ({ c, when: nextAiringOf(c) }))
+    .filter((x) => x.when != null).sort((a, b) => a.when - b.when);
+  if (withNext.length) return { card: withNext[0].c, kind: "next_ep" };
+  if (upToDate.length) return { card: upToDate.slice().sort(byTouch)[0], kind: "next_ep" };
+  const toWatch = active.filter((c) => c.st.id === "to_watch")
+    .sort((a, b) => new Date(b.f.added_at || 0) - new Date(a.f.added_at || 0));
+  if (toWatch.length) return { card: toWatch[0], kind: "discover" };
+  const seen = active.filter((c) => c.st.id === "seen").sort(byTouch);
+  if (seen.length) return { card: seen[0], kind: "seen" };
+  return { card: active.slice().sort(byTouch)[0], kind: "resume" };
+}
+
+// kicker + libellé du CTA primaire + affichage du bouton +1 selon le cas.
+function heroCopy(kind) {
+  switch (kind) {
+    case "resume":   return { kicker: "Reprendre", cta: "▶ Reprendre", quick: true };
+    case "next_ep":  return { kicker: "Prochain épisode", cta: "Voir la fiche", quick: false };
+    case "discover": return { kicker: "À découvrir", cta: "▶ Commencer", quick: false };
+    case "seen":     return { kicker: "Déjà vu", cta: "Revoir la fiche", quick: false };
+    default:         return { kicker: "", cta: "Voir la fiche", quick: false };
+  }
+}
+
 // Libellé court de la saison courante pour hero/carte : « S2 · 12/28 ».
 function mdtCurLabel(cur, progressById) {
   if (!cur) return null;
@@ -272,6 +313,60 @@ function MdtReleasesStrip({ D, tick, onAck }) {
   );
 }
 
+function MdtHero({ hero, progressById, onOpen, onProgress }) {
+  if (!hero) {
+    return (
+      <section className="mdt-hero mdt-hero--empty">
+        <div className="mdt-hero-inner">
+          <div className="mdt-hero-kicker">Ta médiathèque</div>
+          <h2 className="mdt-hero-title">Commence ta collection</h2>
+          <p className="mdt-hero-meta">Cherche un anime ci-dessous pour l'ajouter à ta bibliothèque.</p>
+        </div>
+      </section>
+    );
+  }
+  const { card, kind } = hero;
+  const fr = card.f;
+  const cur = currentEntryOf(card.entries, progressById);
+  const st = card.st;
+  const copy = heroCopy(kind);
+  const nextAt = nextAiringOf(card);
+  const meta = [
+    mdtCurLabel(cur, progressById),
+    st.id === "seen" ? "Terminé" : null,
+    kind === "next_ep" && nextAt ? `nouvel ép. ${mdtFmtDate(new Date(nextAt).toISOString())}` : null,
+  ].filter(Boolean).join(" · ");
+  const pct = st.released ? Math.min(100, Math.round((100 * st.watched) / st.released)) : 0;
+  const bg = fr.banner_url || fr.cover_url;
+  const openFiche = () => {
+    onOpen(fr);
+    window.track && window.track("mediatheque_hero_action", {
+      action: kind === "resume" ? "resume" : kind === "discover" ? "start" : "open", status: st.id });
+  };
+  return (
+    <section className="mdt-hero" style={bg ? { backgroundImage: `url(${bg})` } : undefined}>
+      <div className="mdt-hero-scrim" />
+      <div className="mdt-hero-inner">
+        <div className="mdt-hero-kicker">{copy.kicker}</div>
+        <h2 className="mdt-hero-title">{fr.title_english || fr.title_romaji}</h2>
+        {meta && <p className="mdt-hero-meta">{meta}</p>}
+        {st.watched > 0 && st.id !== "seen" && (
+          <div className="mdt-hero-bar" aria-hidden="true"><div style={{ width: pct + "%" }} /></div>
+        )}
+        <div className="mdt-hero-actions">
+          <button className="mdt-btn mdt-hero-cta" onClick={openFiche}>{copy.cta}</button>
+          {copy.quick && cur && (
+            <button className="mdt-btn mdt-btn--ghost mdt-hero-quick"
+              onClick={() => onProgress(cur, Math.min(mdtReleased(cur), (progressById.get(cur.id) || 0) + 1))}>
+              +1 épisode
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress }) {
   const chainLen = entries.filter((e) => e.in_main_chain).length;
   const pct = st.released ? Math.min(100, Math.round((100 * st.watched) / st.released)) : 0;
@@ -390,6 +485,8 @@ function PanelMediatheque({ data, onNavigate }) {
     };
     return [...list].sort(bySort[sort] || bySort.activity);
   }, [cards, statusFilter, sort]);
+
+  const hero = useMdtMemo(() => (searching ? null : pickHero(cards)), [cards, searching]);
 
   async function openPreview(anchorId) {
     setFiche({ mode: "preview", loading: true });
@@ -541,6 +638,12 @@ function PanelMediatheque({ data, onNavigate }) {
       <h1 className="mdt-title">Médiathèque</h1>
 
       <MdtReleasesStrip D={D} tick={tick} onAck={ackRelease} />
+
+      {!inSearchView && (
+        <MdtHero hero={hero} progressById={progressById}
+          onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
+          onProgress={writeProgress} />
+      )}
 
       <div className="mdt-toolbar">
         <input
