@@ -39,7 +39,7 @@
 
 /* Toolbar discrète : recherche + filtres + tri (sous le hero) */
 .mdt-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 22px; }
-.mdt-search { order: 3; margin-left: auto; flex: 0 1 300px; padding: 8px 14px 8px 34px; font: inherit; font-size: 13.5px;
+.mdt-search { flex: 0 1 340px; padding: 8px 14px 8px 34px; font: inherit; font-size: 13.5px;
   color: var(--tx); background: color-mix(in srgb, var(--tx) 4%, transparent) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' stroke='%23888' stroke-width='2' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m21 21-4.3-4.3'/%3E%3C/svg%3E") no-repeat 11px center;
   border: 1px solid color-mix(in srgb, var(--tx) 12%, transparent); border-radius: 999px; }
 .mdt-search:focus { outline: 2px solid var(--brand); outline-offset: 1px; }
@@ -117,6 +117,14 @@
   color: inherit; cursor: pointer; }
 .mdt-week-later button:hover { color: var(--brand); }
 .mdt-week-later strong { color: var(--tx2); font-weight: 600; }
+
+/* En-tête repliable de la collection */
+.mdt-collection-toggle { display: flex; align-items: baseline; gap: 8px; border: none;
+  background: transparent; padding: 0; font: inherit; color: var(--tx); cursor: pointer; }
+.mdt-collection-toggle:disabled { cursor: default; opacity: .6; }
+.mdt-chev { font-size: 11px; color: var(--tx3); transition: transform .16s ease; }
+.mdt-collection-toggle[aria-expanded="true"] .mdt-chev { transform: rotate(90deg); }
+.mdt-section-head .mdt-filters { margin-left: auto; }
 @media (max-width: 900px) { .mdt-week { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 @media (max-width: 560px) { .mdt-week { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
@@ -128,7 +136,7 @@
 .mdt-badge--shelved { color: var(--tx3); border-color: color-mix(in srgb, var(--tx) 15%, transparent); opacity: .75; }
 
 /* Grille bibliothèque — posters généreux, style Apple TV+ */
-.mdt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 24px 20px; }
+.mdt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px 16px; }
 .mdt-card { position: relative; }
 .mdt-card-poster { display: block; width: 100%; padding: 0; border: none; background: none;
   cursor: pointer; position: relative; border-radius: var(--radius-lg, 12px); overflow: hidden;

@@ -440,7 +440,7 @@ function MdtRail({ cards, progressById, onOpen, onProgress }) {
   );
 }
 
-function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress }) {
+function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress, compact }) {
   const chainLen = entries.filter((e) => e.in_main_chain).length;
   const pct = st.released ? Math.min(100, Math.round((100 * st.watched) / st.released)) : 0;
   const showBar = st.watched > 0 && st.id !== "to_watch";
@@ -457,13 +457,15 @@ function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress }) {
           <div className="mdt-card-bar" aria-hidden="true"><div style={{ width: pct + "%" }} /></div>
         )}
       </button>
-      <div className="mdt-card-actions" onClick={(e) => e.stopPropagation()}>
-        {cur
-          ? <MdtStepper entry={cur} progressById={progressById} onProgress={onProgress} />
-          : st.id === "seen"
-            ? <button className="mdt-chip" onClick={() => onOpen(f)}>Revoir</button>
-            : <span className="mdt-card-actions-note">à jour</span>}
-      </div>
+      {!compact && (
+        <div className="mdt-card-actions" onClick={(e) => e.stopPropagation()}>
+          {cur
+            ? <MdtStepper entry={cur} progressById={progressById} onProgress={onProgress} />
+            : st.id === "seen"
+              ? <button className="mdt-chip" onClick={() => onOpen(f)}>Revoir</button>
+              : <span className="mdt-card-actions-note">à jour</span>}
+        </div>
+      )}
       <div className="mdt-card-meta">
         <p className="mdt-card-title">{f.title_english || f.title_romaji}</p>
         <p className="mdt-card-sub">{curLabel || st.label} · {chainLen} entrée{chainLen > 1 ? "s" : ""}</p>
@@ -472,11 +474,73 @@ function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress }) {
   );
 }
 
+// Toute la bibliothèque (actives incluses) : c'est la seule vue exhaustive.
+// Repliée par défaut — 36 des 44 franchises sont « Vu » et n'appellent aucune action.
+function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusFilter,
+                         sort, onSort, progressById, onOpen, onProgress, queryActive }) {
+  return (
+    <section className="mdt-section" aria-label="Ma collection">
+      <div className="mdt-section-head">
+        <button className="mdt-collection-toggle" aria-expanded={open}
+          onClick={onToggle} disabled={queryActive}>
+          <span className="mdt-chev" aria-hidden="true">▸</span>
+          <span className="mdt-section-title">Ma collection</span>
+          <span className="mdt-section-count">{visible.length}{visible.length !== total ? ` / ${total}` : ""}</span>
+        </button>
+        {open && !queryActive && (
+          <div className="mdt-filters" role="group" aria-label="Filtrer par statut">
+            {[["all", "Tous"], ["to_watch", "À voir"], ["watching", "En cours"], ["seen", "Vu"], ["shelved", "Mis de côté"]].map(([id, label]) => (
+              <button key={id} className={`mdt-chip ${statusFilter === id ? "is-active" : ""}`}
+                onClick={() => onStatusFilter(id)}>{label}</button>
+            ))}
+          </div>
+        )}
+        {open && (
+          <select className="mdt-select" value={sort} onChange={(e) => onSort(e.target.value)} aria-label="Trier">
+            <option value="activity">Dernière activité</option>
+            <option value="added">Date d'ajout</option>
+            <option value="alpha">Alphabétique</option>
+          </select>
+        )}
+      </div>
+      {open && (
+        visible.length === 0 ? (
+          <div className="mdt-empty">
+            {total === 0
+              ? "Ta bibliothèque est vide — cherche un anime ci-dessus pour commencer."
+              : "Aucune franchise ne correspond."}
+          </div>
+        ) : (
+          <div className="mdt-grid">
+            {visible.map(({ f, entries, st }) => (
+              <MdtCard key={f.id} f={f} entries={entries} st={st} compact
+                cur={currentEntryOf(entries, progressById)}
+                progressById={progressById}
+                onOpen={onOpen} onProgress={onProgress} />
+            ))}
+          </div>
+        )
+      )}
+    </section>
+  );
+}
+
 function PanelMediatheque({ data, onNavigate }) {
   const D = window.MEDIATHEQUE_DATA || { franchises: [], entries: [], progress: [], releases: [] };
   const [tick, setTick] = useMdtState(0);            // bump après mutation locale de D
   const [statusFilter, setStatusFilter] = useMdtState("all");
   const [sort, setSort] = useMdtState("activity");
+  const [collectionOpen, setCollectionOpen] = useMdtState(() => {
+    try { return localStorage.getItem("mdt-collection-open") === "1"; } catch { return false; }
+  });
+  function toggleCollection() {
+    setCollectionOpen((v) => {
+      const next = !v;
+      try { localStorage.setItem("mdt-collection-open", next ? "1" : "0"); } catch {}
+      window.track && window.track("mediatheque_collection_toggle", { open: next, count: visible.length });
+      return next;
+    });
+  }
   const [query, setQuery] = useMdtState("");          // >= 3 chars => recherche AniList (Task 8)
   const [view, setView] = useMdtState("library");     // "library" | "search" — bascule explicite recherche/bibliothèque
   const [fiche, setFiche] = useMdtState(null);        // {mode:"library"|"preview", ...} (Tasks 8-9)
@@ -741,24 +805,11 @@ function PanelMediatheque({ data, onNavigate }) {
         <input
           className="mdt-search"
           type="search"
-          placeholder="Rechercher un anime (AniList)…"
+          placeholder="Rechercher — ta bibliothèque, puis AniList…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           aria-label="Rechercher un anime"
         />
-        {!inSearchView && (<>
-          <div className="mdt-filters" role="group" aria-label="Filtrer par statut">
-            {[["all", "Tous"], ["to_watch", "À voir"], ["watching", "En cours"], ["seen", "Vu"], ["shelved", "Mis de côté"]].map(([id, label]) => (
-              <button key={id} className={`mdt-chip ${statusFilter === id ? "is-active" : ""}`}
-                onClick={() => setStatusFilter(id)}>{label}</button>
-            ))}
-          </div>
-          <select className="mdt-select" value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Trier">
-            <option value="activity">Dernière activité</option>
-            <option value="added">Date d'ajout</option>
-            <option value="alpha">Alphabétique</option>
-          </select>
-        </>)}
       </div>
 
       {searching && (
@@ -797,22 +848,16 @@ function PanelMediatheque({ data, onNavigate }) {
             })}
           </div>
         )
-      ) : visible.length === 0 ? (
-        <div className="mdt-empty">
-          {D.franchises.length === 0
-            ? "Ta bibliothèque est vide — cherche un anime ci-dessus pour commencer."
-            : "Aucune franchise ne correspond à ce filtre."}
-        </div>
       ) : (
-        <div className="mdt-grid">
-          {visible.map(({ f, entries, st }) => (
-            <MdtCard key={f.id} f={f} entries={entries} st={st}
-              cur={currentEntryOf(entries, progressById)}
-              progressById={progressById}
-              onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
-              onProgress={writeProgress} />
-          ))}
-        </div>
+        <MdtCollection
+          visible={visible} total={D.franchises.length}
+          open={collectionOpen} onToggle={toggleCollection}
+          statusFilter={statusFilter} onStatusFilter={setStatusFilter}
+          sort={sort} onSort={setSort}
+          progressById={progressById}
+          onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
+          onProgress={writeProgress}
+          queryActive={false} />
       )}
 
       {fiche && (
