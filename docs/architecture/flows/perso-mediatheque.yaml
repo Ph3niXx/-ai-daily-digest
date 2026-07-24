@@ -28,6 +28,6 @@ tables:
 
 panels:
   - id: mediatheque
-    detail: "Panel Médiathèque — bandeau Sorties + calendrier, grille bibliothèque (statuts dérivés), recherche AniList, fiche franchise avec steppers"
+    detail: "Panel Médiathèque — bandeau Sorties, semainier des diffusions, rail « Continuer à regarder », collection repliée (statuts dérivés), recherche bibliothèque + AniList, fiche franchise avec steppers"
   - id: brief
     detail: "Encart MdtBriefCard (media_releases non acquittées < 7j, Tier 1)"
