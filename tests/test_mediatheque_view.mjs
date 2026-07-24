@@ -49,5 +49,85 @@ check("matchesQuery: aucune correspondance", V.matchesQuery(FR, "naruto"), false
 check("matchesQuery: requete vide = faux", V.matchesQuery(FR, "   "), false);
 check("matchesQuery: titres manquants toleres", V.matchesQuery({ title_english: null, title_romaji: null }, "x"), false);
 
+// ── pickRail() ────────────────────────────────────────────────
+const card = (id, stId, touch, shelved) => ({
+  f: { id, shelved: !!shelved, title_english: id }, entries: [],
+  st: { id: stId }, lastTouch: touch,
+});
+const CARDS = [
+  card("black-clover", "watching", 300),
+  card("apothecary", "watching", 500),
+  card("code-geass", "watching", 100),
+  card("slime", "up_to_date", 900),
+  card("naruto", "seen", 800),
+  card("range", "watching", 999, true),
+];
+check("pickRail: watching seuls, tries par activite, hero exclu, shelved exclu",
+  V.pickRail(CARDS, "apothecary").map((c) => c.f.id), ["black-clover", "code-geass"]);
+check("pickRail: sans hero connu, tout le watching non range",
+  V.pickRail(CARDS, null).map((c) => c.f.id), ["apothecary", "black-clover", "code-geass"]);
+check("pickRail: aucune serie en cours => vide",
+  V.pickRail([card("slime", "up_to_date", 1)], null), []);
+
+// ── buildWeek() ───────────────────────────────────────────────
+// Ancrage : vendredi 24 juillet 2026, 10 h locales (construit en heure locale
+// pour rester indépendant du fuseau de la machine de test).
+const NOW = new Date(2026, 6, 24, 10, 0, 0).getTime();
+const localAt = (y, m, d, h, min) => new Date(y, m, d, h, min, 0).toISOString();
+
+const FRANCHISES = new Map([
+  ["f-slime", { id: "f-slime", shelved: false, title_english: "Slime" }],
+  ["f-rezero", { id: "f-rezero", shelved: false, title_english: "Re:ZERO" }],
+  ["f-frieren", { id: "f-frieren", shelved: false, title_english: "Frieren" }],
+  ["f-range", { id: "f-range", shelved: true, title_english: "Rangee" }],
+]);
+const ENTRIES = [
+  { id: "e-slime", franchise_id: "f-slime", kind: "season", in_main_chain: true, title_english: "Slime S5",
+    airing_status: "RELEASING", next_episode_number: 16, next_episode_airing_at: localAt(2026, 6, 24, 16, 0) },
+  { id: "e-rezero", franchise_id: "f-rezero", kind: "season", in_main_chain: true, title_english: "Re:ZERO S5",
+    airing_status: "RELEASING", next_episode_number: 12, next_episode_airing_at: localAt(2026, 7, 12, 15, 0) },
+  { id: "e-frieren-s3", franchise_id: "f-frieren", kind: "season", in_main_chain: true, title_english: null,
+    title_romaji: "Frieren S3", airing_status: "NOT_YET_RELEASED", start_date: "2027-10-01" },
+  { id: "e-frieren-bonus", franchise_id: "f-frieren", kind: "other", in_main_chain: false, title_english: null,
+    title_romaji: null, airing_status: "RELEASING", next_episode_number: null, next_episode_airing_at: null },
+  { id: "e-main-undated", franchise_id: "f-slime", kind: "season", in_main_chain: true, title_english: "Slime S6",
+    airing_status: "RELEASING", next_episode_number: null, next_episode_airing_at: null },
+  { id: "e-range", franchise_id: "f-range", kind: "season", in_main_chain: true, title_english: "Rangee S2",
+    airing_status: "RELEASING", next_episode_number: 3, next_episode_airing_at: localAt(2026, 6, 26, 12, 0) },
+];
+const W = V.buildWeek(ENTRIES, FRANCHISES, NOW);
+
+check("buildWeek: 7 colonnes", W.days.length, 7);
+check("buildWeek: la premiere colonne est aujourd'hui minuit",
+  W.days[0].ts, new Date(2026, 6, 24, 0, 0, 0).getTime());
+check("buildWeek: diffusion du jour dans la colonne 0",
+  W.days[0].items.map((i) => i.entryId), ["e-slime"]);
+check("buildWeek: numero d'episode remonte", W.days[0].items[0].ep, 16);
+check("buildWeek: franchise rangee exclue de la grille",
+  W.days.flatMap((d) => d.items).filter((i) => i.franchiseId === "f-range"), []);
+check("buildWeek: un seul item dans la grille", W.count, 1);
+check("buildWeek: au-dela de J+6 en 'plus tard'",
+  W.later.filter((i) => i.reason === "airing").map((i) => i.entryId), ["e-rezero"]);
+check("buildWeek: premiere annoncee en 2027 hors horizon J+90",
+  W.later.filter((i) => i.entryId === "e-frieren-s3"), []);
+check("buildWeek: bonus hors chaine sans date ignore",
+  W.later.filter((i) => i.entryId === "e-frieren-bonus"), []);
+check("buildWeek: saison de la chaine sans date => 'date inconnue' en dernier",
+  W.later.map((i) => [i.entryId, i.reason]), [["e-rezero", "airing"], ["e-main-undated", "undated"]]);
+check("buildWeek: libelle replie sur le titre romaji puis la franchise",
+  V.buildWeek([{ id: "x", franchise_id: "f-slime", kind: "season", in_main_chain: true,
+    airing_status: "RELEASING", next_episode_number: 2,
+    next_episode_airing_at: localAt(2026, 6, 25, 12, 0) }], FRANCHISES, NOW).days[1].items[0].label,
+  "Slime");
+
+// Première annoncée dans la fenêtre => elle entre dans la grille, sans numéro d'épisode.
+const W2 = V.buildWeek([{ id: "p", franchise_id: "f-slime", kind: "season", in_main_chain: true,
+  title_english: "Slime S6", airing_status: "NOT_YET_RELEASED", start_date: "2026-07-27" }], FRANCHISES, NOW);
+check("buildWeek: premiere proche placee dans la grille",
+  W2.days.map((d) => d.items.length), [0, 0, 0, 1, 0, 0, 0]);
+check("buildWeek: premiere sans numero d'episode", W2.days[3].items[0].ep, null);
+check("buildWeek: semaine vide et rien apres => tout a zero",
+  V.buildWeek([], FRANCHISES, NOW), { days: W.days.map((d) => ({ ts: d.ts, items: [] })), later: [], laterTotal: 0, count: 0 });
+
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);
