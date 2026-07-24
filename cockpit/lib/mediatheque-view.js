@@ -65,6 +65,18 @@
     return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).getTime();
   }
 
+  // Jours calendaires entre `fromMs` (minuit local) et le jour de `atMs`,
+  // en avançant via addDays() (donc setDate()) plutôt qu'en divisant un
+  // delta de millisecondes brut — même logique DST-safe que addDays/parseDay
+  // ci-dessus. Alimente le champ `daysAhead` des items « plus tard » datés.
+  function daysBetween(atMs, fromMs) {
+    const target = addDays(atMs, 0);
+    let cursor = fromMs, n = 0;
+    while (cursor < target) { cursor = addDays(cursor, 1); n++; }
+    while (cursor > target) { cursor = addDays(cursor, -1); n--; }
+    return n;
+  }
+
   const LATER_CAP = 6;        // items affichés dans la ligne « plus tard »
   const HORIZON_DAYS = 90;    // au-delà, une première annoncée est de l'annonce, pas du calendrier
 
@@ -99,7 +111,7 @@
         // Saison qui diffuse mais sans date remontée par AniList : sans cette
         // branche elle disparaîtrait de l'écran. Réservé à la chaîne
         // principale — un bonus sans titre ni date serait du bruit permanent.
-        later.push(Object.assign({}, base, { at: null, reason: "undated" }));
+        later.push(Object.assign({}, base, { at: null, reason: "undated", daysAhead: null }));
         continue;
       } else {
         continue;
@@ -111,10 +123,10 @@
       if (at < end) {
         let i = 0;
         while (i < 6 && at >= bounds[i + 1]) i++;
-        days[i].items.push(Object.assign({}, base, { at, reason }));
+        days[i].items.push(Object.assign({}, base, { at, reason, daysAhead: i }));
         count++;
       } else {
-        later.push(Object.assign({}, base, { at, reason }));
+        later.push(Object.assign({}, base, { at, reason, daysAhead: daysBetween(at, start) }));
       }
     }
 

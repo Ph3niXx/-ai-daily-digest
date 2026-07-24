@@ -134,6 +134,14 @@ check("buildWeek: premiere sans numero d'episode", W2.days[3].items[0].ep, null)
 check("buildWeek: semaine vide et rien apres => tout a zero",
   V.buildWeek([], FRANCHISES, NOW), { days: W.days.map((d) => ({ ts: d.ts, items: [] })), later: [], laterTotal: 0, count: 0 });
 
+// ── daysAhead (Finding 1 : plus de division ms/86400000 dans la vue) ──
+check("buildWeek: daysAhead d'un item de grille = index de colonne",
+  W2.days[3].items[0].daysAhead, 3);
+check("buildWeek: daysAhead d'un item 'plus tard' date = ecart calendaire (jamais une division ms)",
+  W.later.find((i) => i.entryId === "e-rezero").daysAhead, 19);
+check("buildWeek: daysAhead null pour un item 'plus tard' sans date",
+  W.later.find((i) => i.entryId === "e-main-undated").daysAhead, null);
+
 // « plus tard » plafonne a LATER_CAP (6) mais laterTotal garde le vrai compte.
 const LATER_OVERFLOW = Array.from({ length: 9 }, (_, i) => ({
   id: `later-${i}`, franchise_id: "f-slime", kind: "season", in_main_chain: true,

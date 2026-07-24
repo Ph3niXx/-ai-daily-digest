@@ -303,9 +303,9 @@ function MdtWeek({ D, tick, onOpen }) {
 
   const dayLabel = (ts) => new Date(ts).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
   const timeLabel = (ts) => new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-  const open = (item, daysAhead) => {
+  const open = (item) => {
     onOpen(item.franchiseId);
-    window.track && window.track("mediatheque_week_click", { days_ahead: daysAhead, entry_kind: item.kind });
+    window.track && window.track("mediatheque_week_click", { days_ahead: item.daysAhead, entry_kind: item.kind });
   };
   const laterNote = (item) => {
     if (item.reason === "undated") return "date inconnue";
@@ -321,10 +321,10 @@ function MdtWeek({ D, tick, onOpen }) {
           <div key={d.ts} className={`mdt-week-day ${i === 0 ? "is-today" : ""}`}>
             <div className="mdt-week-date">{i === 0 ? "Aujourd'hui" : dayLabel(d.ts)}</div>
             {d.items.map((item) => (
-              <button key={item.entryId} className="mdt-week-pill" onClick={() => open(item, i)}>
+              <button key={item.entryId} className="mdt-week-pill" onClick={() => open(item)}>
                 <span className="mdt-week-name">{item.label}</span>
                 <span className="mdt-week-ep">
-                  {item.ep ? `ép. ${item.ep}` : "première"} · {timeLabel(item.at)}
+                  {item.ep ? `ép. ${item.ep} · ${timeLabel(item.at)}` : "première"}
                 </span>
               </button>
             ))}
@@ -335,7 +335,7 @@ function MdtWeek({ D, tick, onOpen }) {
         <div className="mdt-week-later">
           <span className="mdt-week-later-lbl">plus tard</span>
           {week.later.map((item) => (
-            <button key={item.entryId} onClick={() => open(item, item.at == null ? null : Math.round((item.at - week.days[0].ts) / 86400000))}>
+            <button key={item.entryId} onClick={() => open(item)}>
               <strong>{item.label}</strong> — {laterNote(item)}
             </button>
           ))}
