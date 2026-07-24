@@ -48,7 +48,6 @@
   function pickRail(cards, heroFranchiseId) {
     return cards
       .filter((c) => !c.f.shelved && c.st.id === "watching" && c.f.id !== heroFranchiseId)
-      .slice()
       .sort((a, b) => b.lastTouch - a.lastTouch);
   }
 

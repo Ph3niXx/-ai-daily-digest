@@ -114,11 +114,16 @@ check("buildWeek: bonus hors chaine sans date ignore",
   W.later.filter((i) => i.entryId === "e-frieren-bonus"), []);
 check("buildWeek: saison de la chaine sans date => 'date inconnue' en dernier",
   W.later.map((i) => [i.entryId, i.reason]), [["e-rezero", "airing"], ["e-main-undated", "undated"]]);
-check("buildWeek: libelle replie sur le titre romaji puis la franchise",
+check("buildWeek: libelle replie sur le titre de la franchise quand l'entree n'a aucun titre",
   V.buildWeek([{ id: "x", franchise_id: "f-slime", kind: "season", in_main_chain: true,
     airing_status: "RELEASING", next_episode_number: 2,
     next_episode_airing_at: localAt(2026, 6, 25, 12, 0) }], FRANCHISES, NOW).days[1].items[0].label,
   "Slime");
+check("buildWeek: libelle prend le titre romaji de l'entree avant celui de la franchise",
+  V.buildWeek([{ id: "y", franchise_id: "f-slime", kind: "season", in_main_chain: true,
+    title_english: null, title_romaji: "Slime S7 (romaji)", airing_status: "RELEASING", next_episode_number: 2,
+    next_episode_airing_at: localAt(2026, 6, 25, 12, 0) }], FRANCHISES, NOW).days[1].items[0].label,
+  "Slime S7 (romaji)");
 
 // Première annoncée dans la fenêtre => elle entre dans la grille, sans numéro d'épisode.
 const W2 = V.buildWeek([{ id: "p", franchise_id: "f-slime", kind: "season", in_main_chain: true,
@@ -128,6 +133,16 @@ check("buildWeek: premiere proche placee dans la grille",
 check("buildWeek: premiere sans numero d'episode", W2.days[3].items[0].ep, null);
 check("buildWeek: semaine vide et rien apres => tout a zero",
   V.buildWeek([], FRANCHISES, NOW), { days: W.days.map((d) => ({ ts: d.ts, items: [] })), later: [], laterTotal: 0, count: 0 });
+
+// « plus tard » plafonne a LATER_CAP (6) mais laterTotal garde le vrai compte.
+const LATER_OVERFLOW = Array.from({ length: 9 }, (_, i) => ({
+  id: `later-${i}`, franchise_id: "f-slime", kind: "season", in_main_chain: true,
+  title_english: `Slime E${i}`, airing_status: "RELEASING", next_episode_number: i + 1,
+  next_episode_airing_at: localAt(2026, 7, i + 1, 12, 0),
+}));
+const W3 = V.buildWeek(LATER_OVERFLOW, FRANCHISES, NOW);
+check("buildWeek: 'plus tard' plafonne a 6 items malgre 9 candidats", W3.later.length, 6);
+check("buildWeek: laterTotal garde le vrai compte avant plafonnage", W3.laterTotal, 9);
 
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);
