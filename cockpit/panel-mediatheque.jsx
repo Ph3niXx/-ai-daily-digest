@@ -508,7 +508,7 @@ function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusF
           <div className="mdt-empty">
             {total === 0
               ? "Ta bibliothèque est vide — cherche un anime ci-dessus pour commencer."
-              : "Aucune franchise ne correspond."}
+              : "Aucune franchise ne correspond à ce filtre."}
           </div>
         ) : (
           <div className="mdt-grid">
@@ -541,7 +541,7 @@ function PanelMediatheque({ data, onNavigate }) {
       return next;
     });
   }
-  const [query, setQuery] = useMdtState("");          // >= 3 chars => recherche AniList (Task 8)
+  const [query, setQuery] = useMdtState("");          // >= 1 char => filtre la bibliothèque locale, >= 3 chars => recherche AniList aussi
   const [view, setView] = useMdtState("library");     // "library" | "search" — bascule explicite recherche/bibliothèque
   const [fiche, setFiche] = useMdtState(null);        // {mode:"library"|"preview", ...} (Tasks 8-9)
   const q = query.trim();
@@ -563,7 +563,7 @@ function PanelMediatheque({ data, onNavigate }) {
   }, [q, queryActive]);
 
   useMdtEffect(() => {
-    if (!searching) return;
+    if (!searching) { setResults(null); setSearchErr(null); return; }
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
