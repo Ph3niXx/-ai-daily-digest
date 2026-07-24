@@ -4,74 +4,25 @@
 // Bandeau Sorties (Task 10) · Bibliothèque (cartes franchise, statuts
 // dérivés) · Recherche AniList + fiche préversion/ajout (Task 8) ·
 // Fiche bibliothèque + progression (Task 9).
-// Données : window.MEDIATHEQUE_DATA (T2 brut) — statuts calculés ici.
+// Données : window.MEDIATHEQUE_DATA (T2 brut) — statuts dérivés et libellés
+// calculés par cockpit/lib/mediatheque-view.js (window.mdtView).
 // Spec : docs/superpowers/specs/2026-07-14-mediatheque-anime-tracker-design.md
 // ═══════════════════════════════════════════════════════════════
 
-const { useState: useMdtState, useMemo: useMdtMemo, useEffect: useMdtEffect } = React;
+const { useState: useMdtState, useMemo: useMdtMemo, useEffect: useMdtEffect, useRef: useMdtRef } = React;
 
-// ── Statuts dérivés (entrées in_main_chain uniquement) ─────────
-// Source de vérité dans cockpit/lib/mediatheque-view.js (testé sous node).
-function mdtReleased(e) {
-  return window.mdtView.released(e);
-}
-
-function mdtStatus(chainEntries, progressById) {
-  const watched = chainEntries.reduce((s, e) => s + (progressById.get(e.id) || 0), 0);
-  const released = chainEntries.reduce((s, e) => s + mdtReleased(e), 0);
-  // « Vu » vs « à jour » : la nuance dépend de si une saison DIFFUSE ACTUELLEMENT
-  // (RELEASING), pas de si tout est FINISHED. Rien en cours de diffusion + tous les
-  // épisodes sortis vus = « Vu » — y compris avec une saison future annoncée mais pas
-  // encore diffusée (NOT_YET_RELEASED ne compte pas comme « en cours de diffusion »).
-  // L'anime repasse « En cours » dès qu'un nouvel épisode sort non vu (released remonté
-  // par le pipeline quotidien anime_tracker_sync). « à jour » = saison en diffusion rattrapée.
-  const anyReleasing = chainEntries.some((e) => e.airing_status === "RELEASING");
-  if (watched === 0) return { id: "to_watch", label: "À voir", watched, released };
-  if (watched < released) return { id: "watching", label: "En cours", watched, released };
-  return anyReleasing
-    ? { id: "up_to_date", label: "En cours · à jour", watched, released }
-    : { id: "seen", label: "Vu", watched, released };
-}
-
-function currentEntryOf(entries, progressById) {
-  const chain = entries
-    .filter((e) => e.in_main_chain)
-    .sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
-  for (const e of chain) {
-    if ((progressById.get(e.id) || 0) < mdtReleased(e)) return e;
-  }
-  return null; // tout rattrapé (à jour ou vu)
-}
-
-function nextAiringOf(card) {
-  let min = null;
-  for (const e of card.entries) {
-    if (e.airing_status === "RELEASING" && e.next_episode_airing_at) {
-      const t = new Date(e.next_episode_airing_at).getTime();
-      if (min == null || t < min) min = t;
-    }
-  }
-  return min;
-}
-
-function pickHero(cards) {
-  const active = cards.filter((c) => !c.f.shelved);
-  if (!active.length) return null;
-  const byTouch = (a, b) => b.lastTouch - a.lastTouch;
-  const watching = active.filter((c) => c.st.id === "watching").sort(byTouch);
-  if (watching.length) return { card: watching[0], kind: "resume" };
-  const upToDate = active.filter((c) => c.st.id === "up_to_date");
-  const withNext = upToDate.map((c) => ({ c, when: nextAiringOf(c) }))
-    .filter((x) => x.when != null).sort((a, b) => a.when - b.when);
-  if (withNext.length) return { card: withNext[0].c, kind: "next_ep" };
-  if (upToDate.length) return { card: upToDate.slice().sort(byTouch)[0], kind: "next_ep" };
-  const toWatch = active.filter((c) => c.st.id === "to_watch")
-    .sort((a, b) => new Date(b.f.added_at || 0) - new Date(a.f.added_at || 0));
-  if (toWatch.length) return { card: toWatch[0], kind: "discover" };
-  const seen = active.filter((c) => c.st.id === "seen").sort(byTouch);
-  if (seen.length) return { card: seen[0], kind: "seen" };
-  return { card: active.slice().sort(byTouch)[0], kind: "resume" };
-}
+// ── Délégués vers la logique pure ──────────────────────────────
+// Source de vérité : cockpit/lib/mediatheque-view.js (testé sous node par
+// tests/test_mediatheque_view.mjs). Rien de contractuel ne se calcule ici :
+// statuts dérivés, saison courante, libellés et règle du hero y vivent, sinon
+// ils dérivent sans qu'aucun test ne le voie. Ces délégués d'une ligne gardent
+// les sites d'appel courts (`mdtStatus(chain, progressById)`).
+function mdtReleased(e) { return window.mdtView.released(e); }
+function mdtStatus(chainEntries, progressById) { return window.mdtView.status(chainEntries, progressById); }
+function currentEntryOf(entries, progressById) { return window.mdtView.currentEntryOf(entries, progressById); }
+function mdtCurLabel(cur, progressById) { return window.mdtView.curLabel(cur, progressById); }
+function nextAiringOf(card) { return window.mdtView.nextAiringOf(card); }
+function pickHero(cards) { return window.mdtView.pickHero(cards); }
 
 // kicker + libellé du CTA primaire + affichage du bouton +1 selon le cas.
 function heroCopy(kind) {
@@ -82,15 +33,6 @@ function heroCopy(kind) {
     case "seen":     return { kicker: "Déjà vu", cta: "Revoir la fiche", quick: false };
     default:         return { kicker: "", cta: "Voir la fiche", quick: false };
   }
-}
-
-// Libellé court de la saison courante pour hero/carte : « S2 · 12/28 ».
-function mdtCurLabel(cur, progressById) {
-  if (!cur) return null;
-  const w = progressById.get(cur.id) || 0;
-  const rel = mdtReleased(cur);
-  const tag = cur.kind === "season" ? `S${cur.season_number}` : (cur.kind === "movie" ? "Film" : cur.kind.toUpperCase());
-  return `${tag} · ${w}/${rel || "?"}`;
 }
 
 function mdtFmtDate(iso) {
@@ -440,7 +382,7 @@ function MdtRail({ cards, progressById, onOpen, onProgress }) {
   );
 }
 
-function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress, compact }) {
+function MdtCard({ f, entries, st, cur, progressById, onOpen }) {
   const chainLen = entries.filter((e) => e.in_main_chain).length;
   const pct = st.released ? Math.min(100, Math.round((100 * st.watched) / st.released)) : 0;
   const showBar = st.watched > 0 && st.id !== "to_watch";
@@ -457,15 +399,6 @@ function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress, compac
           <div className="mdt-card-bar" aria-hidden="true"><div style={{ width: pct + "%" }} /></div>
         )}
       </button>
-      {!compact && (
-        <div className="mdt-card-actions" onClick={(e) => e.stopPropagation()}>
-          {cur
-            ? <MdtStepper entry={cur} progressById={progressById} onProgress={onProgress} />
-            : st.id === "seen"
-              ? <button className="mdt-chip" onClick={() => onOpen(f)}>Revoir</button>
-              : <span className="mdt-card-actions-note">à jour</span>}
-        </div>
-      )}
       <div className="mdt-card-meta">
         <p className="mdt-card-title">{f.title_english || f.title_romaji}</p>
         <p className="mdt-card-sub">{curLabel || st.label} · {chainLen} entrée{chainLen > 1 ? "s" : ""}</p>
@@ -477,12 +410,12 @@ function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress, compac
 // Toute la bibliothèque (actives incluses) : c'est la seule vue exhaustive.
 // Repliée par défaut — 36 des 44 franchises sont « Vu » et n'appellent aucune action.
 function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusFilter,
-                         sort, onSort, progressById, onOpen, onProgress, queryActive }) {
+                         sort, onSort, progressById, onOpen, queryActive, query }) {
   return (
     <section className="mdt-section" aria-label="Ma collection">
       <div className="mdt-section-head">
         <button className="mdt-collection-toggle" aria-expanded={open}
-          onClick={onToggle} disabled={queryActive}>
+          onClick={onToggle} disabled={queryActive || total === 0}>
           <span className="mdt-chev" aria-hidden="true">▸</span>
           <span className="mdt-section-title">Ma collection</span>
           <span className="mdt-section-count">{visible.length}{visible.length !== total ? ` / ${total}` : ""}</span>
@@ -508,15 +441,17 @@ function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusF
           <div className="mdt-empty">
             {total === 0
               ? "Ta bibliothèque est vide — cherche un anime ci-dessus pour commencer."
-              : "Aucune franchise ne correspond à ce filtre."}
+              : queryActive
+                ? `Aucun titre de ta bibliothèque ne correspond à « ${query} » — bascule sur AniList pour l'ajouter.`
+                : "Aucune franchise ne correspond à ce filtre."}
           </div>
         ) : (
           <div className="mdt-grid">
             {visible.map(({ f, entries, st }) => (
-              <MdtCard key={f.id} f={f} entries={entries} st={st} compact
+              <MdtCard key={f.id} f={f} entries={entries} st={st}
                 cur={currentEntryOf(entries, progressById)}
                 progressById={progressById}
-                onOpen={onOpen} onProgress={onProgress} />
+                onOpen={onOpen} />
             ))}
           </div>
         )
@@ -533,13 +468,14 @@ function PanelMediatheque({ data, onNavigate }) {
   const [collectionOpen, setCollectionOpen] = useMdtState(() => {
     try { return localStorage.getItem("mdt-collection-open") === "1"; } catch { return false; }
   });
+  // Effets de bord (persistance + télémétrie) dans le handler, PAS dans
+  // l'updater : un updater doit rester pur, sinon un rendu concurrent rejoué
+  // ré-émettrait l'événement.
   function toggleCollection() {
-    setCollectionOpen((v) => {
-      const next = !v;
-      try { localStorage.setItem("mdt-collection-open", next ? "1" : "0"); } catch {}
-      window.track && window.track("mediatheque_collection_toggle", { open: next, count: visible.length });
-      return next;
-    });
+    const next = !collectionOpen;
+    setCollectionOpen(next);
+    try { localStorage.setItem("mdt-collection-open", next ? "1" : "0"); } catch {}
+    window.track && window.track("mediatheque_collection_toggle", { open: next, count: visible.length });
   }
   const [query, setQuery] = useMdtState("");          // >= 1 char => filtre la bibliothèque locale, >= 3 chars => recherche AniList aussi
   const [view, setView] = useMdtState("library");     // "library" | "search" — bascule explicite recherche/bibliothèque
@@ -550,12 +486,28 @@ function PanelMediatheque({ data, onNavigate }) {
   const [results, setResults] = useMdtState(null);   // null = idle, [] = zéro résultat
   const [searchErr, setSearchErr] = useMdtState(null);
   const inSearchView = queryActive && view === "search"; // corps = résultats AniList ; sinon = bibliothèque
+  // Bibliothèque vide : la collection est forcée ouverte, sinon son en-tête ne
+  // cache que du vide et son message d'accueil reste inatteignable.
+  const libraryEmpty = D.franchises.length === 0;
 
-  // Vue par défaut : ta bibliothèque d'abord. On ne bascule sur AniList que
-  // si la requête ne correspond à rien de ce que tu possèdes déjà.
+  const prevQ = useMdtRef("");
+  // Vue par défaut : ta bibliothèque d'abord. On ne bascule sur AniList que si
+  // la requête ne correspond à rien de ce que tu possèdes déjà.
+  // INVARIANT : ce choix automatique n'a lieu qu'au DÉBUT d'une requête (q
+  // précédent vide). Dès qu'une recherche est en cours, la bascule manuelle de
+  // l'utilisateur gagne — sinon chaque frappe le ramenait sur « Ma bibliothèque ».
+  // Vider le champ remet tout à zéro. `localMatches` est volontairement HORS
+  // des dépendances : l'effet ne doit pas rejouer quand la bibliothèque mute en
+  // arrière-plan (un +1 épisode ailleurs sur la page changerait la vue sous les
+  // doigts de l'utilisateur).
   useMdtEffect(() => {
-    if (!queryActive) { setView("library"); setResults(null); setSearchErr(null); return; }
-    setView(localMatches.length > 0 ? "library" : "search");
+    if (!queryActive) {
+      prevQ.current = "";
+      setView("library"); setResults(null); setSearchErr(null);
+      return;
+    }
+    if (!prevQ.current) setView(localMatches.length > 0 ? "library" : "search");
+    prevQ.current = q;
     const t = setTimeout(() => {
       window.track && window.track("mediatheque_filter_local", { q_len: q.length, matches: localMatches.length });
     }, 400);
@@ -875,13 +827,13 @@ function PanelMediatheque({ data, onNavigate }) {
       ) : (
         <MdtCollection
           visible={visible} total={D.franchises.length}
-          open={collectionOpen || queryActive} onToggle={toggleCollection}
+          open={collectionOpen || queryActive || libraryEmpty}
+          onToggle={toggleCollection}
           statusFilter={statusFilter} onStatusFilter={setStatusFilter}
           sort={sort} onSort={setSort}
           progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
-          onProgress={writeProgress}
-          queryActive={queryActive} />
+          queryActive={queryActive} query={q} />
       )}
 
       {fiche && (

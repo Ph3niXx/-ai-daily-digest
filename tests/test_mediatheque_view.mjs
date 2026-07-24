@@ -36,6 +36,60 @@ check("nextEpLabel: film non vu",
 check("nextEpLabel: bonus ova",
   V.nextEpLabel({ kind: "ova", airing_status: "FINISHED", episodes_total: 3 }, 1), "OVA · ép. 2 sur 3");
 
+// ── curLabel() ────────────────────────────────────────────────
+const PROG = new Map([["s2", 12], ["film", 1], ["ova", 0]]);
+check("curLabel: null si pas de saison courante", V.curLabel(null, PROG), null);
+check("curLabel: saison en cours de rattrapage",
+  V.curLabel({ id: "s2", kind: "season", season_number: 2, airing_status: "FINISHED", episodes_total: 28 }, PROG),
+  "S2 · 12/28");
+check("curLabel: film",
+  V.curLabel({ id: "film", kind: "movie", airing_status: "FINISHED", episodes_total: 1 }, PROG), "Film · 1/1");
+check("curLabel: kind manquant durci (pas de .toUpperCase() sur undefined)",
+  V.curLabel({ id: "ova", kind: null, airing_status: "FINISHED", episodes_total: 3 }, PROG), "? · 0/3");
+check("curLabel: denominateur inconnu quand rien n'est sorti",
+  V.curLabel({ id: "ova", kind: "ova", airing_status: "NOT_YET_RELEASED", episodes_total: 12 }, PROG), "OVA · 0/?");
+
+// ── status() ──────────────────────────────────────────────────
+// « à jour » vs « vu » se joue sur la présence d'une saison RELEASING,
+// pas sur le fait que tout soit FINISHED.
+const S = (id, st, total, next) => ({ id, in_main_chain: true, airing_status: st, episodes_total: total, next_episode_number: next });
+const P = (pairs) => new Map(pairs);
+check("status: rien de vu => a voir",
+  V.status([S("a", "FINISHED", 12)], P([])).id, "to_watch");
+check("status: retard sur les episodes sortis => en cours",
+  V.status([S("a", "FINISHED", 12)], P([["a", 5]])).id, "watching");
+check("status: tout vu mais une saison diffuse => a jour",
+  V.status([S("a", "FINISHED", 12), S("b", "RELEASING", null, 4)], P([["a", 12], ["b", 3]])).id, "up_to_date");
+check("status: tout vu et rien en diffusion => vu",
+  V.status([S("a", "FINISHED", 12), S("b", "FINISHED", 10)], P([["a", 12], ["b", 10]])).id, "seen");
+check("status: saison annoncee non diffusee ne retient pas en 'a jour'",
+  V.status([S("a", "FINISHED", 12), S("b", "NOT_YET_RELEASED", 12)], P([["a", 12]])).id, "seen");
+check("status: compteurs vus/sortis agreges sur la chaine",
+  (({ watched, released }) => [watched, released])(
+    V.status([S("a", "FINISHED", 12), S("b", "RELEASING", null, 4)], P([["a", 12], ["b", 1]]))),
+  [13, 15]);
+check("status: libelles",
+  [V.status([S("a", "FINISHED", 12)], P([])).label,
+   V.status([S("a", "FINISHED", 12)], P([["a", 5]])).label,
+   V.status([S("a", "RELEASING", null, 4)], P([["a", 3]])).label,
+   V.status([S("a", "FINISHED", 12)], P([["a", 12]])).label],
+  ["À voir", "En cours", "En cours · à jour", "Vu"]);
+
+// ── currentEntryOf() ──────────────────────────────────────────
+const CHAIN = [
+  { id: "c2", in_main_chain: true, sort_order: 2, airing_status: "FINISHED", episodes_total: 12 },
+  { id: "c1", in_main_chain: true, sort_order: 1, airing_status: "FINISHED", episodes_total: 24 },
+  { id: "bonus", in_main_chain: false, sort_order: 0, airing_status: "FINISHED", episodes_total: 3 },
+];
+check("currentEntryOf: premiere entree non rattrapee, dans l'ordre de la chaine",
+  V.currentEntryOf(CHAIN, P([["c1", 10]])).id, "c1");
+check("currentEntryOf: saute les saisons rattrapees",
+  V.currentEntryOf(CHAIN, P([["c1", 24], ["c2", 3]])).id, "c2");
+check("currentEntryOf: ignore les bonus hors chaine",
+  V.currentEntryOf([CHAIN[2]], P([])), null);
+check("currentEntryOf: tout rattrape => null",
+  V.currentEntryOf(CHAIN, P([["c1", 24], ["c2", 12]])), null);
+
 // ── normalize() / matchesQuery() ──────────────────────────────
 check("normalize: accents et casse", V.normalize("Frieren: Au-delà"), "frieren: au-dela");
 check("normalize: null tolere", V.normalize(null), "");
@@ -68,6 +122,50 @@ check("pickRail: sans hero connu, tout le watching non range",
   V.pickRail(CARDS, null).map((c) => c.f.id), ["apothecary", "black-clover", "code-geass"]);
 check("pickRail: aucune serie en cours => vide",
   V.pickRail([card("slime", "up_to_date", 1)], null), []);
+
+// ── nextAiringOf() / pickHero() ───────────────────────────────
+const hcard = (id, stId, touch, opts) => Object.assign({
+  f: { id, shelved: false, title_english: id, added_at: "2026-01-01" },
+  entries: [], st: { id: stId }, lastTouch: touch,
+}, opts || {});
+const airingIn = (d) => ({ airing_status: "RELEASING", next_episode_airing_at: new Date(2026, 6, d, 12, 0).toISOString() });
+check("nextAiringOf: aucune diffusion connue => null", V.nextAiringOf(hcard("x", "seen", 0)), null);
+check("nextAiringOf: retient la plus proche des diffusions annoncees",
+  V.nextAiringOf({ entries: [airingIn(30), airingIn(26),
+    { airing_status: "NOT_YET_RELEASED", next_episode_airing_at: new Date(2026, 6, 25, 12, 0).toISOString() }] }),
+  new Date(2026, 6, 26, 12, 0).getTime());
+
+const heroOf = (cards) => { const h = V.pickHero(cards); return h && [h.card.f.id, h.kind]; };
+check("pickHero: bibliotheque vide => null", V.pickHero([]), null);
+check("pickHero: uniquement des franchises rangees => null",
+  V.pickHero([{ f: { id: "r", shelved: true }, entries: [], st: { id: "watching" }, lastTouch: 9 }]), null);
+check("pickHero: regle 1 = la franchise 'en cours' la plus recemment touchee",
+  heroOf(CARDS), ["apothecary", "resume"]);
+check("pickHero: sans 'en cours', l'a-jour dont l'episode arrive le plus tot",
+  heroOf([hcard("slime", "up_to_date", 900, { entries: [airingIn(30)] }),
+          hcard("dandadan", "up_to_date", 100, { entries: [airingIn(26)] })]),
+  ["dandadan", "next_ep"]);
+check("pickHero: a-jour sans date connue => repli sur l'activite",
+  heroOf([hcard("slime", "up_to_date", 100), hcard("dandadan", "up_to_date", 900)]),
+  ["dandadan", "next_ep"]);
+check("pickHero: sinon 'a voir' le plus recemment ajoute",
+  heroOf([
+    { f: { id: "vieux", shelved: false, added_at: "2026-01-01" }, entries: [], st: { id: "to_watch" }, lastTouch: 0 },
+    { f: { id: "neuf", shelved: false, added_at: "2026-07-01" }, entries: [], st: { id: "to_watch" }, lastTouch: 0 },
+    hcard("naruto", "seen", 900)]),
+  ["neuf", "discover"]);
+check("pickHero: en dernier recours, un titre deja vu",
+  heroOf([hcard("naruto", "seen", 800), hcard("bleach", "seen", 900)]), ["bleach", "seen"]);
+
+// INVARIANT CENTRAL : hero et rail ne montrent jamais la même franchise.
+// pickRail retire la franchise du hero, ce qui ne suffit QUE parce que pickHero
+// choisit une franchise « en cours » en règle 1. Réordonner ses règles casserait
+// la déduplication en silence — c'est cette assertion qui tient le contrat.
+const HERO_PICK = V.pickHero(CARDS);
+check("hero ∉ rail : la franchise du hero n'apparait jamais dans le rail",
+  V.pickRail(CARDS, HERO_PICK.card.f.id).some((c) => c.f.id === HERO_PICK.card.f.id), false);
+check("hero ∉ rail : le rail garde les autres 'en cours'",
+  V.pickRail(CARDS, HERO_PICK.card.f.id).map((c) => c.f.id), ["black-clover", "code-geass"]);
 
 // ── buildWeek() ───────────────────────────────────────────────
 // Ancrage : vendredi 24 juillet 2026, 10 h locales (construit en heure locale
@@ -133,6 +231,27 @@ check("buildWeek: premiere proche placee dans la grille",
 check("buildWeek: premiere sans numero d'episode", W2.days[3].items[0].ep, null);
 check("buildWeek: semaine vide et rien apres => tout a zero",
   V.buildWeek([], FRANCHISES, NOW), { days: W.days.map((d) => ({ ts: d.ts, items: [] })), later: [], laterTotal: 0, count: 0 });
+
+// ── Dates périmées (sync quotidien 07:30 UTC : entre la diffusion et le sync
+// du lendemain, next_episode_airing_at pointe dans le passé) ──
+const STALE_MAIN = { id: "e-stale", franchise_id: "f-slime", kind: "season", in_main_chain: true,
+  title_english: "Slime S5", airing_status: "RELEASING", next_episode_number: 16,
+  next_episode_airing_at: localAt(2026, 6, 23, 20, 0) };   // hier 20 h
+const WS = V.buildWeek([STALE_MAIN], FRANCHISES, NOW);
+check("buildWeek: chaine principale a la date perimee => 'plus tard' sans date, pas de disparition",
+  WS.later.map((i) => [i.entryId, i.reason, i.at, i.daysAhead]), [["e-stale", "undated", null, null]]);
+check("buildWeek: la chaine a la date perimee ne squatte aucune colonne",
+  WS.days.flatMap((d) => d.items).length + WS.count, 0);
+const WSB = V.buildWeek([Object.assign({}, STALE_MAIN, { id: "e-stale-bonus", in_main_chain: false })], FRANCHISES, NOW);
+check("buildWeek: bonus hors chaine a la date perimee => ecarte (aucun repli)",
+  [WSB.later.length, WSB.count], [0, 0]);
+check("buildWeek: diffuse plus tot aujourd'hui => reste dans la colonne 0",
+  V.buildWeek([Object.assign({}, STALE_MAIN, { next_episode_airing_at: localAt(2026, 6, 24, 8, 0) })],
+    FRANCHISES, NOW).days[0].items.map((i) => [i.entryId, i.reason]), [["e-stale", "airing"]]);
+check("buildWeek: premiere annoncee dans le passe reste ecartee (pas de repli 'undated')",
+  V.buildWeek([{ id: "e-old-prem", franchise_id: "f-slime", kind: "season", in_main_chain: true,
+    title_english: "Slime S0", airing_status: "NOT_YET_RELEASED", start_date: "2026-07-01" }], FRANCHISES, NOW),
+  { days: W.days.map((d) => ({ ts: d.ts, items: [] })), later: [], laterTotal: 0, count: 0 });
 
 // ── daysAhead (Finding 1 : plus de division ms/86400000 dans la vue) ──
 check("buildWeek: daysAhead d'un item de grille = index de colonne",
