@@ -544,28 +544,40 @@ function PanelMediatheque({ data, onNavigate }) {
   const [query, setQuery] = useMdtState("");          // >= 3 chars => recherche AniList (Task 8)
   const [view, setView] = useMdtState("library");     // "library" | "search" — bascule explicite recherche/bibliothèque
   const [fiche, setFiche] = useMdtState(null);        // {mode:"library"|"preview", ...} (Tasks 8-9)
-  const searching = query.trim().length >= 3;
+  const q = query.trim();
+  const queryActive = q.length >= 1;      // filtrage local instantané
+  const searching = q.length >= 3;        // seuil d'appel AniList (inchangé)
   const [results, setResults] = useMdtState(null);   // null = idle, [] = zéro résultat
   const [searchErr, setSearchErr] = useMdtState(null);
-  const inSearchView = searching && view === "search"; // corps = résultats ; sinon = grille bibliothèque
+  const inSearchView = queryActive && view === "search"; // corps = résultats AniList ; sinon = bibliothèque
+
+  // Vue par défaut : ta bibliothèque d'abord. On ne bascule sur AniList que
+  // si la requête ne correspond à rien de ce que tu possèdes déjà.
+  useMdtEffect(() => {
+    if (!queryActive) { setView("library"); setResults(null); setSearchErr(null); return; }
+    setView(localMatches.length > 0 ? "library" : "search");
+    const t = setTimeout(() => {
+      window.track && window.track("mediatheque_filter_local", { q_len: q.length, matches: localMatches.length });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [q, queryActive]);
 
   useMdtEffect(() => {
-    if (!searching) { setResults(null); setSearchErr(null); setView("library"); return; }
-    setView("search");            // taper (ou éditer la requête) ramène sur les résultats
+    if (!searching) return;
     let cancelled = false;
     const t = setTimeout(async () => {
       try {
-        const media = await window.anilist.searchAnime(query.trim());
+        const media = await window.anilist.searchAnime(q);
         if (cancelled) return;
         setResults(media);
         setSearchErr(null);
-        window.track && window.track("mediatheque_search", { q_len: query.trim().length, results: media.length });
+        window.track && window.track("mediatheque_search", { q_len: q.length, results: media.length });
       } catch (e) {
         if (!cancelled) { setResults([]); setSearchErr("AniList ne répond pas — réessaie dans un instant."); }
       }
     }, 400);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [query, searching]);
+  }, [q, searching]);
 
   const entriesByFranchise = useMdtMemo(() => {
     const map = new Map();
@@ -605,15 +617,24 @@ function PanelMediatheque({ data, onNavigate }) {
     });
   }, [D.franchises, entriesByFranchise, progressById, tick]);
 
+  const localMatches = useMdtMemo(
+    () => (queryActive ? cards.filter((c) => window.mdtView.matchesQuery(c.f, q)) : []),
+    [cards, q, queryActive]);
+
   const visible = useMdtMemo(() => {
-    let list = cards;
-    if (statusFilter === "shelved") {
-      list = list.filter((c) => c.f.shelved);
-    } else {
-      list = list.filter((c) => !c.f.shelved);   // "Tous" + buckets actifs excluent les mis de côté
-      if (statusFilter === "to_watch") list = list.filter((c) => c.st.id === "to_watch");
-      else if (statusFilter === "watching") list = list.filter((c) => c.st.id === "watching" || c.st.id === "up_to_date");
-      else if (statusFilter === "seen") list = list.filter((c) => c.st.id === "seen");
+    // Une recherche active prime sur les chips : elle porte sur TOUTE la
+    // bibliothèque, mises de côté comprises (chercher doit retrouver ce qu'on a rangé).
+    let list = localMatches;
+    if (!queryActive) {
+      list = cards;
+      if (statusFilter === "shelved") {
+        list = list.filter((c) => c.f.shelved);
+      } else {
+        list = list.filter((c) => !c.f.shelved);   // "Tous" + buckets actifs excluent les mis de côté
+        if (statusFilter === "to_watch") list = list.filter((c) => c.st.id === "to_watch");
+        else if (statusFilter === "watching") list = list.filter((c) => c.st.id === "watching" || c.st.id === "up_to_date");
+        else if (statusFilter === "seen") list = list.filter((c) => c.st.id === "seen");
+      }
     }
     const bySort = {
       activity: (a, b) => b.lastTouch - a.lastTouch,
@@ -621,7 +642,7 @@ function PanelMediatheque({ data, onNavigate }) {
       alpha: (a, b) => (a.f.title_english || a.f.title_romaji || "").localeCompare(b.f.title_english || b.f.title_romaji || ""),
     };
     return [...list].sort(bySort[sort] || bySort.activity);
-  }, [cards, statusFilter, sort]);
+  }, [cards, localMatches, queryActive, statusFilter, sort]);
 
   // Le gate de rendu ({!inSearchView && …}) porte seul la visibilité ; on calcule
   // toujours le vrai pick pour éviter que le hero d'accueil vide s'affiche par-dessus
@@ -785,19 +806,19 @@ function PanelMediatheque({ data, onNavigate }) {
 
       <MdtReleasesStrip D={D} onAck={ackRelease} />
 
-      {!inSearchView && (
+      {!queryActive && (
         <MdtHero hero={hero} progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress} />
       )}
 
-      {!inSearchView && (
+      {!queryActive && (
         <MdtRail cards={railCards} progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress} />
       )}
 
-      {!inSearchView && (
+      {!queryActive && (
         <MdtWeek D={D} tick={tick} onOpen={(id) => setFiche({ mode: "library", franchiseId: id })} />
       )}
 
@@ -812,21 +833,24 @@ function PanelMediatheque({ data, onNavigate }) {
         />
       </div>
 
-      {searching && (
-        <div className="mdt-viewtoggle" role="group" aria-label="Basculer entre ma bibliothèque et les résultats de recherche">
+      {queryActive && (
+        <div className="mdt-viewtoggle" role="group" aria-label="Basculer entre ma bibliothèque et les résultats AniList">
           <button className={`mdt-viewtoggle-btn ${view === "library" ? "is-active" : ""}`}
-            aria-pressed={view === "library"} onClick={() => setView("library")}>◀ Ma bibliothèque</button>
+            aria-pressed={view === "library"} onClick={() => setView("library")}>
+            Ma bibliothèque · {localMatches.length}
+          </button>
           <button className={`mdt-viewtoggle-btn ${view === "search" ? "is-active" : ""}`}
             aria-pressed={view === "search"} onClick={() => setView("search")}>
-            Résultats « {query.trim()} »{results ? ` (${results.length})` : ""}
+            AniList{results ? ` · ${results.length}` : ""}
           </button>
         </div>
       )}
 
       {inSearchView ? (
+        !searching ? <div className="mdt-empty">Tape au moins 3 caractères pour chercher sur AniList.</div> :
         results === null ? <div className="mdt-spinner">Recherche…</div> :
         searchErr ? <div className="mdt-error">{searchErr}</div> :
-        results.length === 0 ? <div className="mdt-empty">Aucun résultat pour « {query.trim()} ».</div> : (
+        results.length === 0 ? <div className="mdt-empty">Aucun résultat pour « {q} ».</div> : (
           <div className="mdt-results">
             {results.map((m) => {
               const inLib = libSourceIds.has(m.id);
@@ -851,13 +875,13 @@ function PanelMediatheque({ data, onNavigate }) {
       ) : (
         <MdtCollection
           visible={visible} total={D.franchises.length}
-          open={collectionOpen} onToggle={toggleCollection}
+          open={collectionOpen || queryActive} onToggle={toggleCollection}
           statusFilter={statusFilter} onStatusFilter={setStatusFilter}
           sort={sort} onSort={setSort}
           progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress}
-          queryActive={false} />
+          queryActive={queryActive} />
       )}
 
       {fiche && (

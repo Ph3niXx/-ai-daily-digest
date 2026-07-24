@@ -40,6 +40,7 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `mediatheque_hero_action` | `{action, status}` | `cockpit/panel-mediatheque.jsx::MdtHero` clic CTA primaire (`action:"resume"/"start"/"open"`) |
 | `mediatheque_week_click` | `{days_ahead, entry_kind}` | `cockpit/panel-mediatheque.jsx::MdtWeek` clic sur une diffusion du semainier (`days_ahead` = 0 pour aujourd'hui, `null` pour une entrée sans date) |
 | `mediatheque_collection_toggle` | `{open, count}` | `cockpit/panel-mediatheque.jsx::MdtCollection` pli/dépli manuel de la section « Ma collection » |
+| `mediatheque_filter_local` | `{q_len, matches}` | `cockpit/panel-mediatheque.jsx::PanelMediatheque` requête locale stabilisée (debounce 400 ms), avant tout appel AniList |
 
 ## Règle de maintenance
 
