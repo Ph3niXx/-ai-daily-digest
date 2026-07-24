@@ -38,6 +38,7 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `mediatheque_shelve` | `{shelved, franchise_root_id}` | `cockpit/panel-mediatheque.jsx::toggleShelved()` après PATCH réussi |
 | `mediatheque_rate` | `{entry_kind, rating, cleared}` | `cockpit/panel-mediatheque.jsx::writeRating()` après upsert réussi |
 | `mediatheque_hero_action` | `{action, status}` | `cockpit/panel-mediatheque.jsx::MdtHero` clic CTA primaire (`action:"resume"/"start"/"open"`) |
+| `mediatheque_week_click` | `{days_ahead, entry_kind}` | `cockpit/panel-mediatheque.jsx::MdtWeek` clic sur une diffusion du semainier (`days_ahead` = 0 pour aujourd'hui, `null` pour une entrée sans date) |
 
 ## Règle de maintenance
 

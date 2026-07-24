@@ -273,25 +273,11 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
   );
 }
 
-function MdtReleasesStrip({ D, tick, onAck }) {
+// Événements non acquittés uniquement — le calendrier des prochaines diffusions
+// est passé dans <MdtWeek> (semainier).
+function MdtReleasesStrip({ D, onAck }) {
   const events = D.releases.filter((r) => !r.acknowledged);
-  const calendar = useMdtMemo(() => {
-    const items = [];
-    const now = Date.now();
-    for (const e of D.entries) {
-      if (e.airing_status === "RELEASING" && e.next_episode_airing_at) {
-        items.push({ key: e.id, when: new Date(e.next_episode_airing_at).getTime(),
-          label: e.title_english || e.title_romaji,
-          detail: `ép. ${e.next_episode_number} · ${mdtFmtDate(e.next_episode_airing_at)}` });
-      } else if (e.airing_status === "NOT_YET_RELEASED" && e.start_date && new Date(e.start_date).getTime() > now - 86400000) {
-        items.push({ key: e.id, when: new Date(e.start_date).getTime(),
-          label: e.title_english || e.title_romaji, detail: `première le ${mdtFmtDate(e.start_date)}` });
-      }
-    }
-    return items.sort((a, b) => a.when - b.when).slice(0, 8);
-  }, [D.entries, tick]);
-
-  if (!events.length && !calendar.length) return null;
+  if (!events.length) return null;
   return (
     <section className="mdt-releases" aria-label="Sorties">
       <div className="mdt-releases-head">Sorties de ta bibliothèque</div>
@@ -302,11 +288,58 @@ function MdtReleasesStrip({ D, tick, onAck }) {
           <button className="mdt-release-ack" onClick={() => onAck(r)} title="Marquer comme vu" aria-label="Acquitter">✓</button>
         </div>
       ))}
-      {calendar.length > 0 && (
-        <div className="mdt-calendar">
-          {calendar.map((c) => (
-            <span key={c.key} className="mdt-calendar-item">📅 <strong>{c.label}</strong> — {c.detail}</span>
+    </section>
+  );
+}
+
+function MdtWeek({ D, tick, onOpen }) {
+  const franchiseById = useMdtMemo(
+    () => new Map(D.franchises.map((f) => [f.id, f])), [D.franchises, tick]);
+  const week = useMdtMemo(
+    () => window.mdtView.buildWeek(D.entries, franchiseById, Date.now()),
+    [D.entries, franchiseById, tick]);
+
+  if (!week.count && !week.later.length) return null;
+
+  const dayLabel = (ts) => new Date(ts).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
+  const timeLabel = (ts) => new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
+  const open = (item, daysAhead) => {
+    onOpen(item.franchiseId);
+    window.track && window.track("mediatheque_week_click", { days_ahead: daysAhead, entry_kind: item.kind });
+  };
+  const laterNote = (item) => {
+    if (item.reason === "undated") return "date inconnue";
+    if (item.reason === "premiere") return `première le ${mdtFmtDate(new Date(item.at).toISOString())}`;
+    return `ép. ${item.ep || "?"} le ${mdtFmtDate(new Date(item.at).toISOString())}`;
+  };
+
+  return (
+    <section className="mdt-section" aria-label="Cette semaine">
+      <div className="mdt-section-head"><h3 className="mdt-section-title">Cette semaine</h3></div>
+      <div className="mdt-week">
+        {week.days.map((d, i) => (
+          <div key={d.ts} className={`mdt-week-day ${i === 0 ? "is-today" : ""}`}>
+            <div className="mdt-week-date">{i === 0 ? "Aujourd'hui" : dayLabel(d.ts)}</div>
+            {d.items.map((item) => (
+              <button key={item.entryId} className="mdt-week-pill" onClick={() => open(item, i)}>
+                <span className="mdt-week-name">{item.label}</span>
+                <span className="mdt-week-ep">
+                  {item.ep ? `ép. ${item.ep}` : "première"} · {timeLabel(item.at)}
+                </span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+      {week.later.length > 0 && (
+        <div className="mdt-week-later">
+          <span className="mdt-week-later-lbl">plus tard</span>
+          {week.later.map((item) => (
+            <button key={item.entryId} onClick={() => open(item, item.at == null ? null : Math.round((item.at - week.days[0].ts) / 86400000))}>
+              <strong>{item.label}</strong> — {laterNote(item)}
+            </button>
           ))}
+          {week.laterTotal > week.later.length && <span>…</span>}
         </div>
       )}
     </section>
@@ -686,7 +719,7 @@ function PanelMediatheque({ data, onNavigate }) {
       <div className="mdt-kicker">Personnel · anime</div>
       <h1 className="mdt-title">Médiathèque</h1>
 
-      <MdtReleasesStrip D={D} tick={tick} onAck={ackRelease} />
+      <MdtReleasesStrip D={D} onAck={ackRelease} />
 
       {!inSearchView && (
         <MdtHero hero={hero} progressById={progressById}
@@ -698,6 +731,10 @@ function PanelMediatheque({ data, onNavigate }) {
         <MdtRail cards={railCards} progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress} />
+      )}
+
+      {!inSearchView && (
+        <MdtWeek D={D} tick={tick} onOpen={(id) => setFiche({ mode: "library", franchiseId: id })} />
       )}
 
       <div className="mdt-toolbar">
