@@ -11,10 +11,9 @@
 const { useState: useMdtState, useMemo: useMdtMemo, useEffect: useMdtEffect } = React;
 
 // ── Statuts dérivés (entrées in_main_chain uniquement) ─────────
+// Source de vérité dans cockpit/lib/mediatheque-view.js (testé sous node).
 function mdtReleased(e) {
-  if (e.airing_status === "FINISHED" || e.airing_status === "CANCELLED") return e.episodes_total || 0;
-  if (e.airing_status === "RELEASING") return Math.max(0, (e.next_episode_number || 1) - 1);
-  return 0;
+  return window.mdtView.released(e);
 }
 
 function mdtStatus(chainEntries, progressById) {
@@ -368,6 +367,46 @@ function MdtHero({ hero, progressById, onOpen, onProgress }) {
   );
 }
 
+function MdtRail({ cards, progressById, onOpen, onProgress }) {
+  if (!cards.length) return null;
+  return (
+    <section className="mdt-section" aria-label="Continuer à regarder">
+      <div className="mdt-section-head">
+        <h3 className="mdt-section-title">Continuer à regarder</h3>
+        <span className="mdt-section-count">{cards.length}</span>
+      </div>
+      <div className="mdt-rail">
+        {cards.map(({ f, entries }) => {
+          const cur = currentEntryOf(entries, progressById);
+          const watched = cur ? (progressById.get(cur.id) || 0) : 0;
+          const rel = cur ? mdtReleased(cur) : 0;
+          const pct = rel ? Math.min(100, Math.round((100 * watched) / rel)) : 0;
+          const shot = f.banner_url || f.cover_url;
+          return (
+            <div className="mdt-rail-card" key={f.id}>
+              <button className="mdt-rail-shot" onClick={() => onOpen(f)}
+                aria-label={`Ouvrir ${f.title_english || f.title_romaji}`}>
+                {shot ? <img src={shot} alt="" loading="lazy" /> : <div className="mdt-rail-ph" />}
+                <div className="mdt-rail-bar" aria-hidden="true"><div style={{ width: pct + "%" }} /></div>
+              </button>
+              <div className="mdt-rail-body">
+                <p className="mdt-rail-title">{f.title_english || f.title_romaji}</p>
+                <p className="mdt-rail-sub">{window.mdtView.nextEpLabel(cur, watched)}</p>
+                {cur && (
+                  <button className="mdt-chip mdt-rail-plus"
+                    onClick={() => onProgress(cur, Math.min(rel, watched + 1))}>
+                    +1 épisode
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function MdtCard({ f, entries, st, cur, progressById, onOpen, onProgress }) {
   const chainLen = entries.filter((e) => e.in_main_chain).length;
   const pct = st.released ? Math.min(100, Math.round((100 * st.watched) / st.released)) : 0;
@@ -491,6 +530,12 @@ function PanelMediatheque({ data, onNavigate }) {
   // toujours le vrai pick pour éviter que le hero d'accueil vide s'affiche par-dessus
   // une grille pleine quand on revient sur « Ma bibliothèque » pendant une recherche.
   const hero = useMdtMemo(() => pickHero(cards), [cards]);
+
+  // Le hero met déjà en avant une franchise « en cours » (pickHero règle 1) :
+  // le rail affiche les autres pour qu'un même titre n'apparaisse pas deux fois.
+  const railCards = useMdtMemo(
+    () => window.mdtView.pickRail(cards, hero && hero.card ? hero.card.f.id : null),
+    [cards, hero]);
 
   async function openPreview(anchorId) {
     setFiche({ mode: "preview", loading: true });
@@ -645,6 +690,12 @@ function PanelMediatheque({ data, onNavigate }) {
 
       {!inSearchView && (
         <MdtHero hero={hero} progressById={progressById}
+          onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
+          onProgress={writeProgress} />
+      )}
+
+      {!inSearchView && (
+        <MdtRail cards={railCards} progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress} />
       )}

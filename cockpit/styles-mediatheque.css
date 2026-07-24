@@ -72,6 +72,31 @@
 .mdt-calendar { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: 12.5px; color: var(--tx2); }
 .mdt-calendar-item strong { color: var(--tx); font-weight: 600; }
 
+/* En-têtes de section (rail, semainier, collection) */
+.mdt-section { margin-bottom: 6px; }
+.mdt-section-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 26px 0 10px; }
+.mdt-section-title { font-family: var(--font-display); font-weight: 600; font-size: 17px; margin: 0; }
+.mdt-section-count { font-family: var(--font-mono); font-size: 11px; color: var(--tx3); }
+
+/* Rail « Continuer à regarder » — cartes bannière 16:9 à défilement horizontal */
+.mdt-rail { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x proximity;
+  padding-bottom: 8px; scrollbar-width: thin; }
+.mdt-rail-card { flex: 0 0 240px; scroll-snap-align: start; }
+.mdt-rail-shot { display: block; width: 100%; padding: 0; border: none; background: none; cursor: pointer;
+  position: relative; border-radius: var(--radius-lg, 12px); overflow: hidden; box-shadow: var(--shadow-sm);
+  transition: transform .18s ease, box-shadow .18s ease; }
+.mdt-rail-shot img, .mdt-rail-ph { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover;
+  background: color-mix(in srgb, var(--tx) 8%, transparent); }
+.mdt-rail-card:hover .mdt-rail-shot, .mdt-rail-card:focus-within .mdt-rail-shot {
+  transform: translateY(-4px);
+  box-shadow: 0 16px 32px rgba(0,0,0,.26), 0 0 0 1px color-mix(in srgb, var(--brand) 40%, transparent); }
+.mdt-rail-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0,0,0,.45); }
+.mdt-rail-bar > div { height: 100%; background: var(--brand); }
+.mdt-rail-body { padding: 9px 2px 0; }
+.mdt-rail-title { font-size: 13.5px; font-weight: 600; line-height: 1.25; margin: 0 0 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdt-rail-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--tx3); margin: 0 0 8px; }
+
 /* Grille bibliothèque */
 .mdt-badge { display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
   text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid; }
