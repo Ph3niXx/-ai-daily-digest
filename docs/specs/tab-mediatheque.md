@@ -9,8 +9,8 @@ perso
 Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec ses saisons et leurs dates, déclarer sa progression épisode par épisode, et être prévenu dès qu'une nouvelle saison d'un anime suivi est annoncée ou commence à être diffusée — sans dépendre d'un site tiers. Première brique d'une médiathèque élargie (mangas, livres, films, séries).
 
 ## Parcours utilisateur
-1. Clic sidebar « Médiathèque » — la bibliothèque s'affiche avec, en haut, les sorties récentes et le calendrier des prochaines diffusions de sa liste.
-2. Tape le nom d'un anime dans le champ de recherche — les résultats apparaissent en direct ; une bascule « Ma bibliothèque | Résultats (N) » permet de revenir à sa liste suivie et d'y retourner sans perdre la recherche.
+1. Clic sidebar « Médiathèque » — l'écran s'ouvre sur ce qui est actif : sorties non acquittées, hero, rail « Continuer à regarder » et semainier des 7 prochains jours. La collection complète reste repliée en bas.
+2. Tape le nom d'un anime dans le champ de recherche — sa bibliothèque est filtrée dès le 1er caractère ; une bascule « Ma bibliothèque · N | AniList · M » permet de passer aux résultats distants et de revenir sans perdre la recherche.
 3. Clic sur un résultat — la fiche franchise se construit : saisons numérotées et datées, films canon, bonus, prochaines sorties.
 4. Clic « Ajouter à ma bibliothèque » — la franchise rejoint la grille avec le statut « À voir ».
 5. Ouvre une fiche de sa bibliothèque et déclare sa progression saison par saison (+1, saisie directe, « ✓ vue ») — le statut global (À voir / En cours / En cours · à jour / Vu) se met à jour tout seul.
