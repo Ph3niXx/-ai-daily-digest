@@ -42,6 +42,16 @@ function mdtFmtDate(iso) {
   } catch { return iso; }
 }
 
+// Date courte pour l'agenda (« 7 août ») : dans un horizon de 90 jours l'année
+// n'apporte rien et alourdit une ligne déjà dense. On ne la remet que si elle
+// diffère de l'année courante — fin décembre, « 5 janv. 2027 » reste utile.
+function mdtFmtShort(ms) {
+  const d = new Date(ms);
+  const opts = { day: "numeric", month: "short" };
+  if (d.getFullYear() !== new Date().getFullYear()) opts.year = "numeric";
+  return d.toLocaleDateString("fr-FR", opts);
+}
+
 function MdtStepper({ entry, progressById, onProgress }) {
   const [editing, setEditing] = useMdtState(false);
   const watched = progressById.get(entry.id) || 0;
@@ -234,6 +244,11 @@ function MdtReleasesStrip({ D, onAck }) {
   );
 }
 
+// Agenda des diffusions : une ligne par jour qui a quelque chose, jaquette à
+// l'appui, jours creux repliés en une seule ligne. La grille de 7 colonnes
+// qu'il remplace donnait le même poids visuel à un jour vide qu'à un jour
+// chargé et laissait ~120 px de large à des titres de 40 caractères : il
+// fallait lire chaque case pour savoir laquelle portait quelque chose.
 function MdtWeek({ D, tick, onOpen }) {
   const franchiseById = useMdtMemo(
     () => new Map(D.franchises.map((f) => [f.id, f])), [D.franchises, tick]);
@@ -243,7 +258,12 @@ function MdtWeek({ D, tick, onOpen }) {
 
   if (!week.count && !week.later.length) return null;
 
-  const dayLabel = (ts) => new Date(ts).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
+  // Repère relatif d'abord : « demain » se lit sans calcul mental, « dim. 26 » non.
+  const relDay = (i) => (i === 0 ? "aujourd'hui" : i === 1 ? "demain" : null);
+  const weekday = (ts) => new Date(ts).toLocaleDateString("fr-FR", { weekday: "short" });
+  const dayNum = (ts) => new Date(ts).getDate();
+  const quietLabel = (ts, i) =>
+    relDay(i) || new Date(ts).toLocaleDateString("fr-FR", { weekday: "short", day: "numeric" });
   const timeLabel = (ts) => new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   const open = (item) => {
     onOpen(item.franchiseId);
@@ -251,37 +271,73 @@ function MdtWeek({ D, tick, onOpen }) {
   };
   const laterNote = (item) => {
     if (item.reason === "undated") return "date inconnue";
-    if (item.reason === "premiere") return `première le ${mdtFmtDate(new Date(item.at).toISOString())}`;
-    return `ép. ${item.ep || "?"} le ${mdtFmtDate(new Date(item.at).toISOString())}`;
+    if (item.reason === "premiere") return `première ${mdtFmtShort(item.at)}`;
+    return `ép. ${item.ep || "?"} · ${mdtFmtShort(item.at)}`;
   };
+
+  const withIndex = week.days.map((d, i) => ({ d, i }));
+  const filled = withIndex.filter((x) => x.d.items.length);
+  const quiet = withIndex.filter((x) => !x.d.items.length);
 
   return (
     <section className="mdt-section" aria-label="Cette semaine">
-      <div className="mdt-section-head"><h3 className="mdt-section-title">Cette semaine</h3></div>
-      <div className="mdt-week">
-        {week.days.map((d, i) => (
-          <div key={d.ts} className={`mdt-week-day ${i === 0 ? "is-today" : ""}`}>
-            <div className="mdt-week-date">{i === 0 ? "Aujourd'hui" : dayLabel(d.ts)}</div>
-            {d.items.map((item) => (
-              <button key={item.entryId} className="mdt-week-pill" onClick={() => open(item)}>
-                <span className="mdt-week-name">{item.label}</span>
-                <span className="mdt-week-ep">
-                  {item.ep ? `ép. ${item.ep} · ${timeLabel(item.at)}` : "première"}
-                </span>
-              </button>
-            ))}
-          </div>
-        ))}
+      <div className="mdt-section-head">
+        <h3 className="mdt-section-title">Cette semaine</h3>
+        {week.count > 0 && <span className="mdt-section-count">{week.count}</span>}
       </div>
+
+      {filled.length > 0 && (
+        <ol className="mdt-agenda">
+          {filled.map(({ d, i }) => (
+            <li key={d.ts} className={`mdt-agenda-day ${i === 0 ? "is-today" : ""}`}>
+              <div className="mdt-agenda-date">
+                <span className="mdt-agenda-wd">{relDay(i) || weekday(d.ts)}</span>
+                <span className="mdt-agenda-num">{dayNum(d.ts)}</span>
+              </div>
+              <div className="mdt-agenda-items">
+                {d.items.map((item) => (
+                  <button key={item.entryId} className="mdt-agenda-item" onClick={() => open(item)}>
+                    {item.cover
+                      ? <img className="mdt-agenda-thumb" src={item.cover} alt="" loading="lazy" />
+                      : <span className="mdt-agenda-thumb" />}
+                    <span className="mdt-agenda-txt">
+                      <span className="mdt-agenda-name">{item.label}</span>
+                      <span className="mdt-agenda-ep">
+                        {item.ep ? `ép. ${item.ep} · ${timeLabel(item.at)}` : "première"}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      {filled.length === 0
+        ? <p className="mdt-agenda-quiet mdt-agenda-quiet--all">Rien de prévu d'ici sept jours.</p>
+        : quiet.length > 0 && (
+          <p className="mdt-agenda-quiet">
+            <span className="mdt-agenda-quiet-days">
+              {quiet.map(({ d, i }) => (
+                <span key={d.ts} className={i === 0 ? "is-today" : undefined}>{quietLabel(d.ts, i)}</span>
+              ))}
+            </span>
+            {" — rien de prévu"}
+          </p>
+        )}
+
       {week.later.length > 0 && (
         <div className="mdt-week-later">
           <span className="mdt-week-later-lbl">plus tard</span>
           {week.later.map((item) => (
-            <button key={item.entryId} onClick={() => open(item)}>
-              <strong>{item.label}</strong> — {laterNote(item)}
+            <button key={item.entryId} className="mdt-later-pill" onClick={() => open(item)}>
+              <strong>{item.label}</strong>
+              <span>{laterNote(item)}</span>
             </button>
           ))}
-          {week.laterTotal > week.later.length && <span>…</span>}
+          {week.laterTotal > week.later.length &&
+            <span className="mdt-week-later-more">+{week.laterTotal - week.later.length}</span>}
         </div>
       )}
     </section>

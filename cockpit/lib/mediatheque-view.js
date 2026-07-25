@@ -183,7 +183,11 @@
       if (!f || f.shelved) continue;
 
       const label = e.title_english || e.title_romaji || f.title_english || f.title_romaji || "?";
-      const base = { entryId: e.id, franchiseId: f.id, label, kind: e.kind, ep: null };
+      // Le poster voyage avec l'item : c'est le repère le plus rapide pour
+      // reconnaître une série dans l'agenda (un titre de 40 caractères tronqué
+      // ne se lit pas d'un coup d'œil). Porté ici pour que la vue n'ait pas à
+      // re-résoudre la franchise à chaque rendu.
+      const base = { entryId: e.id, franchiseId: f.id, label, kind: e.kind, ep: null, cover: f.cover_url || null };
 
       let at = null, reason = null;
       if (e.airing_status === "RELEASING" && e.next_episode_airing_at) {

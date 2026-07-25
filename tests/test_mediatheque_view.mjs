@@ -174,7 +174,7 @@ const NOW = new Date(2026, 6, 24, 10, 0, 0).getTime();
 const localAt = (y, m, d, h, min) => new Date(y, m, d, h, min, 0).toISOString();
 
 const FRANCHISES = new Map([
-  ["f-slime", { id: "f-slime", shelved: false, title_english: "Slime" }],
+  ["f-slime", { id: "f-slime", shelved: false, title_english: "Slime", cover_url: "https://img/slime.jpg" }],
   ["f-rezero", { id: "f-rezero", shelved: false, title_english: "Re:ZERO" }],
   ["f-frieren", { id: "f-frieren", shelved: false, title_english: "Frieren" }],
   ["f-range", { id: "f-range", shelved: true, title_english: "Rangee" }],
@@ -212,6 +212,12 @@ check("buildWeek: bonus hors chaine sans date ignore",
   W.later.filter((i) => i.entryId === "e-frieren-bonus"), []);
 check("buildWeek: saison de la chaine sans date => 'date inconnue' en dernier",
   W.later.map((i) => [i.entryId, i.reason]), [["e-rezero", "airing"], ["e-main-undated", "undated"]]);
+// Le poster accompagne l'item : l'agenda identifie une serie par sa jaquette,
+// pas seulement par un titre tronque.
+check("buildWeek: le poster de la franchise voyage avec l'item de grille",
+  W.days[0].items[0].cover, "https://img/slime.jpg");
+check("buildWeek: franchise sans poster => cover null (jamais undefined)",
+  W.later.find((i) => i.entryId === "e-rezero").cover, null);
 check("buildWeek: libelle replie sur le titre de la franchise quand l'entree n'a aucun titre",
   V.buildWeek([{ id: "x", franchise_id: "f-slime", kind: "season", in_main_chain: true,
     airing_status: "RELEASING", next_episode_number: 2,

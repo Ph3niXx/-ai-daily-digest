@@ -78,7 +78,12 @@
 /* Rail « Continuer à regarder » — cartes bannière 16:9 à défilement horizontal */
 .mdt-rail { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x proximity;
   padding-bottom: 8px; scrollbar-width: thin; }
-.mdt-rail-card { flex: 0 0 240px; scroll-snap-align: start; }
+/* min-width: 0 est OBLIGATOIRE, pas cosmétique : un flex item a min-width: auto
+   par défaut, soit sa largeur min-content. Le titre étant en white-space: nowrap,
+   sa largeur min-content est celle du titre entier — une franchise au titre long
+   imposait donc 465 px à sa carte là où une autre en faisait 240. flex-basis ne
+   peut rien contre un minimum de contenu. */
+.mdt-rail-card { flex: 0 0 240px; min-width: 0; scroll-snap-align: start; }
 .mdt-rail-shot { display: block; width: 100%; padding: 0; border: none; background: none; cursor: pointer;
   position: relative; border-radius: var(--radius-lg, 12px); overflow: hidden; box-shadow: var(--shadow-sm);
   transition: transform .18s ease, box-shadow .18s ease; }
@@ -94,29 +99,64 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mdt-rail-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--tx3); margin: 0 0 8px; }
 
-/* Semainier — 7 colonnes glissantes, aujourd'hui en tête */
-.mdt-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
-.mdt-week-day { border: 1px solid color-mix(in srgb, var(--tx) 10%, transparent); border-radius: 10px;
-  padding: 8px 9px 10px; min-height: 84px; background: color-mix(in srgb, var(--tx) 2%, transparent); }
-.mdt-week-day.is-today { border-color: color-mix(in srgb, var(--brand) 55%, transparent);
-  background: color-mix(in srgb, var(--brand) 8%, transparent); }
-.mdt-week-date { font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
-  text-transform: uppercase; color: var(--tx3); margin-bottom: 7px; }
-.mdt-week-day.is-today .mdt-week-date { color: var(--brand); }
-.mdt-week-pill { display: block; width: 100%; text-align: left; border: none; background: transparent;
-  padding: 3px 0; font: inherit; color: var(--tx); cursor: pointer; }
-.mdt-week-name { display: block; font-size: 11.5px; font-weight: 600; line-height: 1.3;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mdt-week-pill:hover .mdt-week-name { color: var(--brand); }
-.mdt-week-ep { font-family: var(--font-mono); font-size: 10px; color: var(--tx3); }
-.mdt-week-later { display: flex; align-items: baseline; gap: 6px 16px; flex-wrap: wrap; margin-top: 10px;
-  font-size: 12px; color: var(--tx3); }
-.mdt-week-later-lbl { font-family: var(--font-mono); font-size: 10px; letter-spacing: .12em;
-  text-transform: uppercase; }
-.mdt-week-later button { border: none; background: transparent; padding: 0; font: inherit;
-  color: inherit; cursor: pointer; }
-.mdt-week-later button:hover { color: var(--brand); }
-.mdt-week-later strong { color: var(--tx2); font-weight: 600; }
+/* Cette semaine — agenda. Une ligne par jour qui diffuse : le gros chiffre du
+   jour sert d'ancre au balayage vertical, la jaquette identifie la série avant
+   même qu'on lise le titre. Les jours creux tiennent sur une ligne en pied. */
+.mdt-agenda { list-style: none; margin: 0; padding: 0; }
+.mdt-agenda-day { display: flex; align-items: flex-start; gap: 18px; padding: 12px 0;
+  border-top: 1px solid color-mix(in srgb, var(--tx) 9%, transparent); }
+.mdt-agenda-date { flex: 0 0 96px; padding-top: 2px; }
+.mdt-agenda-wd { display: block; font-family: var(--font-mono); font-size: 9.5px;
+  letter-spacing: .11em; text-transform: uppercase; color: var(--tx3); margin-bottom: 2px; }
+.mdt-agenda-num { display: block; font-family: var(--font-display); font-size: 30px;
+  line-height: 1; color: var(--tx2); font-variant-numeric: tabular-nums; }
+.mdt-agenda-day.is-today .mdt-agenda-wd,
+.mdt-agenda-day.is-today .mdt-agenda-num { color: var(--brand); }
+
+.mdt-agenda-items { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.mdt-agenda-item { display: flex; align-items: center; gap: 10px; min-width: 0;
+  flex: 1 1 250px; max-width: 380px; padding: 6px 14px 6px 6px; text-align: left;
+  font: inherit; color: var(--tx); cursor: pointer; border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--tx) 10%, transparent);
+  background: color-mix(in srgb, var(--tx) 2%, transparent);
+  transition: border-color .15s ease, background-color .15s ease; }
+.mdt-agenda-item:hover { border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+  background: color-mix(in srgb, var(--brand) 5%, transparent); }
+.mdt-agenda-item:hover .mdt-agenda-name { color: var(--brand); }
+.mdt-agenda-thumb { flex: 0 0 auto; display: block; width: 34px; aspect-ratio: 2/3;
+  object-fit: cover; border-radius: 5px;
+  background: color-mix(in srgb, var(--tx) 8%, transparent); }
+.mdt-agenda-txt { min-width: 0; }
+.mdt-agenda-name { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; font-size: 12.5px; font-weight: 600; line-height: 1.3; }
+.mdt-agenda-ep { display: block; margin-top: 3px; font-family: var(--font-mono);
+  font-size: 10px; color: var(--tx3); }
+
+.mdt-agenda-quiet { margin: 0; padding: 11px 0 0; line-height: 1.7;
+  border-top: 1px solid color-mix(in srgb, var(--tx) 9%, transparent);
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: .07em;
+  text-transform: uppercase; color: var(--tx3); }
+.mdt-agenda-quiet-days > span + span::before { content: "·"; margin: 0 7px;
+  color: color-mix(in srgb, var(--tx) 22%, transparent); }
+.mdt-agenda-quiet-days > span.is-today { color: var(--brand); }
+.mdt-agenda-quiet--all { font-family: var(--font-sans); font-size: 13px;
+  letter-spacing: 0; text-transform: none; border-top: none; padding-top: 4px; }
+
+/* Plus tard — chaque sortie dans sa pastille : en ligne continue, les titres et
+   les dates se confondaient d'une entrée à l'autre. */
+.mdt-week-later { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+.mdt-week-later-lbl, .mdt-week-later-more { font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: .12em; text-transform: uppercase; color: var(--tx3); }
+.mdt-later-pill { display: inline-flex; align-items: baseline; gap: 8px; padding: 5px 12px;
+  border: 1px solid color-mix(in srgb, var(--tx) 11%, transparent); border-radius: 999px;
+  background: transparent; font: inherit; cursor: pointer; transition: border-color .15s ease; }
+.mdt-later-pill strong { font-size: 11.5px; font-weight: 600; color: var(--tx2); }
+.mdt-later-pill > span { font-family: var(--font-mono); font-size: 10px; color: var(--tx3); white-space: nowrap; }
+.mdt-later-pill:hover { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
+.mdt-later-pill:hover strong { color: var(--brand); }
+
+.mdt-agenda-item:focus-visible, .mdt-later-pill:focus-visible {
+  outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* En-tête repliable de la collection */
 .mdt-collection-toggle { display: flex; align-items: baseline; gap: 8px; border: none;
@@ -125,8 +165,12 @@
 .mdt-chev { font-size: 11px; color: var(--tx3); transition: transform .16s ease; }
 .mdt-collection-toggle[aria-expanded="true"] .mdt-chev { transform: rotate(90deg); }
 .mdt-section-head .mdt-filters { margin-left: auto; }
-@media (max-width: 900px) { .mdt-week { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
-@media (max-width: 560px) { .mdt-week { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 720px) {
+  .mdt-agenda-day { gap: 12px; }
+  .mdt-agenda-date { flex-basis: 64px; }
+  .mdt-agenda-num { font-size: 24px; }
+  .mdt-agenda-item { flex-basis: 100%; max-width: none; }
+}
 
 /* Grille bibliothèque */
 .mdt-badge { display: inline-block; font-family: var(--font-mono); font-size: 10px; letter-spacing: .08em;
