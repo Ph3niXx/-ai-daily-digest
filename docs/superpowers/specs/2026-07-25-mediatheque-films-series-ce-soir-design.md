@@ -116,13 +116,28 @@ remplit la colonne au premier passage ; le sync TMDB la remplit dès la premièr
 | `Canceled` | `CANCELLED` |
 | `Planned`, `Rumored` | `NOT_YET_RELEASED` |
 
-Deux règles imposées par TMDB, dont le `status` est au niveau **série** et non saison :
+Trois règles imposées par TMDB, dont le `status` est au niveau **série** et non saison :
 
-- **La dernière saison hérite du statut de la série ; toutes les précédentes sont
-  `FINISHED`.** Sans ça, `released()` renverrait `next_episode_number - 1` sur une saison
-  ancienne et sous-compterait ses épisodes.
-- **`next_episode_to_air` s'accroche à la seule saison en diffusion.** Une série avec
-  8 saisons ne doit porter qu'une date de prochaine diffusion.
+- **Une saison n'est `RELEASING` que si `next_episode_to_air` existe.** « Returning
+  Series » décrit la série, pas une saison : une série entre deux saisons reste
+  « Returning ». Le statut de chaque saison est donc dérivé de ses **propres** faits —
+  sans date, sans épisode, ou datée dans le futur → `NOT_YET_RELEASED` ; déjà diffusée →
+  `FINISHED`.
+- **`next_episode_to_air` désigne lui-même sa saison** (`season_number`), qui n'est pas
+  forcément la dernière listée : une saison future peut déjà figurer au catalogue. Une
+  série avec 8 saisons ne doit porter qu'une date de prochaine diffusion.
+- **La durée se cherche en cascade** : `episode_run_time[0]`, puis
+  `last_episode_to_air.runtime`, puis `next_episode_to_air.runtime`.
+
+> **Corrigé sur données réelles (2026-07-25).** La première version de cette spec disait
+> « la dernière saison hérite du statut de la série ». C'est faux, et coûteux : Dan Da Dan
+> (saison unique, 24 épisodes tous sortis, show « Returning Series », aucun
+> `next_episode_to_air`) se retrouvait `RELEASING` avec `next_episode_number = null`, donc
+> `released()` renvoyait `max(0, (null || 1) - 1) = 0` — la série affichait « 0 épisode
+> sorti » et son stepper était désactivé. De même, `episode_run_time` est **vide** sur les
+> séries modernes : sans la cascade, aucune série n'avait de durée et le filtre par budget
+> était inerte sur tout le catalogue séries. Aucune de ces deux erreurs n'était visible
+> depuis des fixtures écrites à la main — seul un appel à l'API réelle les a révélées.
 
 Pour un film non encore sorti (`release_date` future) : `airing_status='NOT_YET_RELEASED'`,
 ce qui le fait apparaître dans l'agenda via la branche « premiere » de `buildWeek()` sans
@@ -261,9 +276,13 @@ inexplicable ; c'est le cas de toute la bibliothèque anime avant le premier bac
 
 ### Modulation par l'heure et par la journée
 
-- **L'heure agit sur le classement.** Passé 23 h, les entrées de plus de 70 min reculent
-  derrière les formats courts, et la carte l'annonce (« il est tard »). Elle ne les
-  supprime pas : c'est un signal, pas une interdiction.
+- **L'heure agit sur le classement.** Passé 23 h, le classement devient un **tri croissant
+  par durée** — le plus court d'abord — et la carte l'annonce (« il est tard »). Elle ne
+  supprime rien : c'est un signal, pas une interdiction.
+
+  *Un seuil binaire « plus de 70 min = long » avait été retenu d'abord. Il ne tient pas :
+  sur données réelles, trois candidats de 76, 139 et 201 min tombent tous du même côté du
+  seuil, la règle ne départage plus rien, et c'est le film de 3 h 20 qui sort à minuit.*
 - **La charge de la journée n'agit que sur la phrase d'accroche.** `dayLoad` est lu dans
   `activity_briefs.stats.meetings` du jour — `{count, total_minutes, teams_count}`,
   upserté par `jarvis/observers/daily_brief_generator.py` depuis l'observer Outlook. Il

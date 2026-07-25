@@ -353,6 +353,18 @@ check("pickTonight: a 21 h, budget illimite => le plus proche du budget d'abord 
 check("pickTonight: a 23 h, le format long recule derriere le court",
   ids(V.pickTonight([SHORT, LONG], new Map(), { budgetMin: null, dayLoad: null }, at(23, 30))), ["short"]);
 
+// Le tri de nuit est CROISSANT, pas un seuil binaire long/court : sinon trois
+// candidats de 76, 139 et 201 min tombent du meme cote et c'est le plus long
+// qui sort. Cas constate sur donnees reelles le 2026-07-25.
+const L76 = mkCard("l76", "to_watch", [mkEntry("a76", { runtime: 76 })], { added_at: "2026-01-01" });
+const L139 = mkCard("l139", "to_watch", [mkEntry("a139", { kind: "movie", total: 1, runtime: 139 })], { added_at: "2026-02-01" });
+const L201 = mkCard("l201", "to_watch", [mkEntry("a201", { kind: "movie", total: 1, runtime: 201 })], { added_at: "2026-03-01" });
+const LONGS = [L139, L201, L76];
+check("pickTonight: a 21 h, budget illimite => le plus long (au plus pres du budget)",
+  ids(V.pickTonight(LONGS, new Map(), { budgetMin: null, dayLoad: null }, at(21))), ["l201"]);
+check("pickTonight: a 23 h 30, trois formats longs => le MOINS long l'emporte",
+  ids(V.pickTonight(LONGS, new Map(), { budgetMin: null, dayLoad: null }, at(23, 30))), ["l76"]);
+
 // Rôle sans candidat : la carte se réduit, aucun remplissage.
 const ONLY_RESUME = mkCard("r", "watching", [mkEntry("r1", { total: 12 })], { lastTouch: 5 });
 check("pickTonight: un seul role servi => une seule proposition, pas de remplissage",

@@ -256,8 +256,7 @@
 
   const EVENING_FROM = 18;   // la bande remplace le hero
   const EVENING_TO = 2;      // …jusqu'à 2 h du matin
-  const LATE_HOUR = 23;      // au-delà, les formats longs reculent
-  const LONG_FORM_MIN = 70;  // minutes
+  const LATE_HOUR = 23;      // au-delà, on préfère le format le plus court
   // Tolérance par pastille : un épisode de 24 min « rentre » dans 30 minutes,
   // et deux épisodes dans une heure. Les bornes sont larges à dessein — un
   // filtre au strict rejetterait un épisode de 26 min d'un budget de 30.
@@ -300,19 +299,19 @@
     const taken = new Set();
     const out = [];
 
-    // Ordre commun à tous les rôles : hors budget écarté, format long relégué
-    // après 23 h, durée inconnue derrière une durée connue, puis départage
-    // propre au rôle.
+    // Ordre commun à tous les rôles : hors budget écarté, le plus court
+    // d'abord après 23 h, durée inconnue derrière une durée connue, puis
+    // départage propre au rôle.
     function rank(list, tie) {
       return list
         .filter((x) => fitsBudget(runtimeOf(x.entry), budget))
         .sort((a, b) => {
           const ra = runtimeOf(a.entry), rb = runtimeOf(b.entry);
-          if (late) {
-            const la = ra != null && ra > LONG_FORM_MIN ? 1 : 0;
-            const lb = rb != null && rb > LONG_FORM_MIN ? 1 : 0;
-            if (la !== lb) return la - lb;
-          }
+          // Tri croissant plutôt qu'un seuil binaire « long / pas long » :
+          // avec un seuil, trois candidats de 76, 139 et 201 min tombent tous
+          // du même côté et la règle ne départage rien — c'est le film de
+          // 3 h 20 qui sortait à minuit (constaté sur données réelles).
+          if (late && ra != null && rb != null && ra !== rb) return ra - rb;
           if ((ra == null) !== (rb == null)) return ra == null ? 1 : -1;
           return tie(a, b);
         });
