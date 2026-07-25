@@ -1290,6 +1290,13 @@
       const from = new Date(Date.now() - 30 * 86400000).toISOString();
       return once("media_releases", () => q("media_releases", `detected_at=gte.${from}&order=detected_at.desc&limit=100`));
     },
+    // Charge de la journée (réunions Outlook du jour), pour la seule accroche
+    // de la bande « Ce soir ». Une ligne, jamais bloquant : l'observer est
+    // local et peut n'avoir rien écrit aujourd'hui.
+    async activity_brief_today(){
+      const day = new Date().toISOString().slice(0, 10);
+      return once("activity_brief_today", () => q("activity_briefs", `date=eq.${day}&select=stats&limit=1`));
+    },
     async veille_outils(){ return once("veille_outils", () => q("claude_veille", "order=created_at.desc&limit=200")); },
     async claude_ecosystem(){ return once("claude_ecosystem", () => q("claude_ecosystem", "order=is_pinned.desc.nullslast,name.asc&limit=500")); },
     async jarvis_messages(){ return once("jarvis_messages", () => q("jarvis_conversations", "order=created_at.desc&limit=200")); },
@@ -4725,19 +4732,26 @@
         return { jobs: allJobs, todayScan, last7Scans };
       }
       case "mediatheque": {
-        const [franchises, entries, progress, releases] = await Promise.all([
+        const [franchises, entries, progress, releases, briefRows] = await Promise.all([
           T2.media_franchises().catch(() => []),
           T2.media_entries().catch(() => []),
           T2.media_progress().catch(() => []),
           T2.media_releases().catch(() => []),
+          T2.activity_brief_today().catch(() => []),
         ]);
+        // Ne module QUE la phrase d'accroche de « Ce soir », jamais le
+        // classement. Absente (observer éteint), la carte s'affiche à
+        // l'identique avec une formulation neutre.
+        const dayLoad = (briefRows && briefRows[0] && briefRows[0].stats
+          && briefRows[0].stats.meetings) || null;
         if (window.MEDIATHEQUE_DATA) {
           window.MEDIATHEQUE_DATA.franchises = franchises;
           window.MEDIATHEQUE_DATA.entries = entries;
           window.MEDIATHEQUE_DATA.progress = progress;
           window.MEDIATHEQUE_DATA.releases = releases;
+          window.MEDIATHEQUE_DATA.dayLoad = dayLoad;
         }
-        return { franchises, entries, progress, releases };
+        return { franchises, entries, progress, releases, dayLoad };
       }
       default:
         // No Tier 2 work for this panel — return null so the App effect

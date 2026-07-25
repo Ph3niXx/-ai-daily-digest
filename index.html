@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://mrmgptqpflzyavdfqwwv.supabase.co wss://mrmgptqpflzyavdfqwwv.supabase.co http://localhost:8765 https://*.trycloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://ws.audioscrobbler.com https://api.frankfurter.dev https://graphql.anilist.co; img-src 'self' data: https://raw.communitydragon.org https://lastfm.freetls.fastly.net https://*.lastfm.freetls.fastly.net https://coverartarchive.org https://*.archive.org https://*.dzcdn.net https://cdn-images.dzcdn.net https://*.steamstatic.com https://media.steampowered.com https://cdn.akamai.steamstatic.com https://s4.anilist.co; frame-src 'none'; object-src 'none'; base-uri 'self';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://mrmgptqpflzyavdfqwwv.supabase.co wss://mrmgptqpflzyavdfqwwv.supabase.co http://localhost:8765 https://*.trycloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://ws.audioscrobbler.com https://api.frankfurter.dev https://graphql.anilist.co https://api.themoviedb.org; img-src 'self' data: https://raw.communitydragon.org https://lastfm.freetls.fastly.net https://*.lastfm.freetls.fastly.net https://coverartarchive.org https://*.archive.org https://*.dzcdn.net https://cdn-images.dzcdn.net https://*.steamstatic.com https://media.steampowered.com https://cdn.akamai.steamstatic.com https://s4.anilist.co https://image.tmdb.org; frame-src 'none'; object-src 'none'; base-uri 'self';">
 <title>AI Cockpit</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23C2410C' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><circle cx='12' cy='12' r='10'/><circle cx='12' cy='12' r='4'/></svg>">
 <link rel="manifest" href="manifest.json">
@@ -31,7 +31,7 @@
 <link rel="stylesheet" href="cockpit/styles-stacks.css?v=4">
 <link rel="stylesheet" href="cockpit/styles-history.css?v=1">
 <link rel="stylesheet" href="cockpit/styles-jobs-radar.css?v=5">
-<link rel="stylesheet" href="cockpit/styles-mediatheque.css?v=3">
+<link rel="stylesheet" href="cockpit/styles-mediatheque.css?v=5">
 <link rel="stylesheet" href="cockpit/styles-jarvis-lab.css?v=11">
 <link rel="stylesheet" href="cockpit/styles-evening.css?v=1">
 <link rel="stylesheet" href="cockpit/styles-mobile.css?v=3">
@@ -62,8 +62,9 @@
 <script src="cockpit/lib/dialog.js?v=1"></script>
 <script src="cockpit/lib/data-loader.js?v=36"></script>
 <script src="cockpit/lib/wiki-tooltip.js?v=2"></script>
-<script src="cockpit/lib/anilist.js?v=1"></script>
-<script src="cockpit/lib/mediatheque-view.js?v=2"></script>
+<script src="cockpit/lib/anilist.js?v=2"></script>
+<script src="cockpit/lib/tmdb.js?v=1"></script>
+<script src="cockpit/lib/mediatheque-view.js?v=3"></script>
 
 <!-- Fallback fake data (remains in place as shape reference; tier 1 overrides these) -->
 <script src="cockpit/data.js"></script>
@@ -81,7 +82,7 @@
 <script src="cockpit/data-opportunities.js?v=2"></script>
 <script src="cockpit/data-ideas.js?v=1"></script>
 <script src="cockpit/data-jarvis.js?v=1"></script>
-<script src="cockpit/data-profile.js?v=1"></script>
+<script src="cockpit/data-profile.js?v=2"></script>
 <script src="cockpit/data-forme.js?v=2"></script>
 <script src="cockpit/data-musique.js?v=1"></script>
 <script src="cockpit/data-gaming-perso.js?v=2"></script>
@@ -114,7 +115,7 @@
 <script type="text/babel" src="cockpit/panel-stacks.jsx?v=2"></script>
 <script type="text/babel" src="cockpit/panel-history.jsx?v=4"></script>
 <script type="text/babel" src="cockpit/panel-jobs-radar.jsx?v=5"></script>
-<script type="text/babel" src="cockpit/panel-mediatheque.jsx?v=2"></script>
+<script type="text/babel" src="cockpit/panel-mediatheque.jsx?v=4"></script>
 <!-- Bootstrap: sets __cockpitBootstrapPending so app.jsx defers mount until we say go -->
 <script src="cockpit/lib/bootstrap.js?v=2"></script>
 <script type="text/babel" src="cockpit/command-palette.jsx?v=1"></script>

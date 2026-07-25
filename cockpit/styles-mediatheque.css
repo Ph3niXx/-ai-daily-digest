@@ -263,6 +263,67 @@
 .mdt-brief-list li { margin: 3px 0; }
 .mdt-brief-cta { border: none; background: transparent; color: var(--brand); font: inherit; font-size: 12.5px; cursor: pointer; padding: 0; }
 
+/* « Ce soir » — remplace le hero de 18 h à 2 h. Trois cartes au plus, souvent
+   moins : la grille se contente de ce qu'elle reçoit (auto-fit) plutôt que
+   d'imposer trois colonnes qui laisseraient des trous quand un rôle est vide. */
+.mdt-tonight { margin: 0 0 28px; }
+.mdt-tonight-head { display: flex; align-items: baseline; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; margin-bottom: 14px; }
+.mdt-tonight-title { font-family: var(--font-display); font-weight: 600; font-size: 26px;
+  line-height: 1.1; margin: 0; color: var(--tx); }
+.mdt-tonight-budgets { display: flex; gap: 6px; }
+/* Même grammaire que .mdt-chip : ce sont des filtres, ils doivent se lire comme tels. */
+.mdt-budget { padding: 6px 13px; font-family: var(--font-mono); font-size: 11.5px; border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tx) 14%, transparent); background: transparent;
+  color: var(--tx2); cursor: pointer; transition: border-color .15s ease, color .15s ease; }
+.mdt-budget:hover { color: var(--tx); border-color: color-mix(in srgb, var(--tx) 30%, transparent); }
+.mdt-budget.is-active { background: var(--tx); color: var(--bg); border-color: var(--tx); }
+
+.mdt-tonight-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+  gap: 16px; list-style: none; margin: 0; padding: 0; }
+.mdt-tonight-card { display: flex; gap: 14px; align-items: flex-start; background: var(--bg2);
+  border: 1px solid color-mix(in srgb, var(--tx) 9%, transparent);
+  border-radius: var(--radius-lg, 12px); padding: 12px; min-width: 0;
+  transition: border-color .18s ease, transform .18s ease; }
+.mdt-tonight-card:hover, .mdt-tonight-card:focus-within {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--brand) 40%, transparent); }
+.mdt-tonight-cover { flex: 0 0 78px; padding: 0; border: none; background: none; cursor: pointer; }
+.mdt-tonight-cover img, .mdt-tonight-nocover { display: block; width: 78px; height: 110px;
+  object-fit: cover; border-radius: 8px; }
+.mdt-tonight-nocover { background: color-mix(in srgb, var(--tx) 8%, transparent); }
+/* min-width: 0 obligatoire — même piège que .mdt-rail-card : un flex item vaut
+   min-content par défaut, et le titre en nowrap imposerait sa largeur entière
+   à toute la carte. */
+.mdt-tonight-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mdt-tonight-role { font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .11em;
+  text-transform: uppercase; color: var(--brand); }
+.mdt-tonight-name { font-size: 14px; font-weight: 600; line-height: 1.25;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mdt-tonight-sub { font-family: var(--font-mono); font-size: 10.5px; color: var(--tx3); }
+.mdt-tonight-cta { margin-top: 6px; align-self: flex-start; padding: 6px 14px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: 11.5px; cursor: pointer;
+  background: var(--tx); color: var(--bg); border: 1px solid var(--tx); }
+
+.mdt-tonight-empty { padding: 22px; border-radius: var(--radius-lg, 12px);
+  border: 1px dashed color-mix(in srgb, var(--tx) 16%, transparent); color: var(--tx2); }
+.mdt-tonight-empty p { margin: 0; }
+.mdt-tonight-widen { margin-top: 12px; padding: 6px 13px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: 11.5px; cursor: pointer; background: transparent;
+  color: var(--tx); border: 1px solid color-mix(in srgb, var(--tx) 30%, transparent); }
+
+/* Résultats de recherche multi-sources. La pastille de provenance reste
+   discrète : elle désambiguïse, elle ne hiérarchise pas. */
+.mdt-result-src { margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--tx3); vertical-align: middle;
+  border: 1px solid color-mix(in srgb, var(--tx) 14%, transparent); }
+/* Une source muette ne masque pas l'autre : on le dit en pied de liste plutot
+   qu'en ecran d'erreur, tant qu'il reste des resultats a montrer. */
+.mdt-results-partial { grid-column: 1 / -1; margin: 4px 0 0;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--tx3); }
+
 @media (max-width: 720px) {
   .panel-mediatheque { padding: 24px 16px 60px; }
+  .mdt-tonight-head { flex-direction: column; align-items: flex-start; gap: 10px; }
 }

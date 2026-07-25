@@ -68,6 +68,18 @@ Setup : voir [steam-setup.md](steam-setup.md).
 | `STEAM_API_KEY` | Steam Web API key (https://steamcommunity.com/dev/apikey) |
 | `STEAM_ID` | Steam ID 64-bit (17 chiffres) |
 
+## TMDB (pipeline `pipelines/tmdb_tracker_sync.py`)
+
+Clé gratuite à demander sur https://developer.themoviedb.org/ (compte + formulaire, validation immédiate pour un usage perso).
+
+| Secret | Usage |
+|---|---|
+| `TMDB_API_KEY` | TMDB REST v3 — `pipelines/tmdb_tracker_sync.py` (sync quotidien des films et séries de la médiathèque) et `pipelines/tmdb_sync.py` (calendrier de l'onglet Veille, dormant) |
+
+⚠️ **Doublon assumé côté front** : la recherche de la médiathèque interroge TMDB depuis le navigateur et ne peut pas lire un secret GitHub. La même clé est donc **aussi** stockée dans `user_profile.tmdb_api_key`, lue via `window.PROFILE_DATA._values` — même pattern que `lastfm_api_key`. Elle est masquée de l'éditeur de profil via `window.PROFILE_HIDDEN_KEYS` ([cockpit/data-profile.js](../cockpit/data-profile.js)). **Rotation : penser aux deux endroits.**
+
+Sans le secret, `tmdb_tracker_sync.py` sort en `[skip]` avec le code 0 — le workflow reste vert. Sans la clé en base, la recherche n'interroge qu'AniList et le signale en pied de liste.
+
 ## Jobs Radar — routine Claude Code distante (aucun secret GitHub)
 
 La routine Jobs Radar ([cowork-routines/jobs-radar.md](cowork-routines/jobs-radar.md), ADR-19) **ne consomme aucun secret GitHub Actions** — elle tourne en remote sur claude.ai, pas dans un workflow.

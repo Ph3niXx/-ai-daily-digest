@@ -30,8 +30,8 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `zero_state_shown` | `{ideas_count}` | `cockpit/home.jsx` useEffect quand le hero bascule en mode "Tu as fait le tour. Bravo." (tout lu/snoozé + unread global = 0) |
 | `top_card_collapsed` | `{rank}` | `cockpit/home.jsx` `toggleRead()` quand une card du Top du jour passe en `is-read` (collapsed à 56px) |
 | `hero_compact_toggled` | `{state}` (`"compact"` / `"full"`) | `cockpit/home.jsx::toggleHeroCompact()` quand l'utilisateur clique le toggle compact/plein du hero (préférence persistée dans `localStorage.cockpit-hero-compact`) |
-| `mediatheque_search` | `{q_len, results}` | `cockpit/panel-mediatheque.jsx` après réponse AniList (debounce 400 ms) |
-| `mediatheque_add` | `{franchise_root_id, entries, source}` | `cockpit/panel-mediatheque.jsx::addFranchise()` après persistance |
+| `mediatheque_search` | `{q_len, results, sources}` | `cockpit/panel-mediatheque.jsx` après réponse des deux sources en parallèle (debounce 400 ms). `sources` = nombre de sources ayant répondu avec au moins un résultat (0, 1 ou 2) — permet de repérer une source durablement muette |
+| `mediatheque_add` | `{franchise_root_id, entries, source}` | `cockpit/panel-mediatheque.jsx::addFranchise()` après persistance. `source` = `anilist` / `tmdb_tv` / `tmdb_movie` |
 | `mediatheque_progress` | `{entry_kind, delta, completed}` | `cockpit/panel-mediatheque.jsx::writeProgress()` après upsert réussi |
 | `mediatheque_remove` | `{franchise_root_id}` | `cockpit/panel-mediatheque.jsx::removeFranchise()` après DELETE |
 | `mediatheque_release_ack` | `{event_type}` | `cockpit/panel-mediatheque.jsx::ackRelease()` après PATCH |
@@ -41,6 +41,10 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `mediatheque_week_click` | `{days_ahead, entry_kind}` | `cockpit/panel-mediatheque.jsx::MdtWeek` clic sur une diffusion de l'agenda « Cette semaine » ou de sa ligne « plus tard » (`days_ahead` = 0 pour aujourd'hui, `null` pour une entrée sans date) |
 | `mediatheque_collection_toggle` | `{open, count}` | `cockpit/panel-mediatheque.jsx::MdtCollection` pli/dépli manuel de la section « Ma collection » |
 | `mediatheque_filter_local` | `{q_len, matches}` | `cockpit/panel-mediatheque.jsx::PanelMediatheque` requête locale stabilisée (debounce 400 ms), avant tout appel AniList |
+| `mediatheque_tonight_budget` | `{budget_min, candidates}` | `cockpit/panel-mediatheque.jsx::pickBudget()` au tap sur une pastille de temps dispo (`budget_min` = `30`, `60` ou `null` pour « 2 h+ ») |
+| `mediatheque_tonight_pick` | `{role, media_type, runtime_minutes, budget_min}` | `cockpit/panel-mediatheque.jsx::MdtTonight` clic sur le CTA d'une proposition (`role` = `fresh` / `resume` / `discover`) |
+| `mediatheque_tonight_empty` | `{budget_min, hour}` | `cockpit/panel-mediatheque.jsx::PanelMediatheque` rendu d'une bande « Ce soir » sans aucune proposition — signal produit : budget trop serré ou bibliothèque à jour |
+| `mediatheque_type_filter` | `{types, count}` | `cockpit/panel-mediatheque.jsx::toggleType()` changement des chips Anime / Séries / Films. Jamais émis avec `count: 0` — le dernier type actif ne peut pas être décoché |
 
 ## Règle de maintenance
 

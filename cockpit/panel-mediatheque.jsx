@@ -24,6 +24,34 @@ function mdtCurLabel(cur, progressById) { return window.mdtView.curLabel(cur, pr
 function nextAiringOf(card) { return window.mdtView.nextAiringOf(card); }
 function pickHero(cards) { return window.mdtView.pickHero(cards); }
 
+// ── Budget « Ce soir » ─────────────────────────────────────────
+// Daté du jour de DÉBUT de session, pas du jour calendaire : entre minuit et
+// 2 h on est encore dans la soirée de la veille. Sans ça, choisir « 2 h+ » à
+// 23 h 50 se réinitialiserait dix minutes plus tard, en plein film.
+const MDT_BUDGET_KEY = "mdt.tonightBudget";
+
+function mdtSessionDay(nowMs) {
+  const d = new Date(nowMs);
+  if (d.getHours() < 2) d.setDate(d.getDate() - 1);
+  // Date locale, pas toISOString() : celui-ci convertit en UTC et ferait
+  // basculer la clé d'un jour dans les fuseaux à l'est de Greenwich.
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+
+function mdtReadBudget(nowMs) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MDT_BUDGET_KEY) || "null");
+    if (raw && raw.d === mdtSessionDay(nowMs)) return raw.b;
+  } catch (_) { /* clé corrompue : on repart du défaut */ }
+  return 60;
+}
+
+function mdtWriteBudget(b, nowMs) {
+  try { localStorage.setItem(MDT_BUDGET_KEY, JSON.stringify({ d: mdtSessionDay(nowMs), b })); }
+  catch (_) { /* quota plein : le budget vit alors le temps du rendu */ }
+}
+
 // kicker + libellé du CTA primaire + affichage du bouton +1 selon le cas.
 function heroCopy(kind) {
   switch (kind) {
@@ -127,26 +155,45 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
         <div className="mdt-modal" onClick={(e) => e.stopPropagation()}><div className="mdt-spinner">Construction de la fiche franchise…</div></div>
       </div>
     );
-    const root = fiche.mediaById[fiche.built.root_id];
-    head = {
-      cover: root.coverImage && root.coverImage.large,
-      banner: root.bannerImage || (root.coverImage && root.coverImage.large) || null,
-      title: (root.title && (root.title.english || root.title.romaji)) || "?",
-      romaji: root.title && root.title.romaji, native: root.title && root.title.native,
-      genres: (root.genres || []).join(" · "), synopsis: null,
-    };
-    rows = fiche.built.entries.map((e) => {
-      const m = fiche.mediaById[e.source_id];
-      return {
-        key: e.source_id, in_main_chain: e.in_main_chain, kind: e.kind, season_number: e.season_number,
-        title: (m.title && (m.title.english || m.title.romaji)) || "?",
-        status: m.status, episodes_total: m.episodes != null ? m.episodes : (m.format === "MOVIE" ? 1 : null),
-        start_date: window.anilist.fuzzyDate(m.startDate),
-        next_episode_number: m.nextAiringEpisode && m.nextAiringEpisode.episode,
-        next_episode_airing_at: m.nextAiringEpisode && m.nextAiringEpisode.airingAt ? new Date(m.nextAiringEpisode.airingAt * 1000).toISOString() : null,
-        entry: null,
+    if (fiche.src === "tmdb") {
+      // On réutilise les mappers, qui produisent déjà le vocabulaire commun :
+      // la fiche n'a jamais à connaître la forme brute de l'API TMDB, et ce
+      // qu'elle montre en prévisualisation est exactement ce qui sera écrit.
+      const fr = window.tmdb.toFranchiseRow(fiche.detail, fiche.kind);
+      head = {
+        cover: fr.cover_url, banner: fr.banner_url || fr.cover_url || null,
+        title: fr.title_english || "?", romaji: null, native: fr.title_native,
+        genres: (fr.genres || []).join(" · "), synopsis: fr.synopsis,
       };
-    });
+      rows = window.tmdb.toEntryRows(fiche.detail, fiche.kind).map((e) => ({
+        key: e.source_id, in_main_chain: e.in_main_chain, kind: e.kind,
+        season_number: e.season_number, title: e.title_english,
+        status: e.airing_status, episodes_total: e.episodes_total,
+        start_date: e.start_date, next_episode_number: e.next_episode_number,
+        next_episode_airing_at: e.next_episode_airing_at, entry: null,
+      }));
+    } else {
+      const root = fiche.mediaById[fiche.built.root_id];
+      head = {
+        cover: root.coverImage && root.coverImage.large,
+        banner: root.bannerImage || (root.coverImage && root.coverImage.large) || null,
+        title: (root.title && (root.title.english || root.title.romaji)) || "?",
+        romaji: root.title && root.title.romaji, native: root.title && root.title.native,
+        genres: (root.genres || []).join(" · "), synopsis: null,
+      };
+      rows = fiche.built.entries.map((e) => {
+        const m = fiche.mediaById[e.source_id];
+        return {
+          key: e.source_id, in_main_chain: e.in_main_chain, kind: e.kind, season_number: e.season_number,
+          title: (m.title && (m.title.english || m.title.romaji)) || "?",
+          status: m.status, episodes_total: m.episodes != null ? m.episodes : (m.format === "MOVIE" ? 1 : null),
+          start_date: window.anilist.fuzzyDate(m.startDate),
+          next_episode_number: m.nextAiringEpisode && m.nextAiringEpisode.episode,
+          next_episode_airing_at: m.nextAiringEpisode && m.nextAiringEpisode.airingAt ? new Date(m.nextAiringEpisode.airingAt * 1000).toISOString() : null,
+          entry: null,
+        };
+      });
+    }
   } else {
     const f = D.franchises.find((x) => x.id === fiche.franchiseId);
     if (!f) return null;
@@ -249,9 +296,15 @@ function MdtReleasesStrip({ D, onAck }) {
 // qu'il remplace donnait le même poids visuel à un jour vide qu'à un jour
 // chargé et laissait ~120 px de large à des titres de 40 caractères : il
 // fallait lire chaque case pour savoir laquelle portait quelque chose.
-function MdtWeek({ D, tick, onOpen }) {
+function MdtWeek({ D, tick, types, onOpen }) {
+  // Le filtre de type s'applique via la map de franchises : buildWeek écarte
+  // déjà toute entrée dont la franchise est absente, on n'a donc pas à
+  // dupliquer la règle côté logique pure.
   const franchiseById = useMdtMemo(
-    () => new Map(D.franchises.map((f) => [f.id, f])), [D.franchises, tick]);
+    () => new Map(D.franchises
+      .filter((f) => types.includes(f.media_type || "anime"))
+      .map((f) => [f.id, f])),
+    [D.franchises, types, tick]);
   const week = useMdtMemo(
     () => window.mdtView.buildWeek(D.entries, franchiseById, Date.now()),
     [D.entries, franchiseById, tick]);
@@ -398,6 +451,110 @@ function MdtHero({ hero, progressById, onOpen, onProgress }) {
   );
 }
 
+// ── Bande « Ce soir » ──────────────────────────────────────────
+// Remplace le hero de 18 h à 2 h. Trois propositions au plus, à rôles
+// distincts — la sélection vit dans window.mdtView.pickTonight().
+const MDT_BUDGETS = [
+  { value: 30, label: "30 min" },
+  { value: 60, label: "1 h" },
+  { value: null, label: "2 h+" },
+];
+
+const MDT_ROLE_LABEL = {
+  fresh: "Ça vient de sortir",
+  resume: "Reprendre",
+  discover: "Sortir du lot",
+};
+
+// ── Filtre par type de média ───────────────────────────────────
+// « Anime » seul par défaut : décision produit, ne pas noyer les franchises
+// existantes sous les films au premier chargement.
+const MDT_TYPE_KEY = "mdt.typeFilter";
+const MDT_TYPES = [
+  { value: "anime", label: "Anime" },
+  { value: "tv", label: "Séries" },
+  { value: "movie", label: "Films" },
+];
+
+function mdtReadTypes() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MDT_TYPE_KEY) || "null");
+    if (Array.isArray(raw) && raw.length) return raw;
+  } catch (_) { /* clé corrompue : on repart du défaut */ }
+  return ["anime"];
+}
+
+function mdtBudgetLabel(budget) {
+  const b = MDT_BUDGETS.find((x) => x.value === budget);
+  return b ? b.label : "1 h";
+}
+
+function MdtTonight({ picks, headline, budget, onBudget, progressById, onOpen, onProgress }) {
+  return (
+    <section className="mdt-tonight">
+      <header className="mdt-tonight-head">
+        <h2 className="mdt-tonight-title">{headline || "Ce soir"}</h2>
+        <div className="mdt-tonight-budgets" role="group" aria-label="Temps disponible">
+          {MDT_BUDGETS.map((b) => (
+            <button key={String(b.value)} type="button"
+              className={"mdt-budget" + (b.value === budget ? " is-active" : "")}
+              aria-pressed={b.value === budget}
+              onClick={() => onBudget(b.value)}>{b.label}</button>
+          ))}
+        </div>
+      </header>
+
+      {picks.length === 0 ? (
+        <div className="mdt-tonight-empty">
+          <p>Rien qui rentre dans {budget === null ? "ta soirée" : mdtBudgetLabel(budget)}.</p>
+          {budget !== null && (
+            <button type="button" className="mdt-tonight-widen" onClick={() => onBudget(null)}>
+              Élargir à 2 h+
+            </button>
+          )}
+        </div>
+      ) : (
+        <ul className="mdt-tonight-list">
+          {picks.map((p) => {
+            const watched = progressById.get(p.entry.id) || 0;
+            const title = p.card.f.title_english || p.card.f.title_romaji || "?";
+            return (
+              <li key={p.role} className="mdt-tonight-card">
+                <button type="button" className="mdt-tonight-cover"
+                  onClick={() => onOpen(p.card.f)} aria-label={title}>
+                  {p.card.f.cover_url
+                    ? <img src={p.card.f.cover_url} alt="" loading="lazy" />
+                    : <span className="mdt-tonight-nocover" aria-hidden="true" />}
+                </button>
+                <div className="mdt-tonight-meta">
+                  <span className="mdt-tonight-role">{MDT_ROLE_LABEL[p.role]}</span>
+                  <span className="mdt-tonight-name" title={title}>{title}</span>
+                  <span className="mdt-tonight-sub">
+                    {window.mdtView.nextEpLabel(p.entry, watched)}
+                    {p.runtime != null ? ` · ${p.runtime} min` : ""}
+                  </span>
+                  <button type="button" className="mdt-tonight-cta"
+                    onClick={() => {
+                      window.track && window.track("mediatheque_tonight_pick", {
+                        role: p.role,
+                        media_type: p.card.f.media_type || "anime",
+                        runtime_minutes: p.runtime,
+                        budget_min: budget,
+                      });
+                      onProgress(p.entry, watched + 1);
+                    }}>
+                    {p.role === "discover" ? "▶ Commencer" : "+1 épisode"}
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function MdtRail({ cards, progressById, onOpen, onProgress }) {
   if (!cards.length) return null;
   return (
@@ -466,7 +623,7 @@ function MdtCard({ f, entries, st, cur, progressById, onOpen }) {
 // Toute la bibliothèque (actives incluses) : c'est la seule vue exhaustive.
 // Repliée par défaut — 36 des 44 franchises sont « Vu » et n'appellent aucune action.
 function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusFilter,
-                         sort, onSort, progressById, onOpen, queryActive, query }) {
+                         types, onToggleType, sort, onSort, progressById, onOpen, queryActive, query }) {
   return (
     <section className="mdt-section" aria-label="Ma collection">
       <div className="mdt-section-head">
@@ -476,6 +633,15 @@ function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusF
           <span className="mdt-section-title">Ma collection</span>
           <span className="mdt-section-count">{visible.length}{visible.length !== total ? ` / ${total}` : ""}</span>
         </button>
+        {open && !queryActive && (
+          <div className="mdt-filters" role="group" aria-label="Filtrer par type de média">
+            {MDT_TYPES.map((t) => (
+              <button key={t.value} className={`mdt-chip mdt-typechip ${types.includes(t.value) ? "is-active" : ""}`}
+                aria-pressed={types.includes(t.value)}
+                onClick={() => onToggleType(t.value)}>{t.label}</button>
+            ))}
+          </div>
+        )}
         {open && !queryActive && (
           <div className="mdt-filters" role="group" aria-label="Filtrer par statut">
             {[["all", "Tous"], ["to_watch", "À voir"], ["watching", "En cours"], ["seen", "Vu"], ["shelved", "Mis de côté"]].map(([id, label]) => (
@@ -540,6 +706,10 @@ function PanelMediatheque({ data, onNavigate }) {
   const queryActive = q.length >= 1;      // filtrage local instantané
   const searching = q.length >= 3;        // seuil d'appel AniList (inchangé)
   const [results, setResults] = useMdtState(null);   // null = idle, [] = zéro résultat
+  const [types, setTypes] = useMdtState(mdtReadTypes);
+  // Même pattern que lastfm_api_key (panel-musique.jsx) : clé plate dans
+  // user_profile, lue au Tier 1. Absente => la recherche n'interroge qu'AniList.
+  const tmdbKey = ((window.PROFILE_DATA && window.PROFILE_DATA._values) || {}).tmdb_api_key || null;
   const [searchErr, setSearchErr] = useMdtState(null);
   const inSearchView = queryActive && view === "search"; // corps = résultats AniList ; sinon = bibliothèque
   // Bibliothèque vide : la collection est forcée ouverte, sinon son en-tête ne
@@ -570,22 +740,52 @@ function PanelMediatheque({ data, onNavigate }) {
     return () => clearTimeout(t);
   }, [q, queryActive]);
 
+  // Les deux sources sont interrogées EN PARALLÈLE et leurs résultats fusionnés
+  // dans une forme commune : le rendu n'a alors aucun `if (src === …)`, et une
+  // troisième source ne toucherait que cette fonction.
   useMdtEffect(() => {
     if (!searching) { setResults(null); setSearchErr(null); return; }
     let cancelled = false;
     const t = setTimeout(async () => {
-      try {
-        const media = await window.anilist.searchAnime(q);
-        if (cancelled) return;
-        setResults(media);
-        setSearchErr(null);
-        window.track && window.track("mediatheque_search", { q_len: q.length, results: media.length });
-      } catch (e) {
-        if (!cancelled) { setResults([]); setSearchErr("AniList ne répond pas — réessaie dans un instant."); }
-      }
+      const [ani, tmdb] = await Promise.allSettled([
+        window.anilist.searchAnime(q),
+        tmdbKey && window.tmdb ? window.tmdb.search(q, tmdbKey) : Promise.resolve([]),
+      ]);
+      if (cancelled) return;
+
+      const aniRows = ani.status === "fulfilled" ? ani.value.map((m) => ({
+        src: "anilist", kind: null, id: m.id,
+        title: (m.title && (m.title.english || m.title.romaji)) || "?",
+        native: (m.title && m.title.native) || null,
+        year: (m.startDate && m.startDate.year) || null,
+        format: m.format || null, poster: (m.coverImage && m.coverImage.large) || null,
+        genres: m.genres || [], badge: "Anime", score: m.averageScore || 0,
+      })) : [];
+
+      const tmdbRows = tmdb.status === "fulfilled" ? tmdb.value.map((r) => ({
+        src: "tmdb", kind: r.kind, id: r.tmdb_id,
+        title: r.title, native: null, year: r.year ? Number(r.year) : null,
+        format: r.kind === "tv" ? "TV" : "MOVIE", poster: r.poster_url,
+        genres: [], badge: r.kind === "tv" ? "Série" : "Film",
+        // popularity TMDB n'a pas la même échelle qu'averageScore : on la
+        // ramène sur 0-100 pour que le tri commun ait un sens.
+        score: Math.min(100, Math.round(r.popularity || 0)),
+      })) : [];
+
+      // Une source qui tombe ne doit pas masquer l'autre : on affiche ce qu'on
+      // a et on le signale, plutôt qu'un écran d'erreur alors que la moitié du
+      // résultat est disponible. Erreur bloquante seulement si TOUT a échoué.
+      const failed = [ani, tmdb].filter((p) => p.status === "rejected").length;
+      setResults([...aniRows, ...tmdbRows].sort((a, b) => b.score - a.score));
+      setSearchErr(failed === 2 ? "Aucune source ne répond — réessaie dans un instant."
+        : failed === 1 ? "Une source n'a pas répondu — résultats partiels." : null);
+      window.track && window.track("mediatheque_search", {
+        q_len: q.length, results: aniRows.length + tmdbRows.length,
+        sources: (aniRows.length ? 1 : 0) + (tmdbRows.length ? 1 : 0),
+      });
     }, 400);
     return () => { cancelled = true; clearTimeout(t); };
-  }, [q, searching]);
+  }, [q, searching, tmdbKey]);
 
   const entriesByFranchise = useMdtMemo(() => {
     const map = new Map();
@@ -609,7 +809,12 @@ function PanelMediatheque({ data, onNavigate }) {
     return map;
   }, [D.progress, tick]);
 
-  const libSourceIds = useMdtMemo(() => new Set(D.entries.map((e) => e.source_id)), [D.entries, tick]);
+  const libSourceIds = useMdtMemo(
+    // La cle porte la source : un id TMDB et un id AniList peuvent etre le
+    // meme nombre. `tmdb_season` se replie sur `tmdb` car un resultat de
+    // recherche designe la serie entiere, pas une saison.
+    () => new Set(D.entries.map((e) => `${e.source.startsWith("tmdb") ? "tmdb" : e.source}:${e.source_id}`)),
+    [D.entries, tick]);
 
   const cards = useMdtMemo(() => {
     return D.franchises.map((f) => {
@@ -634,7 +839,7 @@ function PanelMediatheque({ data, onNavigate }) {
     // bibliothèque, mises de côté comprises (chercher doit retrouver ce qu'on a rangé).
     let list = localMatches;
     if (!queryActive) {
-      list = cards;
+      list = typedCards;
       if (statusFilter === "shelved") {
         list = list.filter((c) => c.f.shelved);
       } else {
@@ -650,46 +855,124 @@ function PanelMediatheque({ data, onNavigate }) {
       alpha: (a, b) => (a.f.title_english || a.f.title_romaji || "").localeCompare(b.f.title_english || b.f.title_romaji || ""),
     };
     return [...list].sort(bySort[sort] || bySort.activity);
-  }, [cards, localMatches, queryActive, statusFilter, sort]);
+  }, [typedCards, localMatches, queryActive, statusFilter, sort]);
 
   // Le gate de rendu ({!inSearchView && …}) porte seul la visibilité ; on calcule
   // toujours le vrai pick pour éviter que le hero d'accueil vide s'affiche par-dessus
   // une grille pleine quand on revient sur « Ma bibliothèque » pendant une recherche.
   const hero = useMdtMemo(() => pickHero(cards), [cards]);
 
-  // Le hero met déjà en avant une franchise « en cours » (pickHero règle 1) :
-  // le rail affiche les autres pour qu'un même titre n'apparaisse pas deux fois.
-  const railCards = useMdtMemo(
-    () => window.mdtView.pickRail(cards, hero && hero.card ? hero.card.f.id : null),
-    [cards, hero]);
+  // Les chips gouvernent la NAVIGATION (collection, rail, agenda), jamais la
+  // décision : `pickTonight` lit `cards`, pas `typedCards`. Filtrer « Ce soir »
+  // sur l'anime rendrait runtime_minutes et le budget « 2 h+ » inutiles,
+  // puisqu'un épisode d'anime dure 24 minutes. On filtre quand on explore, pas
+  // quand on demande quoi regarder.
+  const typedCards = useMdtMemo(
+    () => cards.filter((c) => types.includes(c.f.media_type || "anime")),
+    [cards, types]);
 
-  async function openPreview(anchorId) {
+  // ── « Ce soir » ────────────────────────────────────────────
+  // De 18 h à 2 h, la bande remplace le hero. Le reste de la journée, rien
+  // n'est calculé : `evening` est faux et `tonight` reste vide.
+  const [budget, setBudget] = useMdtState(() => mdtReadBudget(Date.now()));
+  const evening = useMdtMemo(() => window.mdtView.isEvening(Date.now()), [tick]);
+  const dayLoad = D.dayLoad || null;
+
+  const tonight = useMdtMemo(
+    () => (evening
+      ? window.mdtView.pickTonight(cards, progressById, { budgetMin: budget, dayLoad }, Date.now())
+      : []),
+    [evening, cards, progressById, budget, dayLoad, tick]);
+
+  const tonightHeadline = useMdtMemo(
+    () => window.mdtView.tonightHeadline(tonight, { budgetMin: budget, dayLoad }, Date.now()),
+    [tonight, budget, dayLoad, tick]);
+
+  function toggleType(value) {
+    // Jamais zéro type actif : une collection vide sans raison visible se lit
+    // comme un bug. Décocher le dernier type le laisse actif.
+    const next = types.includes(value)
+      ? (types.length > 1 ? types.filter((t) => t !== value) : types)
+      : [...types, value];
+    if (next === types) return;
+    setTypes(next);
+    try { localStorage.setItem(MDT_TYPE_KEY, JSON.stringify(next)); } catch (_) {}
+    window.track && window.track("mediatheque_type_filter", { types: next, count: next.length });
+  }
+
+  function pickBudget(value) {
+    setBudget(value);
+    mdtWriteBudget(value, Date.now());
+    window.track && window.track("mediatheque_tonight_budget",
+      { budget_min: value, candidates: tonight.length });
+  }
+
+  // L'état vide est un signal produit : si « Ce soir » ne propose rien, c'est
+  // que le budget est trop serré ou la bibliothèque à jour. On veut le savoir.
+  useMdtEffect(() => {
+    if (evening && !tonight.length) {
+      window.track && window.track("mediatheque_tonight_empty",
+        { budget_min: budget, hour: new Date().getHours() });
+    }
+  }, [evening, tonight.length, budget]);
+
+  // Un même titre ne doit jamais apparaître deux fois : le rail retire ce que
+  // la page met déjà en avant — le hero en journée, « Ce soir » après 18 h.
+  const railCards = useMdtMemo(
+    () => window.mdtView.pickRail(typedCards, evening
+      ? tonight.map((p) => p.card.f.id)
+      : (hero && hero.card ? [hero.card.f.id] : [])),
+    [typedCards, hero, tonight, evening]);
+
+  // `res` est une ligne de résultat normalisée ({src, kind, id, …}). La fiche
+  // de prévisualisation porte désormais sa source pour qu'addFranchise sache
+  // quel mapper appeler.
+  async function openPreview(res) {
     setFiche({ mode: "preview", loading: true });
     try {
-      const { built, mediaById } = await window.anilist.fetchFranchiseLive(anchorId);
-      const existing = D.franchises.find((f) => f.source_root_id === built.root_id);
+      if (res.src === "tmdb") {
+        const { detail, kind } = await window.tmdb.fetchFranchiseLive(res.id, res.kind, tmdbKey);
+        // Dédup par (source, id) et non par id seul : les ids TMDB et AniList
+        // vivent dans des namespaces distincts et peuvent collider.
+        const src = kind === "tv" ? "tmdb_tv" : "tmdb_movie";
+        const existing = D.franchises.find((f) => f.source === src && f.source_root_id === detail.id);
+        if (existing) { setFiche({ mode: "library", franchiseId: existing.id }); return; }
+        setFiche({ mode: "preview", src: "tmdb", detail, kind });
+        return;
+      }
+      const { built, mediaById } = await window.anilist.fetchFranchiseLive(res.id);
+      const existing = D.franchises.find((f) => f.source === "anilist" && f.source_root_id === built.root_id);
       if (existing) { setFiche({ mode: "library", franchiseId: existing.id }); return; }
-      setFiche({ mode: "preview", built, mediaById });
+      setFiche({ mode: "preview", src: "anilist", built, mediaById });
     } catch (e) {
       setFiche(null);
-      window.cockpitToast && cockpitToast("Fiche AniList indisponible — réessaie.", { kind: "error" });
+      window.cockpitToast && cockpitToast("Fiche indisponible — réessaie.", { kind: "error" });
     }
   }
 
-  async function addFranchise(built, mediaById) {
+  async function addFranchise(fiche) {
     const base = window.SUPABASE_URL + "/rest/v1/";
-    const frRow = window.anilist.toFranchiseRow(built, mediaById);
+    const isTmdb = fiche.src === "tmdb";
+    const frRow = isTmdb
+      ? window.tmdb.toFranchiseRow(fiche.detail, fiche.kind)
+      : window.anilist.toFranchiseRow(fiche.built, fiche.mediaById);
+    const rootId = isTmdb ? fiche.detail.id : fiche.built.root_id;
     let created = null;
     try {
       const [fr] = await window.sb.postJSON(base + "media_franchises", frRow);
       created = fr;
-      const entryRows = window.anilist.toEntryRows(built, mediaById).map((r) => ({ ...r, franchise_id: fr.id }));
+      const rows = isTmdb
+        ? window.tmdb.toEntryRows(fiche.detail, fiche.kind)
+        : window.anilist.toEntryRows(fiche.built, fiche.mediaById);
+      const entryRows = rows.map((r) => ({ ...r, franchise_id: fr.id }));
       const savedEntries = await window.sb.postJSON(base + "media_entries", entryRows);
       window.MEDIATHEQUE_DATA.franchises.unshift(fr);
       window.MEDIATHEQUE_DATA.entries.push(...savedEntries);
       setTick((t) => t + 1);
       setFiche({ mode: "library", franchiseId: fr.id });
-      window.track && window.track("mediatheque_add", { franchise_root_id: built.root_id, entries: savedEntries.length, source: "anilist" });
+      window.track && window.track("mediatheque_add", {
+        franchise_root_id: rootId, entries: savedEntries.length, source: frRow.source,
+      });
       cockpitToast(`${fr.title_english || fr.title_romaji} ajouté à ta bibliothèque.`, { kind: "success" });
     } catch (e) {
       if (created) { try { await window.sb.deleteRequest(base + "media_franchises?id=eq." + created.id); } catch (_) {} }
@@ -814,7 +1097,16 @@ function PanelMediatheque({ data, onNavigate }) {
 
       <MdtReleasesStrip D={D} onAck={ackRelease} />
 
-      {!queryActive && (
+      {/* De 18 h à 2 h la décision prime sur la mise en avant : deux surfaces
+          qui se disputent la même place à 22 h, c'est une de trop. */}
+      {!queryActive && evening && (
+        <MdtTonight picks={tonight} headline={tonightHeadline}
+          budget={budget} onBudget={pickBudget} progressById={progressById}
+          onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
+          onProgress={writeProgress} />
+      )}
+
+      {!queryActive && !evening && (
         <MdtHero hero={hero} progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress} />
@@ -827,7 +1119,8 @@ function PanelMediatheque({ data, onNavigate }) {
       )}
 
       {!queryActive && (
-        <MdtWeek D={D} tick={tick} onOpen={(id) => setFiche({ mode: "library", franchiseId: id })} />
+        <MdtWeek D={D} tick={tick} types={types}
+          onOpen={(id) => setFiche({ mode: "library", franchiseId: id })} />
       )}
 
       <div className="mdt-toolbar">
@@ -849,28 +1142,32 @@ function PanelMediatheque({ data, onNavigate }) {
           </button>
           <button className={`mdt-viewtoggle-btn ${view === "search" ? "is-active" : ""}`}
             aria-pressed={view === "search"} onClick={() => setView("search")}>
-            AniList{results ? ` · ${results.length}` : ""}
+            En ligne{results ? ` · ${results.length}` : ""}
           </button>
         </div>
       )}
 
       {inSearchView ? (
-        !searching ? <div className="mdt-empty">Tape au moins 3 caractères pour chercher sur AniList.</div> :
+        !searching ? <div className="mdt-empty">Tape au moins 3 caractères pour chercher en ligne.</div> :
         results === null ? <div className="mdt-spinner">Recherche…</div> :
-        searchErr ? <div className="mdt-error">{searchErr}</div> :
-        results.length === 0 ? <div className="mdt-empty">Aucun résultat pour « {q} ».</div> : (
+        results.length === 0 ? (
+          searchErr ? <div className="mdt-error">{searchErr}</div>
+            : <div className="mdt-empty">Aucun résultat pour « {q} ».</div>
+        ) : (
           <div className="mdt-results">
             {results.map((m) => {
-              const inLib = libSourceIds.has(m.id);
+              const inLib = libSourceIds.has(`${m.src}:${m.id}`);
               return (
-                <button key={m.id} className="mdt-result" onClick={() => openPreview(m.id)}>
-                  {m.coverImage && m.coverImage.large ? <img src={m.coverImage.large} alt="" loading="lazy" /> : <div style={{ width: 56 }} />}
+                <button key={`${m.src}:${m.id}`} className="mdt-result" onClick={() => openPreview(m)}>
+                  {m.poster ? <img src={m.poster} alt="" loading="lazy" /> : <div style={{ width: 56 }} />}
                   <div>
-                    <p className="mdt-result-title">{(m.title && (m.title.english || m.title.romaji)) || "?"}</p>
+                    <p className="mdt-result-title">
+                      {m.title}<span className="mdt-result-src">{m.badge}</span>
+                    </p>
                     <p className="mdt-result-sub">
-                      {m.format || "?"} · {(m.startDate && m.startDate.year) || "?"}
-                      {m.averageScore ? ` · ${m.averageScore}%` : ""}
-                      {m.title && m.title.native ? ` · ${m.title.native}` : ""}
+                      {m.format || "?"} · {m.year || "?"}
+                      {m.score ? ` · ${m.score}%` : ""}
+                      {m.native ? ` · ${m.native}` : ""}
                     </p>
                     <p className="mdt-result-genres">{(m.genres || []).slice(0, 3).join(" · ")}</p>
                     {inLib && <span className="mdt-inlib">déjà dans ta bibliothèque</span>}
@@ -878,6 +1175,8 @@ function PanelMediatheque({ data, onNavigate }) {
                 </button>
               );
             })}
+            {/* Une source muette ne masque pas l'autre : on le dit en pied. */}
+            {searchErr && <p className="mdt-results-partial">{searchErr}</p>}
           </div>
         )
       ) : (
@@ -886,6 +1185,7 @@ function PanelMediatheque({ data, onNavigate }) {
           open={collectionOpen || queryActive || libraryEmpty}
           onToggle={toggleCollection}
           statusFilter={statusFilter} onStatusFilter={setStatusFilter}
+          types={types} onToggleType={toggleType}
           sort={sort} onSort={setSort}
           progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
@@ -896,7 +1196,7 @@ function PanelMediatheque({ data, onNavigate }) {
         <FicheFranchise
           fiche={fiche} D={D} progressById={progressById} ratingById={ratingById}
           onClose={() => setFiche(null)}
-          onAdd={fiche.mode === "preview" && fiche.built ? () => addFranchise(fiche.built, fiche.mediaById) : null}
+          onAdd={fiche.mode === "preview" && (fiche.built || fiche.detail) ? () => addFranchise(fiche) : null}
           onProgress={fiche.mode === "library" ? writeProgress : null}
           onRemove={fiche.mode === "library" ? () => removeFranchise(fiche.franchiseId) : null}
           onShelve={fiche.mode === "library" ? () => toggleShelved(fiche.franchiseId) : null}
