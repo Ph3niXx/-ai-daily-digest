@@ -830,6 +830,20 @@ function PanelMediatheque({ data, onNavigate }) {
     });
   }, [D.franchises, entriesByFranchise, progressById, tick]);
 
+  // Les chips gouvernent la NAVIGATION (collection, rail, agenda), jamais la
+  // décision : `pickTonight` lit `cards`, pas `typedCards`. Filtrer « Ce soir »
+  // sur l'anime rendrait runtime_minutes et le budget « 2 h+ » inutiles,
+  // puisqu'un épisode d'anime dure 24 minutes. On filtre quand on explore, pas
+  // quand on demande quoi regarder.
+  const typedCards = useMdtMemo(
+    () => cards.filter((c) => types.includes(c.f.media_type || "anime")),
+    [cards, types]);
+
+  // ⚠️ typedCards doit rester DÉCLARÉ AVANT `visible`, qui le consomme.
+  // Babel standalone transpile `const` en `var` : une utilisation trop tôt ne
+  // lève pas d'erreur de zone morte mais donne `undefined.filter`, et le panel
+  // entier tombe dans l'error boundary. Bug vécu en prod le 2026-07-25.
+
   const localMatches = useMdtMemo(
     () => (queryActive ? cards.filter((c) => window.mdtView.matchesQuery(c.f, q)) : []),
     [cards, q, queryActive]);
@@ -861,15 +875,6 @@ function PanelMediatheque({ data, onNavigate }) {
   // toujours le vrai pick pour éviter que le hero d'accueil vide s'affiche par-dessus
   // une grille pleine quand on revient sur « Ma bibliothèque » pendant une recherche.
   const hero = useMdtMemo(() => pickHero(cards), [cards]);
-
-  // Les chips gouvernent la NAVIGATION (collection, rail, agenda), jamais la
-  // décision : `pickTonight` lit `cards`, pas `typedCards`. Filtrer « Ce soir »
-  // sur l'anime rendrait runtime_minutes et le budget « 2 h+ » inutiles,
-  // puisqu'un épisode d'anime dure 24 minutes. On filtre quand on explore, pas
-  // quand on demande quoi regarder.
-  const typedCards = useMdtMemo(
-    () => cards.filter((c) => types.includes(c.f.media_type || "anime")),
-    [cards, types]);
 
   // ── « Ce soir » ────────────────────────────────────────────
   // De 18 h à 2 h, la bande remplace le hero. Le reste de la journée, rien
