@@ -312,6 +312,17 @@
   font-family: var(--font-mono); font-size: 11.5px; cursor: pointer; background: transparent;
   color: var(--tx); border: 1px solid color-mix(in srgb, var(--tx) 30%, transparent); }
 
+/* Résultats de recherche multi-sources. La pastille de provenance reste
+   discrète : elle désambiguïse, elle ne hiérarchise pas. */
+.mdt-result-src { margin-left: 8px; padding: 1px 7px; border-radius: 999px;
+  font-family: var(--font-mono); font-size: 9.5px; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--tx3); vertical-align: middle;
+  border: 1px solid color-mix(in srgb, var(--tx) 14%, transparent); }
+/* Une source muette ne masque pas l'autre : on le dit en pied de liste plutot
+   qu'en ecran d'erreur, tant qu'il reste des resultats a montrer. */
+.mdt-results-partial { grid-column: 1 / -1; margin: 4px 0 0;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--tx3); }
+
 @media (max-width: 720px) {
   .panel-mediatheque { padding: 24px 16px 60px; }
   .mdt-tonight-head { flex-direction: column; align-items: flex-start; gap: 10px; }

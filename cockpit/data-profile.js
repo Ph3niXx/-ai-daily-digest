@@ -18,6 +18,7 @@ window.PROFILE_HIDDEN_KEYS = [
   "jarvis_tunnel_url",
   "lastfm_api_key",
   "lastfm_username",
+  "tmdb_api_key",
 ];
 
 // Labels FR pour les champs connus.

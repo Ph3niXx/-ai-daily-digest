@@ -1,17 +1,19 @@
 # Médiathèque
 
-> Bibliothèque anime personnelle : recherche, suivi de progression par saison, alerte sur les nouvelles sorties.
+> Bibliothèque personnelle anime, séries et films : recherche deux sources, suivi de progression par saison, alerte sur les nouvelles sorties, et une bande « Ce soir » qui tranche quoi regarder selon le temps dispo.
 
 ## Scope
 perso
 
 ## Finalité fonctionnelle
-Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec ses saisons et leurs dates, déclarer sa progression épisode par épisode, et être prévenu dès qu'une nouvelle saison d'un anime suivi est annoncée ou commence à être diffusée — sans dépendre d'un site tiers. Première brique d'une médiathèque élargie (mangas, livres, films, séries).
+Suivre tout ce qu'on regarde au même endroit — animes (AniList), séries et films (TMDB) : retrouver un titre avec ses saisons et leurs dates, déclarer sa progression épisode par épisode, être prévenu dès qu'une nouvelle saison d'un titre suivi est annoncée ou commence à être diffusée, et savoir quoi lancer le soir selon le temps qu'on a — sans dépendre d'un site tiers.
+
+Toute source est traduite dans un vocabulaire unique à l'ingestion (ADR-29) : la logique d'affichage ne sait pas d'où vient une entrée. Mangas et livres restent hors périmètre.
 
 ## Parcours utilisateur
 1. **Le soir (18 h → 2 h)** — l'écran s'ouvre sur la bande « Ce soir » à la place du hero : au plus trois propositions, une par rôle (ce qui vient de sortir, reprendre, sortir du lot). L'utilisateur indique son temps dispo d'un tap (30 min / 1 h / 2 h+) et les propositions se recalculent ; le choix est mémorisé pour la soirée. Un clic sur le bouton d'une carte fait +1 épisode sans ouvrir la fiche.
 2. Clic sidebar « Médiathèque » — l'écran s'ouvre sur ce qui est actif : sorties non acquittées, hero (ou bande « Ce soir » après 18 h), rail « Continuer à regarder » et agenda des 7 prochains jours. La collection complète reste repliée en bas.
-3. Tape le nom d'un anime dans le champ de recherche — sa bibliothèque est filtrée dès le 1er caractère ; une bascule « Ma bibliothèque · N | AniList · M » permet de passer aux résultats distants et de revenir sans perdre la recherche.
+3. Tape un titre dans le champ de recherche — sa bibliothèque est filtrée dès le 1er caractère ; une bascule « Ma bibliothèque · N | En ligne · M » permet de passer aux résultats distants (AniList **et** TMDB interrogés en parallèle, chaque carte portant sa pastille Anime / Série / Film) et de revenir sans perdre la recherche.
 4. Clic sur un résultat — la fiche franchise se construit : saisons numérotées et datées, films canon, bonus, prochaines sorties.
 5. Clic « Ajouter à ma bibliothèque » — la franchise rejoint « Ma collection » avec le statut « À voir ». Elle n'apparaît pas dans le rail (réservé à ce qui est entamé) ; on la retrouve en dépliant la collection ou via son chip « À voir ». Elle peut en revanche être mise en avant par le hero, qui bascule sur « À découvrir » quand rien n'est en cours.
 6. Ouvre une fiche de sa bibliothèque et déclare sa progression saison par saison (+1, saisie directe, « ✓ vue ») — le statut global (À voir / En cours / En cours · à jour / Vu) se met à jour tout seul.
@@ -21,7 +23,9 @@ Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec 
 - **Bande « Ce soir »** : de 18 h à 2 h du matin, elle prend la place du hero pour poser une seule question — qu'est-ce que je regarde avec le temps que j'ai. Au plus trois propositions, chacune avec son rôle : ce qui vient de sortir aujourd'hui et n'est pas vu, la série à reprendre, et un titre jamais commencé qui remplit le créneau. Un rôle sans candidat disparaît : la bande affiche trois, deux, une ou zéro proposition, jamais de remplissage. Le reste de la journée, la médiathèque est inchangée.
 - **Temps dispo en un tap** : trois pastilles (30 min / 1 h / 2 h+) filtrent les propositions sur la durée réelle d'un épisode ou d'un film. Le choix vaut pour la soirée entière, minuit compris — décider « 2 h+ » à 23 h 50 ne se réinitialise pas dix minutes plus tard. Un titre dont la durée est inconnue reste proposé, simplement classé après ceux dont la durée colle.
 - **Bande sensible à l'heure et à la journée** : passé 23 h, les formats longs reculent derrière les courts et la bande le dit. Une journée chargée en réunions change la phrase d'accroche, jamais le classement — et la bande ne commente ni le sport ni le sommeil.
-- **Recherche en direct** : un seul champ, bibliothèque d'abord. Dès 1 caractère il filtre la bibliothèque (titres anglais/romaji/japonais, insensible à la casse et aux accents, mises de côté comprises) ; à partir de 3 caractères il interroge aussi AniList (format, année, genres, score ; les fiches déjà en bibliothèque sont signalées). La bascule segmentée « Ma bibliothèque · N | AniList · M » atterrit sur la bibliothèque dès qu'il y a une correspondance locale.
+- **Recherche deux sources fusionnées** : un seul champ, une seule bascule. AniList et TMDB sont interrogés en parallèle et leurs résultats mélangés, triés par pertinence, chacun avec une pastille discrète de provenance. Si une source ne répond pas, l'autre s'affiche quand même et la liste le dit en pied — pas d'écran d'erreur tant qu'il reste quelque chose à montrer.
+- **Filtre par type de média** : trois chips Anime / Séries / Films dans la collection, mémorisés entre les sessions, **Anime seul actif par défaut** pour ne pas noyer la bibliothèque existante. Ils gouvernent la collection, le rail et l'agenda — mais **pas** la bande « Ce soir », qui regarde toujours toute la bibliothèque : on filtre quand on explore, pas quand on demande quoi regarder. Le dernier type actif ne peut pas être décoché.
+- **Recherche en direct** : bibliothèque d'abord. Dès 1 caractère elle filtre la bibliothèque (titres anglais/romaji/japonais, insensible à la casse et aux accents, mises de côté comprises) ; à partir de 3 caractères elle interroge aussi les sources en ligne (format, année, genres, score ; les fiches déjà en bibliothèque sont signalées). La bascule segmentée « Ma bibliothèque · N | En ligne · M » atterrit sur la bibliothèque dès qu'il y a une correspondance locale.
 - **Fiche franchise** : toutes les saisons regroupées et numérotées avec dates et nombre d'épisodes, films canon à leur place chronologique, OVA/bonus à part ; prochaine diffusion datée pour les saisons en cours.
 - **Bibliothèque** : hero cinématique mettant en avant le titre le plus pertinent, puis trois rayons — rail « Continuer à regarder » (cartes bannière 16:9 de largeur fixe avec `+1 épisode` visible sans survol, la franchise du hero exclue), agenda des 7 prochains jours de diffusion, et « Ma collection » repliée (grille dense de posters, chips de statut, tri). Au filtre par défaut la collection contient **toutes les franchises actives** ; les mises de côté se retrouvent via leur chip dédié ou par la recherche. Son état plié/déplié est mémorisé (forcé ouvert tant que la bibliothèque est vide).
 - **Statut manuel « mis de côté »** : ranger une franchise qu'on ne suit plus (bouton dans la fiche). Elle sort des buckets actifs (À voir / En cours / Vu / « Tous ») et n'apparaît que sous son chip dédié « Mis de côté » ; progression et notes conservées, réactivable à tout moment.
@@ -58,15 +62,18 @@ Suivre tous les animes vus / à voir au même endroit : retrouver un anime avec 
 `activity_briefs` est lu en plus au Tier 2 — une ligne, celle du jour, pour `stats.meetings`. Elle ne sert qu'à la phrase d'accroche de « Ce soir » et son absence (observer local éteint) n'a aucun effet visible au-delà d'une formulation neutre.
 
 ## Back — pipelines qui alimentent
-- `anime_tracker_sync` (quotidien 07:30 UTC) → refresh des entrées suivies + détection new_entry / airing_started / date_announced → `media_releases`.
+- `anime_tracker_sync` (quotidien 07:30 UTC) → refresh des entrées suivies + détection new_entry / airing_started / date_announced → `media_releases`. Borné à `source=eq.anilist`.
+- `tmdb_tracker_sync` (quotidien 07:45 UTC) → même contrat pour les films et séries, borné à `source in (tmdb_movie, tmdb_tv / tmdb_season)`. Socle partagé : `pipelines/media_tracker_common.py`. Sans `TMDB_API_KEY`, sortie `[skip]` code 0 — le workflow reste vert.
 
 ## Appels externes
-AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : recherche + walk à l'ajout (≥700 ms entre requêtes). Pipeline : batchs id_in de 25, throttle 2,5 s. Les deux respectent Retry-After sur 429.
+**TMDB REST v3** `https://api.themoviedb.org/3` — clé requise. Front : `/search/multi` puis `/{tv|movie}/{id}`, clé lue dans `user_profile.tmdb_api_key`. Pipeline : mêmes endpoints avec le secret `TMDB_API_KEY`, throttle 250 ms. Retry-After respecté des deux côtés. Jaquettes servies par `https://image.tmdb.org`.
+
+**AniList GraphQL** `https://graphql.anilist.co` — public, sans clé. Front : recherche + walk à l'ajout (≥700 ms entre requêtes). Pipeline : batchs id_in de 25, throttle 2,5 s. Les deux respectent Retry-After sur 429.
 
 ## Dépendances
 - Onglets : Brief du jour (encart sorties)
 - Pipelines : anime_tracker_sync
-- Variables d'env / secrets : SUPABASE_URL + SUPABASE_SERVICE_KEY (pipeline) — aucun secret nouveau
+- Variables d'env / secrets : SUPABASE_URL + SUPABASE_SERVICE_KEY (pipelines) + **TMDB_API_KEY**, qui vit à **deux** endroits — secret GitHub pour `tmdb_tracker_sync`, et `user_profile.tmdb_api_key` pour la recherche front qui ne peut pas lire un secret CI. Rotation à faire aux deux endroits ([secrets.md](../secrets.md))
 
 ## États & edge cases
 - Bibliothèque vide → invite à chercher. AniList down/429 → message d'erreur sur la recherche, bibliothèque et progression intactes (données locales).
@@ -74,6 +81,9 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - Saison annoncée sans date → numérotée en dernier, stepper désactivé. Épisodes plafonnés aux sortis pour une saison en diffusion.
 - Un report de date met à jour le calendrier sans re-déclencher d'événement.
 - Mettre de côté depuis un bucket actif → la carte disparaît de la vue courante (sauf filtre « Mis de côté »). Réactiver → retour dans le bucket dérivé de la progression.
+- **Clé TMDB absente** : la recherche n'interroge qu'AniList et le signale en pied de liste. Aucun blocage.
+- **Une source qui tombe** : les résultats de l'autre s'affichent avec la mention « Une source n'a pas répondu — résultats partiels ». Écran d'erreur seulement si les deux échouent.
+- **Dernier chip de type décoché** : refusé silencieusement — une collection vide sans raison visible se lirait comme un bug.
 - **Avant 18 h** : la bande « Ce soir » n'est pas rendue et `pickTonight()` n'est pas appelé — le hero reprend sa place, la page est strictement celle d'avant.
 - **Passage de minuit** : le budget est daté du jour de *début* de session, il ne se réinitialise donc pas entre 23 h 50 et 00 h 10. Il retombe sur « 1 h » à la session suivante.
 - **Aucune proposition** : bloc explicite « Rien qui rentre dans X » + bouton pour élargir à 2 h+, puis la recherche. Jamais de remplissage avec un titre hors budget.
@@ -83,12 +93,15 @@ AniList GraphQL `https://graphql.anilist.co` — public, sans clé. Front : rech
 - « Vu » vs « En cours · à jour » : un anime bascule « Vu » dès qu'**aucune saison ne diffuse actuellement** (aucune `RELEASING`) et que tous les épisodes sortis sont vus — y compris s'il a une saison future annoncée mais pas encore diffusée. Il repasse « En cours » quand un nouvel épisode sort non vu (`released` remonté par le pipeline quotidien). « En cours · à jour » est réservé au cas « saison en diffusion et rattrapée ».
 
 ## Limitations connues / TODO
-- [ ] v1 anime uniquement — mangas/livres/films/séries prévus (schéma media_type prêt)
+- [ ] mangas et livres non couverts — le schéma `media_type` les accepterait, mais la progression en chapitres/pages et l'absence de calendrier de diffusion demandent leur propre décision
+- [ ] doublon cross-source assumé : un anime référencé aussi sur TMDB donne deux franchises distinctes. Dédupliquer demanderait une table de correspondance (ADR-29)
 - [ ] pas de note/score au niveau franchise (agrégée)
 - [ ] import d'historique MAL/AniList non couvert
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
+2026-07-25 — films & séries via TMDB. Seconde source traduite dans le vocabulaire AniList **à l'ingestion** (ADR-29) : `cockpit/lib/mediatheque-view.js` n'a pas bougé d'une ligne pour l'accueillir — c'est le critère de réussite de la traduction, vérifié par des tests qui font tourner les fonctions dérivées sur des lignes TMDB. `source` discrimine le namespace (`tmdb_movie` / `tmdb_season`) parce que les ids de films et de saisons TMDB peuvent collider sous `UNIQUE(source, source_id)`. Recherche fusionnée deux sources avec dégradation gracieuse, chips de type (Anime par défaut) qui gouvernent la navigation mais jamais « Ce soir ». Nouveau pipeline `tmdb_tracker_sync` à 07:45 UTC, socle partagé extrait dans `media_tracker_common.py`.
+
 2026-07-25 — bande « Ce soir ». De 18 h à 2 h elle remplace le hero : trois propositions au plus, à rôles distincts (`fresh` / `resume` / `discover`) plutôt qu'un top-3 scoré — trois candidats classés par le même critère se ressemblent et n'aident pas à trancher. Un rôle sans candidat disparaît, aucun remplissage. Filtrage sur le temps dispo choisi en un tap, rendu possible par la nouvelle colonne `media_entries.runtime_minutes` (migration 022, alimentée par `duration` désormais demandé à AniList). Sélection **déterministe** et non LLM : le budget est la variable qui bouge, un appel quotidien serait figé au moment du run. `pickTonight()` / `isEvening()` / `tonightHeadline()` vivent dans `mediatheque-view.js`, testés sous node. `pickRail()` prend désormais une **liste** d'exclusion — l'invariant « un titre n'apparaît jamais deux fois » vaut pour le hero comme pour « Ce soir ». Correctif amont : `anime_tracker_sync.run_sync()` filtre enfin sur `source=eq.anilist` (sans quoi une franchise non-AniList verrait son id envoyé à AniList).
 
 2026-07-25 — lisibilité du parcours actif. Rail « Continuer à regarder » : les cartes ne sont plus à des largeurs différentes (`min-width: 0` — un flex item a `min-width: auto`, soit sa largeur min-content, et le titre en `nowrap` imposait la sienne à toute la carte par-dessus `flex-basis`). Semainier remplacé par un agenda : une ligne par jour qui diffuse avec le chiffre du jour en ancre et la jaquette de chaque série, jours creux repliés en une ligne, « plus tard » éclaté en pastilles. `buildWeek()` porte désormais `cover` sur chaque item. Aucune migration.
