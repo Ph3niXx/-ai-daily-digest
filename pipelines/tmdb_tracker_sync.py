@@ -127,28 +127,66 @@ def _movie_rows(detail):
     }]
 
 
+def _tv_runtime(detail):
+    """Durée d'un épisode.
+
+    TMDB a vidé `episode_run_time` sur les séries modernes (constaté en live sur
+    Severance et Dan Da Dan, 2026-07-25) : la durée ne vit plus que dans les
+    épisodes. Sans ce repli, AUCUNE série n'aurait de durée et le filtre par
+    budget de « Ce soir » serait inerte sur tout le catalogue séries.
+    """
+    declared = detail.get("episode_run_time") or []
+    if declared and declared[0]:
+        return declared[0]
+    for key in ("last_episode_to_air", "next_episode_to_air"):
+        ep = detail.get(key) or {}
+        if ep.get("runtime"):
+            return ep["runtime"]
+    return None
+
+
+def _last_numbered(seasons):
+    """Repli quand next_episode_to_air omet son season_number."""
+    numbered = [s for s in seasons if (s.get("season_number") or 0) >= 1]
+    return numbered[-1]["season_number"] if numbered else None
+
+
 def _tv_rows(detail):
     seasons = sorted(detail.get("seasons") or [], key=lambda s: s.get("season_number") or 0)
     if not seasons:
         return []
 
-    numbered = [s for s in seasons if (s.get("season_number") or 0) >= 1]
-    last_number = numbered[-1]["season_number"] if numbered else None
     show_status = map_status(detail.get("status"))
-    run_times = detail.get("episode_run_time") or []
-    runtime = run_times[0] if run_times else None
+    runtime = _tv_runtime(detail)
     nxt = detail.get("next_episode_to_air") or None
+    # « Returning Series » décrit la SÉRIE, pas une saison : une série entre
+    # deux saisons reste « Returning ». La seule preuve qu'une saison diffuse
+    # en ce moment est l'existence d'un next_episode_to_air, qui désigne
+    # lui-même sa saison — pas forcément la dernière listée, puisqu'une saison
+    # future peut déjà figurer au catalogue.
+    airing_season = None
+    if nxt:
+        airing_season = nxt.get("season_number")
+        if airing_season is None:
+            airing_season = _last_numbered(seasons)
+    today = datetime.now(timezone.utc).date().isoformat()
 
     rows = []
     for i, s in enumerate(seasons):
         number = s.get("season_number") or 0
         is_special = number == 0
-        # Le status TMDB est au niveau SÉRIE : seule la dernière saison en
-        # hérite. Sinon released() lirait next_episode_number - 1 sur une
-        # saison ancienne et sous-compterait ses épisodes.
-        is_last = not is_special and number == last_number
-        status = show_status if is_last else "FINISHED"
-        airing = bool(is_last and status == "RELEASING" and nxt)
+        is_airing = not is_special and airing_season is not None and number == airing_season
+        # Statut dérivé des faits de la saison elle-même, jamais propagé depuis
+        # la série : sans date, sans épisode, ou datée dans le futur => annoncée.
+        if is_airing:
+            status = "RELEASING"
+        elif not s.get("air_date") or s["air_date"] > today or not s.get("episode_count"):
+            status = "NOT_YET_RELEASED"
+        elif show_status == "CANCELLED":
+            status = "CANCELLED"
+        else:
+            status = "FINISHED"
+        airing = bool(is_airing and nxt)
         rows.append({
             "source": "tmdb_season",
             "source_id": s["id"],

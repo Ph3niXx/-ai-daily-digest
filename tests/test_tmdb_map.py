@@ -99,6 +99,62 @@ check("film a sortir => start_date renseignee pour l'agenda",
 check("film a sortir => end_date vide",
       to_entry_rows(FUTURE, "movie")[0]["end_date"], None)
 
+# ── Formes REELLES de l'API (relevees en live le 2026-07-25) ───
+# Trouvees en interrogeant l'API, pas en ecrivant des fixtures : TMDB a vide
+# episode_run_time sur les series modernes, et « Returning Series » ne veut PAS
+# dire qu'une saison diffuse en ce moment.
+
+DANDADAN = {
+    "id": 240411, "name": "DAN DA DAN", "original_name": "ダンダダン",
+    "overview": "…", "genres": [], "poster_path": "/d.jpg", "backdrop_path": None,
+    "status": "Returning Series", "episode_run_time": [],
+    "next_episode_to_air": None,
+    "last_episode_to_air": {"season_number": 1, "episode_number": 24,
+                            "air_date": "2025-09-19", "runtime": 24},
+    "seasons": [{"season_number": 1, "episode_count": 24, "air_date": "2024-10-04", "id": 380001}],
+}
+DD = to_entry_rows(DANDADAN, "tv")
+check("live: episode_run_time vide => repli sur last_episode_to_air.runtime",
+      DD[0]["runtime_minutes"], 24)
+check("live: « Returning Series » SANS next_episode => la saison sortie est FINISHED",
+      DD[0]["airing_status"], "FINISHED")
+
+SEVERANCE = {
+    "id": 95396, "name": "Severance", "original_name": "Severance",
+    "overview": "…", "genres": [], "poster_path": "/s.jpg", "backdrop_path": None,
+    "status": "Returning Series", "episode_run_time": [],
+    "next_episode_to_air": None,
+    "last_episode_to_air": {"season_number": 2, "episode_number": 10,
+                            "air_date": "2025-03-20", "runtime": 76},
+    "seasons": [
+        {"season_number": 0, "episode_count": 1, "air_date": "2021-12-15", "id": 700},
+        {"season_number": 1, "episode_count": 9, "air_date": "2022-02-17", "id": 701},
+        {"season_number": 2, "episode_count": 10, "air_date": "2025-01-16", "id": 702},
+        {"season_number": 3, "episode_count": 0, "air_date": None, "id": 703},
+    ],
+}
+SV = {r["season_number"]: r for r in to_entry_rows(SEVERANCE, "tv")}
+check("live: saison annoncee sans date ni episode => NOT_YET_RELEASED",
+      SV[3]["airing_status"], "NOT_YET_RELEASED")
+check("live: saisons deja sorties => FINISHED",
+      [SV[1]["airing_status"], SV[2]["airing_status"]], ["FINISHED", "FINISHED"])
+check("live: aucune saison marquee RELEASING sans next_episode",
+      len([r for r in to_entry_rows(SEVERANCE, "tv") if r["airing_status"] == "RELEASING"]), 0)
+check("live: duree portee par toutes les saisons via last_episode_to_air",
+      SV[1]["runtime_minutes"], 76)
+
+MID = {**SEVERANCE,
+       "next_episode_to_air": {"season_number": 2, "episode_number": 6,
+                               "air_date": "2026-08-02", "runtime": 70},
+       "last_episode_to_air": {"season_number": 2, "episode_number": 5,
+                               "air_date": "2026-07-26", "runtime": 70}}
+MD = {r["season_number"]: r for r in to_entry_rows(MID, "tv")}
+check("live: RELEASING sur la saison designee par next_episode, pas la derniere listee",
+      [MD[2]["airing_status"], MD[3]["airing_status"]], ["RELEASING", "NOT_YET_RELEASED"])
+check("live: next_episode accroche a cette saison-la", MD[2]["next_episode_number"], 6)
+check("live: episode_run_time renseigne reste prioritaire",
+      to_entry_rows({**MID, "episode_run_time": [52]}, "tv")[1]["runtime_minutes"], 52)
+
 # Le mapper ne fabrique PAS de `id` : c'est l'uuid attribue par Supabase a
 # l'insert. Meme invariant que cote JS.
 check("le mapper ne fabrique pas d'id (attribue par Supabase)",

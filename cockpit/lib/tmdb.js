@@ -88,26 +88,50 @@
     }];
   }
 
+  // TMDB a vidé `episode_run_time` sur les séries modernes (constaté en live
+  // sur Severance et Dan Da Dan, 2026-07-25) : la durée ne vit plus que dans
+  // les épisodes. Sans ce repli, AUCUNE série n'aurait de durée et le filtre
+  // par budget de « Ce soir » serait inerte sur tout le catalogue séries.
+  function tvRuntime(detail) {
+    const declared = (detail.episode_run_time && detail.episode_run_time[0]) || null;
+    if (declared) return declared;
+    const last = detail.last_episode_to_air || null;
+    if (last && last.runtime) return last.runtime;
+    const next = detail.next_episode_to_air || null;
+    if (next && next.runtime) return next.runtime;
+    return null;
+  }
+
   function tvRows(detail) {
     const seasons = (detail.seasons || []).slice()
       .sort((a, b) => (a.season_number || 0) - (b.season_number || 0));
     if (!seasons.length) return [];
 
-    const numbered = seasons.filter((s) => (s.season_number || 0) >= 1);
-    const lastNumber = numbered.length ? numbered[numbered.length - 1].season_number : null;
     const showStatus = mapStatus(detail.status);
-    const runtime = (detail.episode_run_time && detail.episode_run_time[0]) || null;
+    const runtime = tvRuntime(detail);
     const next = detail.next_episode_to_air || null;
+    // « Returning Series » décrit la SÉRIE, pas une saison : une série entre
+    // deux saisons reste « Returning ». La seule preuve qu'une saison diffuse
+    // en ce moment est l'existence d'un next_episode_to_air, qui désigne
+    // lui-même sa saison — pas forcément la dernière listée, puisqu'une saison
+    // future peut déjà figurer au catalogue.
+    const airingSeason = next
+      ? (next.season_number != null ? next.season_number : lastNumberedOf(seasons))
+      : null;
+    const today = new Date().toISOString().slice(0, 10);
 
     return seasons.map((s, i) => {
       const number = s.season_number || 0;
       const isSpecial = number === 0;
-      // Le statut de la série ne vaut que pour sa DERNIÈRE saison. Sans ça,
-      // released() lirait next_episode_number - 1 sur une saison ancienne et
-      // sous-compterait ses épisodes.
-      const isLast = !isSpecial && number === lastNumber;
-      const status = isLast ? showStatus : "FINISHED";
-      const airing = isLast && status === "RELEASING" && next;
+      const isAiring = !isSpecial && airingSeason != null && number === airingSeason;
+      // Statut dérivé des faits de la saison elle-même, jamais propagé depuis
+      // la série : sans date, sans épisode, ou datée dans le futur => annoncée.
+      let status;
+      if (isAiring) status = "RELEASING";
+      else if (!s.air_date || s.air_date > today || !s.episode_count) status = "NOT_YET_RELEASED";
+      else if (showStatus === "CANCELLED") status = "CANCELLED";
+      else status = "FINISHED";
+      const airing = isAiring && next;
       return {
         source: "tmdb_season",
         source_id: s.id,
@@ -135,6 +159,13 @@
         updated_at: new Date().toISOString(),
       };
     });
+  }
+
+  // Repli quand next_episode_to_air omet son season_number : la saison en
+  // diffusion est alors la dernière numérotée du catalogue.
+  function lastNumberedOf(seasons) {
+    const numbered = seasons.filter((s) => (s.season_number || 0) >= 1);
+    return numbered.length ? numbered[numbered.length - 1].season_number : null;
   }
 
   function toEntryRows(detail, kind) {
