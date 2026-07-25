@@ -277,5 +277,103 @@ const W3 = V.buildWeek(LATER_OVERFLOW, FRANCHISES, NOW);
 check("buildWeek: 'plus tard' plafonne a 6 items malgre 9 candidats", W3.later.length, 6);
 check("buildWeek: laterTotal garde le vrai compte avant plafonnage", W3.laterTotal, 9);
 
+// ── isEvening() / pickTonight() ────────────────────────────────
+const at = (h, m = 0) => new Date(2026, 6, 25, h, m, 0).getTime();
+
+check("isEvening: 9 h du matin => non", V.isEvening(at(9)), false);
+check("isEvening: 18 h => oui", V.isEvening(at(18)), true);
+check("isEvening: 23 h => oui", V.isEvening(at(23)), true);
+check("isEvening: 1 h du matin => oui", V.isEvening(at(1)), true);
+check("isEvening: 2 h du matin => non", V.isEvening(at(2)), false);
+
+// Fabrique de cartes. `st` est fourni tel que le panel le calcule.
+function mkCard(id, stId, entries, opts) {
+  const o = opts || {};
+  return {
+    f: { id, source_root_id: id, title_english: id, shelved: !!o.shelved, added_at: o.added_at || "2026-01-01" },
+    entries,
+    st: { id: stId, label: stId },
+    lastTouch: o.lastTouch || 0,
+  };
+}
+function mkEntry(id, o) {
+  return {
+    id, in_main_chain: o.chain !== false, kind: o.kind || "season", season_number: o.season || 1,
+    airing_status: o.status || "FINISHED", episodes_total: o.total != null ? o.total : 12,
+    next_episode_number: o.nextEp || null, next_episode_airing_at: o.airingAt || null,
+    runtime_minutes: o.runtime === undefined ? 24 : o.runtime, sort_order: o.sort || 1,
+  };
+}
+const EMPTY_CTX = { budgetMin: 60, dayLoad: null };
+const roles = (picks) => picks.map((p) => p.role);
+const ids = (picks) => picks.map((p) => p.card.f.id);
+
+check("pickTonight: bibliotheque vide => aucune proposition",
+  V.pickTonight([], new Map(), EMPTY_CTX, at(21)), []);
+
+// « Vient de sortir » : la date stockée est AUJOURD'HUI et déjà passée.
+const FRESH_E = mkEntry("e1", { status: "RELEASING", total: 24, nextEp: 13, airingAt: new Date(at(18)).toISOString() });
+const FRESH = mkCard("fresh", "up_to_date", [FRESH_E]);
+check("pickTonight: episode diffuse aujourd'hui non vu => role fresh",
+  roles(V.pickTonight([FRESH], new Map([["e1", 12]]), EMPTY_CTX, at(21))), ["fresh"]);
+check("pickTonight: episode d'aujourd'hui deja vu => pas de fresh",
+  V.pickTonight([FRESH], new Map([["e1", 13]]), EMPTY_CTX, at(21)), []);
+check("pickTonight: episode d'aujourd'hui pas encore diffuse => pas de fresh",
+  V.pickTonight([FRESH], new Map([["e1", 12]]), EMPTY_CTX, at(12)), []);
+
+// Budget : un film de 120 min ne rentre pas dans 30 minutes.
+const FILM = mkCard("film", "to_watch", [mkEntry("f1", { kind: "movie", total: 1, runtime: 120 })]);
+check("pickTonight: budget 30 min face a un seul film de 120 min => rien",
+  V.pickTonight([FILM], new Map(), { budgetMin: 30, dayLoad: null }, at(21)), []);
+check("pickTonight: budget 2 h+ (null) => le film passe",
+  roles(V.pickTonight([FILM], new Map(), { budgetMin: null, dayLoad: null }, at(21))), ["discover"]);
+
+// Durée inconnue : acceptée partout, mais classée derrière une durée connue compatible.
+const UNK = mkCard("unk", "to_watch", [mkEntry("u1", { runtime: null })], { added_at: "2026-06-01" });
+const KNOWN = mkCard("known", "to_watch", [mkEntry("k1", { runtime: 22 })], { added_at: "2026-01-01" });
+check("pickTonight: duree inconnue acceptee mais classee apres une duree connue",
+  ids(V.pickTonight([UNK, KNOWN], new Map(), { budgetMin: 30, dayLoad: null }, at(21))), ["known"]);
+
+// Une franchise ne peut occuper qu'un rôle.
+const BOTH_E = mkEntry("b1", { status: "RELEASING", total: 24, nextEp: 13, airingAt: new Date(at(18)).toISOString() });
+const BOTH = mkCard("both", "watching", [BOTH_E], { lastTouch: 99 });
+check("pickTonight: une franchise eligible a deux roles n'apparait qu'une fois",
+  ids(V.pickTonight([BOTH], new Map([["b1", 5]]), EMPTY_CTX, at(21))), ["both"]);
+
+// Mis de côté : jamais proposé.
+const SHELVED = mkCard("shelved", "watching", [mkEntry("s1", {})], { shelved: true });
+check("pickTonight: franchise mise de cote jamais proposee",
+  V.pickTonight([SHELVED], new Map([["s1", 1]]), EMPTY_CTX, at(21)), []);
+
+// Après 23 h, un format long recule derrière un format court.
+const LONG = mkCard("long", "to_watch", [mkEntry("l1", { kind: "movie", total: 1, runtime: 118 })], { added_at: "2026-06-01" });
+const SHORT = mkCard("short", "to_watch", [mkEntry("sh1", { runtime: 24 })], { added_at: "2026-01-01" });
+check("pickTonight: a 21 h, budget illimite => le plus proche du budget d'abord (le long)",
+  ids(V.pickTonight([SHORT, LONG], new Map(), { budgetMin: null, dayLoad: null }, at(21))), ["long"]);
+check("pickTonight: a 23 h, le format long recule derriere le court",
+  ids(V.pickTonight([SHORT, LONG], new Map(), { budgetMin: null, dayLoad: null }, at(23, 30))), ["short"]);
+
+// Rôle sans candidat : la carte se réduit, aucun remplissage.
+const ONLY_RESUME = mkCard("r", "watching", [mkEntry("r1", { total: 12 })], { lastTouch: 5 });
+check("pickTonight: un seul role servi => une seule proposition, pas de remplissage",
+  roles(V.pickTonight([ONLY_RESUME], new Map([["r1", 3]]), EMPTY_CTX, at(21))), ["resume"]);
+
+// Les trois rôles ensemble, dans l'ordre.
+const THREE = V.pickTonight([FRESH, ONLY_RESUME, KNOWN],
+  new Map([["e1", 12], ["r1", 3]]), EMPTY_CTX, at(21));
+check("pickTonight: trois roles servis dans l'ordre fresh, resume, discover",
+  roles(THREE), ["fresh", "resume", "discover"]);
+
+// Accroche.
+check("tonightHeadline: rien a proposer => null",
+  V.tonightHeadline([], EMPTY_CTX, at(21)), null);
+check("tonightHeadline: apres 23 h",
+  V.tonightHeadline(THREE, EMPTY_CTX, at(23, 30)), "Il est tard — plutôt un format court");
+check("tonightHeadline: grosse journee => la phrase change, pas le classement",
+  V.tonightHeadline(THREE, { budgetMin: 60, dayLoad: { count: 6, total_minutes: 300 } }, at(21)),
+  "Grosse journée — de quoi décrocher");
+check("tonightHeadline: journee normale",
+  V.tonightHeadline(THREE, EMPTY_CTX, at(21)), "Ce soir");
+
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);

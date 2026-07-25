@@ -241,9 +241,142 @@
     return { days, later: later.slice(0, LATER_CAP), laterTotal: later.length, count };
   }
 
+  // ── « Ce soir » ─────────────────────────────────────────────
+  // Trois rôles DISTINCTS, pas un top-3 scoré : trois candidats classés par le
+  // même critère se ressemblent tous et n'aident pas à trancher. Un rôle sans
+  // candidat disparaît — la carte affiche 3, 2, 1 ou zéro proposition, jamais
+  // de remplissage.
+  //
+  // Déterministe et non LLM à dessein : le budget est la variable qui bouge
+  // (« finalement j'ai deux heures »), un appel quotidien serait figé au moment
+  // du run. Tout est déjà en base, il n'y a rien à interpréter.
+
+  const EVENING_FROM = 18;   // la bande remplace le hero
+  const EVENING_TO = 2;      // …jusqu'à 2 h du matin
+  const LATE_HOUR = 23;      // au-delà, les formats longs reculent
+  const LONG_FORM_MIN = 70;  // minutes
+  // Tolérance par pastille : un épisode de 24 min « rentre » dans 30 minutes,
+  // et deux épisodes dans une heure. Les bornes sont larges à dessein — un
+  // filtre au strict rejetterait un épisode de 26 min d'un budget de 30.
+  const BUDGET_MAX = { 30: 35, 60: 70 };
+
+  function isEvening(nowMs) {
+    const h = new Date(nowMs).getHours();
+    return h >= EVENING_FROM || h < EVENING_TO;
+  }
+
+  function runtimeOf(entry) {
+    return entry && entry.runtime_minutes != null ? entry.runtime_minutes : null;
+  }
+
+  // budgetMin null = « 2 h+ » : aucun plafond, PAS une borne haute déguisée.
+  // Une durée inconnue n'est jamais exclue : la bibliothèque entière est dans
+  // ce cas avant le premier backfill, et une carte vide inexplicable coûte plus
+  // cher qu'une proposition légèrement hors budget.
+  function fitsBudget(runtime, budgetMin) {
+    if (budgetMin == null || runtime == null) return true;
+    return runtime <= (BUDGET_MAX[budgetMin] || budgetMin);
+  }
+
+  // Un épisode « vient de sortir » quand la date stockée est AUJOURD'HUI et
+  // déjà passée. Le sync ne tourne qu'à 07:30 : entre la diffusion du soir et
+  // le sync du lendemain, next_episode_airing_at pointe encore l'épisode qui
+  // vient de tomber — et released() ne le compte pas encore. C'est ce décalage
+  // qui rend le rôle détectable sans donnée supplémentaire.
+  function airedToday(e, nowMs) {
+    if (e.airing_status !== "RELEASING" || !e.next_episode_airing_at) return false;
+    const t = new Date(e.next_episode_airing_at).getTime();
+    if (!Number.isFinite(t) || t > nowMs) return false;
+    return addDays(t, 0) === addDays(nowMs, 0);
+  }
+
+  function pickTonight(cards, progressById, ctx, nowMs) {
+    const budget = ctx && ctx.budgetMin !== undefined ? ctx.budgetMin : 60;
+    const late = new Date(nowMs).getHours() >= LATE_HOUR;
+    const active = cards.filter((c) => !c.f.shelved);
+    const taken = new Set();
+    const out = [];
+
+    // Ordre commun à tous les rôles : hors budget écarté, format long relégué
+    // après 23 h, durée inconnue derrière une durée connue, puis départage
+    // propre au rôle.
+    function rank(list, tie) {
+      return list
+        .filter((x) => fitsBudget(runtimeOf(x.entry), budget))
+        .sort((a, b) => {
+          const ra = runtimeOf(a.entry), rb = runtimeOf(b.entry);
+          if (late) {
+            const la = ra != null && ra > LONG_FORM_MIN ? 1 : 0;
+            const lb = rb != null && rb > LONG_FORM_MIN ? 1 : 0;
+            if (la !== lb) return la - lb;
+          }
+          if ((ra == null) !== (rb == null)) return ra == null ? 1 : -1;
+          return tie(a, b);
+        });
+    }
+
+    function take(role, list) {
+      for (const x of list) {
+        if (taken.has(x.card.f.id)) continue;
+        taken.add(x.card.f.id);
+        out.push({ role, card: x.card, entry: x.entry, runtime: runtimeOf(x.entry) });
+        return;
+      }
+    }
+
+    const fresh = [];
+    for (const c of active) {
+      for (const e of c.entries) {
+        if (!e.in_main_chain || !airedToday(e, nowMs)) continue;
+        if ((progressById.get(e.id) || 0) >= (e.next_episode_number || 0)) continue;
+        fresh.push({ card: c, entry: e, at: new Date(e.next_episode_airing_at).getTime() });
+      }
+    }
+    take("fresh", rank(fresh, (a, b) => b.at - a.at));
+
+    const resume = active
+      .filter((c) => c.st.id === "watching")
+      .map((c) => ({ card: c, entry: currentEntryOf(c.entries, progressById) }))
+      .filter((x) => x.entry);
+    take("resume", rank(resume, (a, b) => b.card.lastTouch - a.card.lastTouch));
+
+    // « Sortir du lot » : la durée la plus proche du budget PAR EN DESSOUS,
+    // pour que « 2 h+ » propose le film et pas l'épisode de 24 min. À budget
+    // illimité ou durée inconnue, on retombe sur l'ajout le plus récent.
+    const discover = active
+      .filter((c) => c.st.id === "to_watch")
+      .map((c) => ({ card: c, entry: currentEntryOf(c.entries, progressById) }))
+      .filter((x) => x.entry);
+    take("discover", rank(discover, (a, b) => {
+      const ra = runtimeOf(a.entry), rb = runtimeOf(b.entry);
+      if (ra != null && rb != null && ra !== rb) return rb - ra;
+      return new Date(b.card.f.added_at || 0) - new Date(a.card.f.added_at || 0);
+    }));
+
+    return out;
+  }
+
+  // L'heure agit sur le classement ; la charge de la journée n'agit QUE sur
+  // cette phrase, jamais sur l'ordre. Compter des réunions ne dit pas
+  // honnêtement ce qu'on a envie de regarder — et la carte ne fait aucun
+  // commentaire sur le sport ou le sommeil.
+  const BUSY_MEETINGS = 5;
+  const BUSY_MINUTES = 240;
+
+  function tonightHeadline(picks, ctx, nowMs) {
+    if (!picks || !picks.length) return null;
+    if (new Date(nowMs).getHours() >= LATE_HOUR) return "Il est tard — plutôt un format court";
+    const load = (ctx && ctx.dayLoad) || null;
+    if (load && ((load.count || 0) >= BUSY_MEETINGS || (load.total_minutes || 0) >= BUSY_MINUTES)) {
+      return "Grosse journée — de quoi décrocher";
+    }
+    return "Ce soir";
+  }
+
   const api = {
     released, kindTag, nextEpLabel, curLabel, status, currentEntryOf,
     nextAiringOf, pickHero, normalize, matchesQuery, pickRail, buildWeek,
+    isEvening, pickTonight, tonightHeadline, fitsBudget, airedToday,
   };
   if (typeof window !== "undefined") window.mdtView = Object.assign(window.mdtView || {}, api);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
