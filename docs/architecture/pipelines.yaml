@@ -192,7 +192,7 @@ pipelines:
     avg_duration_s: 60
     budget_usd: 0
     status: active
-    notes: "Pipeline TMDB (pipelines/tmdb_sync.py) scaffoldé mais pas de workflow actif — nécessite TMDB_API_KEY."
+    notes: "Pipeline TMDB (pipelines/tmdb_sync.py) scaffoldé mais pas de workflow actif — nécessite TMDB_API_KEY. À ne pas confondre avec tmdb_tracker_sync : celui-ci alimente le calendrier `anime_articles` de cet onglet, l'autre la médiathèque. Les deux ne partagent que le secret."
 
   - id: anime_tracker_sync
     name: "Médiathèque anime (tracker AniList)"
@@ -211,7 +211,26 @@ pipelines:
     avg_duration_s: 60
     budget_usd: 0
     status: active
-    notes: "Ne rafraîchit QUE les franchises de la bibliothèque. Batchs id_in de 25, throttle 2,5 s (< 30 req/min AniList). Événements dédupliqués par UNIQUE(entry_id,event_type). Walk = contrat commun avec cockpit/lib/anilist.js (tests/fixtures/franchise_graphs.json)."
+    notes: "Ne rafraîchit QUE les franchises de la bibliothèque, et seulement celles en source='anilist' (franchises_qs/entries_qs — sans ce filtre un source_root_id TMDB partirait vers AniList). Batchs id_in de 25, throttle 2,5 s (< 30 req/min AniList). Événements dédupliqués par UNIQUE(entry_id,event_type). Walk = contrat commun avec cockpit/lib/anilist.js (tests/fixtures/franchise_graphs.json). Transport Supabase + diff_events partagés via pipelines/media_tracker_common.py."
+
+  - id: tmdb_tracker_sync
+    name: "Médiathèque films & séries (tracker TMDB)"
+    cron: "45 7 * * *"
+    human_time: "Quotidien 07:45 UTC"
+    workflow_file: ".github/workflows/tmdb-tracker-sync.yml"
+    script: "pipelines/tmdb_tracker_sync.py"
+    input_api: "TMDB REST v3 (TMDB_API_KEY)"
+    output_tables:
+      - media_entries
+      - media_releases
+      - media_franchises
+    read_tables:
+      - media_franchises
+      - media_entries
+    avg_duration_s: 45
+    budget_usd: 0
+    status: active
+    notes: "Jumeau de anime_tracker_sync pour la source TMDB, décalé de 15 min pour ne pas empiler deux syncs de media_entries sur la même minute. Borné à source in (tmdb_movie, tmdb_tv / tmdb_season). Traduit TMDB dans le contrat AniList à l'ingestion — duplication assumée de cockpit/lib/tmdb.js (un pipeline Python ne peut pas importer un module JS), verrouillée par les tests jumeaux tests/test_tmdb_map.py et .mjs. Sans TMDB_API_KEY : sortie [skip] code 0, le workflow reste vert. NE PAS confondre avec tmdb_sync.py (calendrier de l'onglet Veille)."
 
   - id: news_sync
     name: "Actualités généralistes RSS"

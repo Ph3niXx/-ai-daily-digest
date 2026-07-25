@@ -1,0 +1,37 @@
+name: Médiathèque — tracker films & séries TMDB
+
+on:
+  schedule:
+    # Quotidien à 7h45 UTC — 15 min après anime-tracker-sync, pour ne pas
+    # empiler deux syncs de la même table sur la même minute.
+    - cron: '45 7 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run (aucune écriture)"
+        type: boolean
+        default: false
+
+jobs:
+  tmdb-tracker-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r pipelines/requirements-tmdb.txt
+
+      # Sans TMDB_API_KEY le script sort en [skip] avec le code 0 : le
+      # workflow reste vert tant que le secret n'est pas posé.
+      - name: Run TMDB tracker sync
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python pipelines/tmdb_tracker_sync.py ${{ inputs.dry_run && '--dry-run' || '' }}

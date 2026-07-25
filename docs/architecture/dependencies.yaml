@@ -333,7 +333,7 @@ tables:
     domain: apprentissage
 
   - name: media_entries
-    owner_pipeline: anime_tracker_sync
+    owner_pipeline: anime_tracker_sync   # + tmdb_tracker_sync — chacun borné à sa propre `source`
     rls: authenticated
     domain: perso
     notes: >
@@ -352,7 +352,7 @@ tables:
     domain: perso
 
   - name: media_releases
-    owner_pipeline: anime_tracker_sync
+    owner_pipeline: anime_tracker_sync   # + tmdb_tracker_sync — événements dédupliqués par UNIQUE(entry_id,event_type), quelle que soit la source
     rls: authenticated
     domain: perso
 
