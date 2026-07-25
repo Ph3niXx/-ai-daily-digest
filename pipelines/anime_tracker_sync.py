@@ -304,11 +304,28 @@ def diff_events(franchise, old_by_source_id, fresh_rows):
     return events
 
 
+# Toute lecture du tracker est bornée à sa source. Sans ce filtre, une
+# franchise TMDB verrait son source_root_id envoyé à AniList — au mieux un
+# walk qui échoue, au pire un id qui correspond par hasard à un autre anime
+# et qui écrase la fiche. Les query strings sont extraites pour être testées
+# sans mock réseau (tests/test_source_scoping.py).
+ANILIST_SOURCE = "anilist"
+
+
+def franchises_qs():
+    return (f"source=eq.{ANILIST_SOURCE}"
+            "&select=id,source_root_id,title_english,title_romaji&order=added_at")
+
+
+def entries_qs():
+    return (f"source=eq.{ANILIST_SOURCE}"
+            "&select=id,franchise_id,source_id,airing_status,start_date&order=sort_order")
+
+
 def run_sync(dry_run):
     url, headers = sb_env()
-    franchises = sb_get(url, headers, "media_franchises", "select=id,source_root_id,title_english,title_romaji&order=added_at")
-    entries = sb_get(url, headers, "media_entries",
-                     "select=id,franchise_id,source_id,airing_status,start_date&order=sort_order")
+    franchises = sb_get(url, headers, "media_franchises", franchises_qs())
+    entries = sb_get(url, headers, "media_entries", entries_qs())
     by_franchise = {}
     for e in entries:
         by_franchise.setdefault(e["franchise_id"], []).append(e)
