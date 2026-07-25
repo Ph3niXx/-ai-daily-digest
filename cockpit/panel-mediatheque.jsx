@@ -657,11 +657,16 @@ function PanelMediatheque({ data, onNavigate }) {
   // une grille pleine quand on revient sur « Ma bibliothèque » pendant une recherche.
   const hero = useMdtMemo(() => pickHero(cards), [cards]);
 
-  // Le hero met déjà en avant une franchise « en cours » (pickHero règle 1) :
-  // le rail affiche les autres pour qu'un même titre n'apparaisse pas deux fois.
+  // Un même titre ne doit jamais apparaître deux fois : le rail retire ce que
+  // la page met déjà en avant — le hero en journée, « Ce soir » après 18 h
+  // (branché en Task 5 ; d'ici là `evening` est faux et `tonight` vide).
+  const evening = false;
+  const tonight = [];
   const railCards = useMdtMemo(
-    () => window.mdtView.pickRail(cards, hero && hero.card ? hero.card.f.id : null),
-    [cards, hero]);
+    () => window.mdtView.pickRail(cards, evening
+      ? tonight.map((p) => p.card.f.id)
+      : (hero && hero.card ? [hero.card.f.id] : [])),
+    [cards, hero, tonight, evening]);
 
   async function openPreview(anchorId) {
     setFiche({ mode: "preview", loading: true });

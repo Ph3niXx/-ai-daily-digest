@@ -117,11 +117,11 @@ const CARDS = [
   card("range", "watching", 999, true),
 ];
 check("pickRail: watching seuls, tries par activite, hero exclu, shelved exclu",
-  V.pickRail(CARDS, "apothecary").map((c) => c.f.id), ["black-clover", "code-geass"]);
+  V.pickRail(CARDS, ["apothecary"]).map((c) => c.f.id), ["black-clover", "code-geass"]);
 check("pickRail: sans hero connu, tout le watching non range",
-  V.pickRail(CARDS, null).map((c) => c.f.id), ["apothecary", "black-clover", "code-geass"]);
+  V.pickRail(CARDS, []).map((c) => c.f.id), ["apothecary", "black-clover", "code-geass"]);
 check("pickRail: aucune serie en cours => vide",
-  V.pickRail([card("slime", "up_to_date", 1)], null), []);
+  V.pickRail([card("slime", "up_to_date", 1)], []), []);
 
 // ── nextAiringOf() / pickHero() ───────────────────────────────
 const hcard = (id, stId, touch, opts) => Object.assign({
@@ -163,9 +163,9 @@ check("pickHero: en dernier recours, un titre deja vu",
 // la déduplication en silence — c'est cette assertion qui tient le contrat.
 const HERO_PICK = V.pickHero(CARDS);
 check("hero ∉ rail : la franchise du hero n'apparait jamais dans le rail",
-  V.pickRail(CARDS, HERO_PICK.card.f.id).some((c) => c.f.id === HERO_PICK.card.f.id), false);
+  V.pickRail(CARDS, [HERO_PICK.card.f.id]).some((c) => c.f.id === HERO_PICK.card.f.id), false);
 check("hero ∉ rail : le rail garde les autres 'en cours'",
-  V.pickRail(CARDS, HERO_PICK.card.f.id).map((c) => c.f.id), ["black-clover", "code-geass"]);
+  V.pickRail(CARDS, [HERO_PICK.card.f.id]).map((c) => c.f.id), ["black-clover", "code-geass"]);
 
 // ── buildWeek() ───────────────────────────────────────────────
 // Ancrage : vendredi 24 juillet 2026, 10 h locales (construit en heure locale
@@ -374,6 +374,23 @@ check("tonightHeadline: grosse journee => la phrase change, pas le classement",
   "Grosse journée — de quoi décrocher");
 check("tonightHeadline: journee normale",
   V.tonightHeadline(THREE, EMPTY_CTX, at(21)), "Ce soir");
+
+// ── pickRail() × pickTonight() ─────────────────────────────────
+check("pickRail: liste d'exclusion vide => tout ce qui est en cours",
+  V.pickRail([ONLY_RESUME], []).map((c) => c.f.id), ["r"]);
+check("pickRail: exclut chaque id fourni",
+  V.pickRail([ONLY_RESUME], ["r"]).map((c) => c.f.id), []);
+
+// L'invariant : aucune franchise proposée par « Ce soir » ne réapparaît au rail.
+const RAIL_A = mkCard("ra", "watching", [mkEntry("ra1", { total: 12 })], { lastTouch: 9 });
+const RAIL_B = mkCard("rb", "watching", [mkEntry("rb1", { total: 12 })], { lastTouch: 8 });
+const PROG_RAIL = new Map([["ra1", 3], ["rb1", 3]]);
+const T_RAIL = V.pickTonight([RAIL_A, RAIL_B], PROG_RAIL, EMPTY_CTX, at(21));
+const RAIL_OUT = V.pickRail([RAIL_A, RAIL_B], T_RAIL.map((p) => p.card.f.id));
+check("invariant: tonight ∩ rail = vide",
+  RAIL_OUT.filter((c) => T_RAIL.some((p) => p.card.f.id === c.f.id)).length, 0);
+check("invariant: le rail garde bien l'autre franchise",
+  RAIL_OUT.map((c) => c.f.id), ["rb"]);
 
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);

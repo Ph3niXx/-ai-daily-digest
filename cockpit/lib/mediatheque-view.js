@@ -128,12 +128,15 @@
   }
 
   // ── Rail « Continuer à regarder » ───────────────────────────
-  // Les franchises où il reste des épisodes SORTIS non vus, privées de celle
-  // que le hero met déjà en avant (pickHero ci-dessus privilégie watching en
-  // règle 1, donc le rail affiche systématiquement « les autres »).
-  function pickRail(cards, heroFranchiseId) {
+  // Les franchises où il reste des épisodes SORTIS non vus, privées de celles
+  // déjà mises en avant plus haut dans la page : le hero en journée (pickHero
+  // privilégie watching en règle 1, donc le rail affiche « les autres »), les
+  // propositions de « Ce soir » après 18 h. Un même titre ne doit jamais
+  // apparaître deux fois — invariant verrouillé par un test dédié.
+  function pickRail(cards, excludeIds) {
+    const skip = new Set(excludeIds || []);
     return cards
-      .filter((c) => !c.f.shelved && c.st.id === "watching" && c.f.id !== heroFranchiseId)
+      .filter((c) => !c.f.shelved && c.st.id === "watching" && !skip.has(c.f.id))
       .sort((a, b) => b.lastTouch - a.lastTouch);
   }
 
