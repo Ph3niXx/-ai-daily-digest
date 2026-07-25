@@ -196,7 +196,7 @@ panels:
 
   - id: mediatheque
     file: cockpit/panel-mediatheque.jsx
-    reads: [media_franchises, media_entries, media_progress, media_releases]
+    reads: [media_franchises, media_entries, media_progress, media_releases, activity_briefs]  # activity_briefs = 1 ligne (jour courant), stats.meetings, pour la seule accroche de « Ce soir »
     writes: [media_franchises, media_entries, media_progress, media_releases, usage_events]  # ajout/progression/ack ; entries créées à l'ajout puis pipeline-owned
 
   - id: stacks

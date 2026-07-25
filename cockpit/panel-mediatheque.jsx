@@ -24,6 +24,34 @@ function mdtCurLabel(cur, progressById) { return window.mdtView.curLabel(cur, pr
 function nextAiringOf(card) { return window.mdtView.nextAiringOf(card); }
 function pickHero(cards) { return window.mdtView.pickHero(cards); }
 
+// ── Budget « Ce soir » ─────────────────────────────────────────
+// Daté du jour de DÉBUT de session, pas du jour calendaire : entre minuit et
+// 2 h on est encore dans la soirée de la veille. Sans ça, choisir « 2 h+ » à
+// 23 h 50 se réinitialiserait dix minutes plus tard, en plein film.
+const MDT_BUDGET_KEY = "mdt.tonightBudget";
+
+function mdtSessionDay(nowMs) {
+  const d = new Date(nowMs);
+  if (d.getHours() < 2) d.setDate(d.getDate() - 1);
+  // Date locale, pas toISOString() : celui-ci convertit en UTC et ferait
+  // basculer la clé d'un jour dans les fuseaux à l'est de Greenwich.
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+
+function mdtReadBudget(nowMs) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(MDT_BUDGET_KEY) || "null");
+    if (raw && raw.d === mdtSessionDay(nowMs)) return raw.b;
+  } catch (_) { /* clé corrompue : on repart du défaut */ }
+  return 60;
+}
+
+function mdtWriteBudget(b, nowMs) {
+  try { localStorage.setItem(MDT_BUDGET_KEY, JSON.stringify({ d: mdtSessionDay(nowMs), b })); }
+  catch (_) { /* quota plein : le budget vit alors le temps du rendu */ }
+}
+
 // kicker + libellé du CTA primaire + affichage du bouton +1 selon le cas.
 function heroCopy(kind) {
   switch (kind) {
@@ -398,6 +426,92 @@ function MdtHero({ hero, progressById, onOpen, onProgress }) {
   );
 }
 
+// ── Bande « Ce soir » ──────────────────────────────────────────
+// Remplace le hero de 18 h à 2 h. Trois propositions au plus, à rôles
+// distincts — la sélection vit dans window.mdtView.pickTonight().
+const MDT_BUDGETS = [
+  { value: 30, label: "30 min" },
+  { value: 60, label: "1 h" },
+  { value: null, label: "2 h+" },
+];
+
+const MDT_ROLE_LABEL = {
+  fresh: "Ça vient de sortir",
+  resume: "Reprendre",
+  discover: "Sortir du lot",
+};
+
+function mdtBudgetLabel(budget) {
+  const b = MDT_BUDGETS.find((x) => x.value === budget);
+  return b ? b.label : "1 h";
+}
+
+function MdtTonight({ picks, headline, budget, onBudget, progressById, onOpen, onProgress }) {
+  return (
+    <section className="mdt-tonight">
+      <header className="mdt-tonight-head">
+        <h2 className="mdt-tonight-title">{headline || "Ce soir"}</h2>
+        <div className="mdt-tonight-budgets" role="group" aria-label="Temps disponible">
+          {MDT_BUDGETS.map((b) => (
+            <button key={String(b.value)} type="button"
+              className={"mdt-budget" + (b.value === budget ? " is-active" : "")}
+              aria-pressed={b.value === budget}
+              onClick={() => onBudget(b.value)}>{b.label}</button>
+          ))}
+        </div>
+      </header>
+
+      {picks.length === 0 ? (
+        <div className="mdt-tonight-empty">
+          <p>Rien qui rentre dans {budget === null ? "ta soirée" : mdtBudgetLabel(budget)}.</p>
+          {budget !== null && (
+            <button type="button" className="mdt-tonight-widen" onClick={() => onBudget(null)}>
+              Élargir à 2 h+
+            </button>
+          )}
+        </div>
+      ) : (
+        <ul className="mdt-tonight-list">
+          {picks.map((p) => {
+            const watched = progressById.get(p.entry.id) || 0;
+            const title = p.card.f.title_english || p.card.f.title_romaji || "?";
+            return (
+              <li key={p.role} className="mdt-tonight-card">
+                <button type="button" className="mdt-tonight-cover"
+                  onClick={() => onOpen(p.card.f)} aria-label={title}>
+                  {p.card.f.cover_url
+                    ? <img src={p.card.f.cover_url} alt="" loading="lazy" />
+                    : <span className="mdt-tonight-nocover" aria-hidden="true" />}
+                </button>
+                <div className="mdt-tonight-meta">
+                  <span className="mdt-tonight-role">{MDT_ROLE_LABEL[p.role]}</span>
+                  <span className="mdt-tonight-name" title={title}>{title}</span>
+                  <span className="mdt-tonight-sub">
+                    {window.mdtView.nextEpLabel(p.entry, watched)}
+                    {p.runtime != null ? ` · ${p.runtime} min` : ""}
+                  </span>
+                  <button type="button" className="mdt-tonight-cta"
+                    onClick={() => {
+                      window.track && window.track("mediatheque_tonight_pick", {
+                        role: p.role,
+                        media_type: p.card.f.media_type || "anime",
+                        runtime_minutes: p.runtime,
+                        budget_min: budget,
+                      });
+                      onProgress(p.entry, watched + 1);
+                    }}>
+                    {p.role === "discover" ? "▶ Commencer" : "+1 épisode"}
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function MdtRail({ cards, progressById, onOpen, onProgress }) {
   if (!cards.length) return null;
   return (
@@ -657,11 +771,41 @@ function PanelMediatheque({ data, onNavigate }) {
   // une grille pleine quand on revient sur « Ma bibliothèque » pendant une recherche.
   const hero = useMdtMemo(() => pickHero(cards), [cards]);
 
+  // ── « Ce soir » ────────────────────────────────────────────
+  // De 18 h à 2 h, la bande remplace le hero. Le reste de la journée, rien
+  // n'est calculé : `evening` est faux et `tonight` reste vide.
+  const [budget, setBudget] = useMdtState(() => mdtReadBudget(Date.now()));
+  const evening = useMdtMemo(() => window.mdtView.isEvening(Date.now()), [tick]);
+  const dayLoad = D.dayLoad || null;
+
+  const tonight = useMdtMemo(
+    () => (evening
+      ? window.mdtView.pickTonight(cards, progressById, { budgetMin: budget, dayLoad }, Date.now())
+      : []),
+    [evening, cards, progressById, budget, dayLoad, tick]);
+
+  const tonightHeadline = useMdtMemo(
+    () => window.mdtView.tonightHeadline(tonight, { budgetMin: budget, dayLoad }, Date.now()),
+    [tonight, budget, dayLoad, tick]);
+
+  function pickBudget(value) {
+    setBudget(value);
+    mdtWriteBudget(value, Date.now());
+    window.track && window.track("mediatheque_tonight_budget",
+      { budget_min: value, candidates: tonight.length });
+  }
+
+  // L'état vide est un signal produit : si « Ce soir » ne propose rien, c'est
+  // que le budget est trop serré ou la bibliothèque à jour. On veut le savoir.
+  useMdtEffect(() => {
+    if (evening && !tonight.length) {
+      window.track && window.track("mediatheque_tonight_empty",
+        { budget_min: budget, hour: new Date().getHours() });
+    }
+  }, [evening, tonight.length, budget]);
+
   // Un même titre ne doit jamais apparaître deux fois : le rail retire ce que
-  // la page met déjà en avant — le hero en journée, « Ce soir » après 18 h
-  // (branché en Task 5 ; d'ici là `evening` est faux et `tonight` vide).
-  const evening = false;
-  const tonight = [];
+  // la page met déjà en avant — le hero en journée, « Ce soir » après 18 h.
   const railCards = useMdtMemo(
     () => window.mdtView.pickRail(cards, evening
       ? tonight.map((p) => p.card.f.id)
@@ -819,7 +963,16 @@ function PanelMediatheque({ data, onNavigate }) {
 
       <MdtReleasesStrip D={D} onAck={ackRelease} />
 
-      {!queryActive && (
+      {/* De 18 h à 2 h la décision prime sur la mise en avant : deux surfaces
+          qui se disputent la même place à 22 h, c'est une de trop. */}
+      {!queryActive && evening && (
+        <MdtTonight picks={tonight} headline={tonightHeadline}
+          budget={budget} onBudget={pickBudget} progressById={progressById}
+          onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
+          onProgress={writeProgress} />
+      )}
+
+      {!queryActive && !evening && (
         <MdtHero hero={hero} progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress} />

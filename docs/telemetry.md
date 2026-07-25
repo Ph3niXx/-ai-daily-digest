@@ -41,6 +41,9 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `mediatheque_week_click` | `{days_ahead, entry_kind}` | `cockpit/panel-mediatheque.jsx::MdtWeek` clic sur une diffusion de l'agenda « Cette semaine » ou de sa ligne « plus tard » (`days_ahead` = 0 pour aujourd'hui, `null` pour une entrée sans date) |
 | `mediatheque_collection_toggle` | `{open, count}` | `cockpit/panel-mediatheque.jsx::MdtCollection` pli/dépli manuel de la section « Ma collection » |
 | `mediatheque_filter_local` | `{q_len, matches}` | `cockpit/panel-mediatheque.jsx::PanelMediatheque` requête locale stabilisée (debounce 400 ms), avant tout appel AniList |
+| `mediatheque_tonight_budget` | `{budget_min, candidates}` | `cockpit/panel-mediatheque.jsx::pickBudget()` au tap sur une pastille de temps dispo (`budget_min` = `30`, `60` ou `null` pour « 2 h+ ») |
+| `mediatheque_tonight_pick` | `{role, media_type, runtime_minutes, budget_min}` | `cockpit/panel-mediatheque.jsx::MdtTonight` clic sur le CTA d'une proposition (`role` = `fresh` / `resume` / `discover`) |
+| `mediatheque_tonight_empty` | `{budget_min, hour}` | `cockpit/panel-mediatheque.jsx::PanelMediatheque` rendu d'une bande « Ce soir » sans aucune proposition — signal produit : budget trop serré ou bibliothèque à jour |
 
 ## Règle de maintenance
 
