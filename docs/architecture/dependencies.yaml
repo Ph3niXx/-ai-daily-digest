@@ -336,6 +336,10 @@ tables:
     owner_pipeline: anime_tracker_sync
     rls: authenticated
     domain: perso
+    notes: >
+      runtime_minutes (nullable, migration 022) = durée d'UN épisode ou du film,
+      alimentée par les syncs. Consommée par pickTonight() pour filtrer sur le
+      budget temps du soir. Une durée inconnue n'exclut jamais une entrée.
 
   - name: media_franchises
     owner_pipeline: front

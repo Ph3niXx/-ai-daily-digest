@@ -950,7 +950,7 @@ Dans `index.html`, incrémenter le `?v=` de `cockpit/panel-mediatheque.jsx` et `
 node scripts/sync-sw.mjs
 node tests/test_mediatheque_view.mjs
 PYTHONUTF8=1 python scripts/validate_spec.py
-python scripts/validate_arch.py
+PYTHONUTF8=1 python scripts/validate_architecture.py
 ```
 
 Expected: tests verts. `validate_spec.py` peut sortir en code 1 sur un `UnicodeEncodeError` au `print` final sous Windows alors que la validation est passée — c'est connu, d'où `PYTHONUTF8=1`.
@@ -1825,7 +1825,7 @@ et l'étape d'exécution :
 - [ ] **Step 6: Valider l'archi**
 
 ```bash
-python scripts/validate_arch.py
+PYTHONUTF8=1 python scripts/validate_architecture.py
 python tests/test_tmdb_map.py
 python tests/test_media_tracker_common.py
 python tests/test_source_scoping.py
@@ -1996,7 +1996,7 @@ node tests/test_mediatheque_view.mjs
 node tests/test_tmdb_map.mjs
 node tests/test_anilist_map.mjs
 PYTHONUTF8=1 python scripts/validate_spec.py
-python scripts/validate_arch.py
+PYTHONUTF8=1 python scripts/validate_architecture.py
 ```
 
 - [ ] **Step 7: Commit**

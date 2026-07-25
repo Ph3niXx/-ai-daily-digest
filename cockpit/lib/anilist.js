@@ -94,7 +94,7 @@
   // ── Réseau ─────────────────────────────────────────────────────
   const GQL_URL = "https://graphql.anilist.co";
   const MEDIA_FIELDS = `
-    id idMal type format status episodes averageScore genres
+    id idMal type format status episodes duration averageScore genres
     description(asHtml: false)
     title { romaji english native }
     startDate { year month day } endDate { year month day }
@@ -233,6 +233,10 @@
         format: m.format || null,
         airing_status: m.status || null,
         episodes_total: m.episodes != null ? m.episodes : (m.format === "MOVIE" ? 1 : null),
+        // Durée d'UN épisode (ou du film). Alimente le filtrage par budget de
+        // pickTonight(). null si AniList ne la connaît pas — jamais 0, qui
+        // ferait passer l'entrée pour instantanée.
+        runtime_minutes: m.duration != null ? m.duration : null,
         start_date: fuzzyDate(m.startDate),
         end_date: fuzzyDate(m.endDate),
         next_episode_number: releasing ? m.nextAiringEpisode.episode : null,

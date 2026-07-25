@@ -132,7 +132,7 @@ import requests
 
 GQL_URL = "https://graphql.anilist.co"
 MEDIA_FIELDS = """
-  id idMal type format status episodes averageScore genres
+  id idMal type format status episodes duration averageScore genres
   description(asHtml: false)
   title { romaji english native }
   startDate { year month day } endDate { year month day }
@@ -240,6 +240,9 @@ def to_entry_row(entry, media):
         "format": media.get("format"),
         "airing_status": media.get("status"),
         "episodes_total": episodes if episodes is not None else (1 if media.get("format") == "MOVIE" else None),
+        # Durée d'UN épisode (ou du film) — alimente le filtrage par budget de
+        # pickTonight(). None si AniList ne la connaît pas, jamais 0.
+        "runtime_minutes": media.get("duration"),
         "start_date": fuzzy_date(media.get("startDate")),
         "end_date": fuzzy_date(media.get("endDate")),
         "next_episode_number": nae.get("episode") if releasing else None,
