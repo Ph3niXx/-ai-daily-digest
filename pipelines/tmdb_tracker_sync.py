@@ -37,7 +37,9 @@ from media_tracker_common import sb_env, sb_get, sb_upsert, sb_patch, diff_event
 BASE = "https://api.themoviedb.org/3"
 POSTER = "https://image.tmdb.org/t/p/w342"
 BACKDROP = "https://image.tmdb.org/t/p/w780"
-LANG = "fr-FR"
+# en-US et non fr-FR : le catalogue vient à 95 % d'AniList, dont les titres et
+# les synopsis sont déjà en anglais. Le titre d'origine reste dans title_native.
+LANG = "en-US"
 THROTTLE_S = 0.25          # TMDB tolère ~50 req/s ; on reste très en deçà.
 RETRY_ON_429 = 3
 
@@ -194,7 +196,9 @@ def _tv_rows(detail):
             "kind": "special" if is_special else "season",
             "season_number": None if is_special else number,
             "title_romaji": None,
-            "title_english": s.get("name") or ("Spéciaux" if is_special else f"Saison {number}"),
+            # Repli calqué sur ce que TMDB renvoie en en-US : un nom absent ne
+            # doit pas produire « Saison 3 » au milieu de « Season 1 », « Season 2 ».
+            "title_english": s.get("name") or ("Specials" if is_special else f"Season {number}"),
             "title_native": None,
             "format": "TV",
             "airing_status": status,

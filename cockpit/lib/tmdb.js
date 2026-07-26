@@ -16,7 +16,11 @@
   const BASE = "https://api.themoviedb.org/3";
   const POSTER = "https://image.tmdb.org/t/p/w342";
   const BACKDROP = "https://image.tmdb.org/t/p/w780";
-  const LANG = "fr-FR";
+  // en-US et non fr-FR : le catalogue vient à 95 % d'AniList, dont les titres
+  // et les synopsis sont déjà en anglais. En français, TMDB rendait « Sauve qui
+  // pécho ! » là où le reste de la médiathèque dit « Single's Inferno ». Le
+  // titre d'origine n'est pas perdu — il vit dans title_native.
+  const LANG = "en-US";
 
   // TMDB expose son statut au niveau SÉRIE (ou film), jamais saison.
   // Défaut FINISHED plutôt que null : une valeur inconnue ne doit pas faire
@@ -139,7 +143,9 @@
         kind: isSpecial ? "special" : "season",
         season_number: isSpecial ? null : number,
         title_romaji: null,
-        title_english: s.name || (isSpecial ? "Spéciaux" : `Saison ${number}`),
+        // Repli calqué sur ce que TMDB renvoie en en-US : un nom absent ne doit
+        // pas produire « Saison 3 » au milieu de « Season 1 », « Season 2 ».
+        title_english: s.name || (isSpecial ? "Specials" : `Season ${number}`),
         title_native: null,
         format: "TV",
         airing_status: status,

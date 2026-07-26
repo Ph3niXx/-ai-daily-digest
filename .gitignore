@@ -9,6 +9,10 @@ jarvis/intel/*.md
 .claude/settings.local.json
 .claude/skills/
 .claude/worktrees/
+.claude/scheduled_tasks.lock
+
+# Superpowers brainstorming visual companion (mockups, local server state)
+.superpowers/
 
 # Build artifacts
 video/node_modules/
@@ -17,3 +21,10 @@ video/out/
 # OS
 .DS_Store
 Thumbs.db
+
+# Symphony orchestrator (service de dev, voir symphony/README.md)
+symphony/node_modules/
+symphony/dist/
+symphony/workspaces/
+symphony/.env
+symphony/*.log
