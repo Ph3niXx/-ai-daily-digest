@@ -89,6 +89,24 @@ def strava_get(access_token, path, params=None):
             f"The refresh_token may have been revoked or the scopes are insufficient. "
             f"Re-run: python scripts/strava_oauth_init.py"
         )
+    if resp.status_code == 403:
+        # Le 403 tombait auparavant dans `raise_for_status()`, qui ne garde que
+        # le code et jette le corps. Or c'est le corps qui porte le diagnostic :
+        # Strava y nomme la permission manquante, par exemple
+        #   {"errors":[{"resource":"AccessToken","field":"activity:read_permission","code":"missing"}]}
+        # Sans lui, on ne peut pas distinguer un scope insuffisant d'un quota
+        # atteint ou d'une autorisation révoquée — et le pipeline échoue tous
+        # les jours depuis le 2026-07-01 sans qu'on sache lequel des trois.
+        raise RuntimeError(
+            f"Strava 403 Forbidden sur {path}.\n"
+            f"  Réponse Strava : {resp.text}\n"
+            f"  Quota du jour  : {resp.headers.get('X-RateLimit-Usage', '?')} "
+            f"/ {resp.headers.get('X-RateLimit-Limit', '?')} (15 min, jour)\n"
+            f"  Si la réponse mentionne une permission manquante : relancer "
+            f"python scripts/strava_oauth_init.py (scopes demandés : "
+            f"read, activity:read_all, profile:read_all).\n"
+            f"  Si elle mentionne un quota : attendre la fenêtre suivante."
+        )
     resp.raise_for_status()
     return resp.json()
 
@@ -173,10 +191,19 @@ def save_refresh_token_to_supabase(url, service_key, token):
         data=json.dumps({"key": "strava_refresh_token", "value": token}),
         timeout=15,
     )
-    if resp.status_code in (200, 201):
+    if resp.status_code in (200, 201, 204):
         print("[supabase] Saved new refresh_token to user_profile")
     else:
-        print(f"[supabase] WARNING: Failed to save refresh_token ({resp.status_code}): {resp.text}")
+        # Cet appel n'a lieu QUE si Strava a fait tourner le token — donc dans
+        # le seul cas où ne pas l'écrire condamne le run suivant. L'ancien
+        # WARNING laissait passer une bombe à retardement silencieuse : run
+        # vert aujourd'hui, panne inexplicable demain. C'est précisément le
+        # scénario qui a tué withings_sync pendant trois mois.
+        raise RuntimeError(
+            f"Persistance du refresh_token Strava échouée ({resp.status_code}): {resp.text}. "
+            f"Le token précédent est désormais invalide — relancer "
+            f"python scripts/strava_oauth_init.py."
+        )
 
 
 # ---------------------------------------------------------------------------

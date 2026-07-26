@@ -71,10 +71,18 @@ def env_required(name):
 def refresh_access_token(client_id, client_secret, refresh_token):
     """Exchange refresh_token for a fresh access_token.
 
-    Returns (access_token, new_refresh_token, user_id). Withings rotates
-    refresh tokens on each call — the caller cannot persist this change
-    back to GitHub Secrets automatically, but the token stays valid while
-    the previous one is still usable (grace period).
+    Returns (access_token, new_refresh_token, user_id).
+
+    Withings rotate le refresh token À CHAQUE appel et l'ancien devient
+    immédiatement inutilisable. L'appelant DOIT persister le nouveau, sinon
+    le run suivant rejoue un token déjà consommé.
+
+    L'ancienne version de ce docstring affirmait qu'il existait une « période
+    de grâce » pendant laquelle l'ancien token restait valide, et jetait donc
+    le nouveau. C'est faux : le pipeline a réussi une seule fois (2026-04-23,
+    3 mesures en base) puis a échoué tous les jours pendant trois mois sur
+    `invalid refresh_token`. La persistance vit maintenant dans user_profile,
+    comme pour Strava.
     """
     resp = requests.post(WITHINGS_TOKEN_URL, data={
         "action": "requesttoken",
@@ -204,6 +212,63 @@ def merge_daily_rows(rows):
 # Supabase writes
 # ---------------------------------------------------------------------------
 
+def supabase_headers(key):
+    return {
+        "apikey": key,
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+
+
+def load_refresh_token_from_supabase(url, key):
+    """Lit withings_refresh_token depuis user_profile. None si absent.
+
+    Absent = premier run après (re)autorisation : on retombe sur le secret
+    GitHub, qui n'est valable qu'une fois.
+    """
+    try:
+        resp = requests.get(
+            f"{url}/rest/v1/user_profile",
+            headers=supabase_headers(key),
+            params={"key": "eq.withings_refresh_token", "select": "value"},
+            timeout=15,
+        )
+    except requests.RequestException as exc:
+        print(f"[supabase] WARNING: lecture du refresh_token impossible ({exc})")
+        return None
+    if resp.status_code == 200:
+        rows = resp.json()
+        if rows and rows[0].get("value"):
+            print("[supabase] refresh_token chargé depuis user_profile")
+            return rows[0]["value"]
+    return None
+
+
+def save_refresh_token_to_supabase(url, key, token):
+    """Persiste le refresh_token tourné. Lève si l'écriture échoue.
+
+    Contrairement à Strava — où le token est souvent inchangé et où un échec
+    d'écriture est bénin — ici ne pas persister condamne le run suivant :
+    le token qu'on vient d'utiliser est déjà mort. Un échec silencieux
+    reproduirait exactement la panne qu'on corrige, donc on lève.
+    """
+    headers = supabase_headers(key)
+    headers["Prefer"] = "resolution=merge-duplicates"
+    resp = requests.post(
+        f"{url}/rest/v1/user_profile",
+        headers=headers,
+        data=json.dumps({"key": "withings_refresh_token", "value": token}),
+        timeout=15,
+    )
+    if resp.status_code not in (200, 201, 204):
+        raise RuntimeError(
+            f"Persistance du refresh_token Withings échouée ({resp.status_code}): {resp.text}. "
+            f"Le token vient d'être consommé et n'est plus récupérable — "
+            f"relancer scripts/withings_oauth_init.py."
+        )
+    print("[supabase] nouveau refresh_token enregistré dans user_profile")
+
+
 def supabase_upsert(url, key, table, rows, on_conflict):
     if not rows:
         return 0
@@ -232,13 +297,23 @@ def main():
 
     client_id = env_required("WITHINGS_CLIENT_ID")
     client_secret = env_required("WITHINGS_CLIENT_SECRET")
-    refresh_token = env_required("WITHINGS_REFRESH_TOKEN")
+    env_refresh_token = env_required("WITHINGS_REFRESH_TOKEN")
     supabase_url = env_required("SUPABASE_URL")
     supabase_key = env_required("SUPABASE_SERVICE_KEY")
 
-    access_token, _new_refresh, user_id = refresh_access_token(
+    # Supabase d'abord, secret GitHub en repli : ce dernier n'est valable que
+    # pour le tout premier run suivant une (ré)autorisation, puisque Withings
+    # le consomme immédiatement.
+    refresh_token = load_refresh_token_from_supabase(supabase_url, supabase_key) or env_refresh_token
+
+    access_token, new_refresh, user_id = refresh_access_token(
         client_id, client_secret, refresh_token
     )
+
+    # Persister AVANT de récupérer les mesures, pas après : si la récupération
+    # échoue, le token vient déjà d'être consommé et serait perdu avec elle.
+    if new_refresh and new_refresh != refresh_token:
+        save_refresh_token_to_supabase(supabase_url, supabase_key, new_refresh)
 
     if args.backfill:
         # Full history — use startdate=0 to fetch everything.
