@@ -20,8 +20,8 @@
 panels:
   - id: brief
     file: cockpit/home.jsx
-    reads: [articles, daily_briefs, signal_tracking, skill_radar, user_profile, weekly_analysis]
-    writes: []
+    reads: [articles, daily_briefs, signal_tracking, skill_radar, user_profile, weekly_analysis, daily_picks, article_feedback]  # daily_picks = sélection raisonnée du jour (remplace le slice(0,3)), article_feedback = état des boutons de vote
+    writes: [article_feedback]  # vote 👍/👎, qui alimente le recalibrage de veille_picks
 
   - id: evening
     file: cockpit/panel-evening.jsx
@@ -35,7 +35,7 @@ panels:
 
   - id: top
     file: cockpit/panel-top.jsx
-    reads: [articles]
+    reads: [articles, daily_picks]  # consomme COCKPIT_DATA.top, alimenté par buildTop(articles, dailyPicks)
     writes: []
 
   - id: week
@@ -196,8 +196,8 @@ panels:
 
   - id: mediatheque
     file: cockpit/panel-mediatheque.jsx
-    reads: [media_franchises, media_entries, media_progress, media_releases, activity_briefs]  # activity_briefs = 1 ligne (jour courant), stats.meetings, pour la seule accroche de « Ce soir »
-    writes: [media_franchises, media_entries, media_progress, media_releases, usage_events]  # ajout/progression/ack ; entries créées à l'ajout puis pipeline-owned
+    reads: [media_franchises, media_entries, media_progress, media_releases, activity_briefs, jp_words, jp_seen]  # activity_briefs = 1 ligne (jour courant), stats.meetings, pour la seule accroche de « Ce soir » ; jp_* = bande « Avant l'épisode »
+    writes: [media_franchises, media_entries, media_progress, media_releases, jp_seen, usage_events]  # ajout/progression/ack ; entries créées à l'ajout puis pipeline-owned ; jp_seen = marquage « je connais »
 
   - id: stacks
     file: cockpit/panel-stacks.jsx
@@ -405,6 +405,31 @@ tables:
     owner_pipeline: news_sync
     rls: authenticated
     domain: veille
+
+  - name: article_feedback
+    owner_pipeline: front   # vote 👍/👎 sur la sélection du jour, écrit depuis le Brief
+    rls: authenticated      # SELECT + INSERT + UPDATE, jamais DELETE (on ne supprime pas une trace d'apprentissage)
+    domain: veille
+
+  - name: daily_picks
+    owner_pipeline: veille_picks
+    rls: authenticated      # SELECT seul — le pipeline écrit en service_role
+    domain: veille
+
+  - name: jp_seen
+    owner_pipeline: front   # marquage « je connais », écrit uniquement depuis la Médiathèque
+    rls: authenticated      # SELECT + INSERT + UPDATE, jamais DELETE
+    domain: perso
+
+  - name: jp_words
+    owner_pipeline: jp_vocab_sync
+    rls: authenticated      # SELECT seul — le pipeline écrit en service_role
+    domain: perso
+
+  - name: pipeline_health
+    owner_pipeline: pipeline_health   # observation externe : lit l'API GitHub Actions + la fraîcheur des tables
+    rls: authenticated  # SELECT seul pour authenticated — aucune policy d'écriture, seul le service_role alimente
+    domain: systeme
 
   - name: profile_facts
     owner_pipeline: jarvis_nightly_learner

@@ -489,6 +489,70 @@ function mdtBudgetLabel(budget) {
   return b ? b.label : "1 h";
 }
 
+// ── Bande « Avant l'épisode » ──────────────────────────────────
+// 2-3 mots japonais tirés du titre natif de la série qu'on s'apprête à
+// lancer. Duolingo enseigne « le chat boit du lait », Anki fait tourner le
+// deck qu'on lui donne : ni l'un ni l'autre ne sait qu'on va lancer 無職転生
+// dans dix minutes. C'est le seul angle que le cockpit peut couvrir mieux.
+//
+// Aucune notion d'échéance, de série de jours ou de retard, VOLONTAIREMENT.
+// Un tap marque « je connais » et le mot sort de la rotation ; ne rien taper
+// n'accumule rien. Le mot revient quand la série revient, pas quand une file
+// d'attente l'exige — c'est un backlog de 47 cartes en retard qui a tué la
+// tentative précédente (app Atlas, une seule journée de pratique en 3 mois).
+const MDT_JP_MAX = 3;
+
+function MdtJapanese({ franchise, words, seenByWord, onMark }) {
+  if (!franchise) return null;
+  const mine = (words || []).filter((w) => w.franchise_id === franchise.id);
+  if (!mine.length) return null;
+
+  const isKnown = (w) => (seenByWord.get(w.word) || {}).status === "known";
+  const fresh = mine.filter((w) => !isKnown(w));
+  const shown = fresh.slice(0, MDT_JP_MAX);
+
+  const title = franchise.title_romaji || franchise.title_english || franchise.title_native;
+
+  // Tout connu : on le dit une fois, sobrement, plutôt que de faire
+  // disparaître la bande — une UI qui s'évapore se lit comme un bug.
+  if (!shown.length) {
+    return (
+      <section className="mdt-jp mdt-jp--done">
+        <span className="mdt-jp-kicker">Avant l'épisode</span>
+        <p className="mdt-jp-done-text">Tu connais déjà les mots de ce titre.</p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mdt-jp">
+      <header className="mdt-jp-head">
+        <span className="mdt-jp-kicker">Avant l'épisode</span>
+        <span className="mdt-jp-sub">{title}</span>
+      </header>
+      <ul className="mdt-jp-words">
+        {shown.map((w) => (
+          <li key={w.word} className="mdt-jp-word">
+            <div className="mdt-jp-main">
+              <span className="mdt-jp-kanji" lang="ja">{w.word}</span>
+              {w.reading && <span className="mdt-jp-reading" lang="ja">{w.reading}</span>}
+            </div>
+            <div className="mdt-jp-gloss">
+              {w.romaji && <em className="mdt-jp-romaji">{w.romaji}</em>}
+              <span className="mdt-jp-meaning">{w.meaning_fr}</span>
+            </div>
+            <button type="button" className="mdt-jp-btn"
+              onClick={() => onMark(w, "known")}
+              aria-label={`Marquer ${w.word} comme connu`}>
+              je connais
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function MdtTonight({ picks, headline, budget, onBudget, progressById, onOpen, onProgress }) {
   return (
     <section className="mdt-tonight">
@@ -893,6 +957,34 @@ function PanelMediatheque({ data, onNavigate }) {
     () => window.mdtView.tonightHeadline(tonight, { budgetMin: budget, dayLoad }, Date.now()),
     [tonight, budget, dayLoad, tick]);
 
+  // ── « Avant l'épisode » ────────────────────────────────────
+  // Les mots suivent la série que la page met déjà en avant : la première
+  // proposition de « Ce soir » le soir, le hero en journée. On ne crée pas
+  // une troisième sélection concurrente.
+  const jpWords = D.jpWords || [];
+  const jpSeenByWord = useMdtMemo(
+    () => new Map((D.jpSeen || []).map((r) => [r.word, r])),
+    [D.jpSeen, tick]);
+  const jpFranchise = useMdtMemo(() => {
+    const pick = evening ? tonight[0] : hero;
+    return (pick && pick.card && pick.card.f) || null;
+  }, [evening, tonight, hero]);
+
+  // Dénominateur de la sonde de survie. Sans lui, « 0 marquage » ne distingue
+  // pas « jamais affiché » de « affiché et ignoré » — et le critère d'arrêt
+  // (volume nul sur 3 semaines → retirer la bande) serait ininterprétable.
+  // Une seule fois par montage : c'est une mesure d'exposition, pas de rendu.
+  const jpShownRef = useMdtRef(false);
+  useMdtEffect(() => {
+    if (jpShownRef.current || !jpFranchise) return;
+    const fresh = jpWords.filter((w) => w.franchise_id === jpFranchise.id
+      && (jpSeenByWord.get(w.word) || {}).status !== "known").length;
+    if (!fresh) return;
+    jpShownRef.current = true;
+    window.track && window.track("jp_band_shown",
+      { words: Math.min(fresh, MDT_JP_MAX), evening });
+  }, [jpFranchise, jpWords, jpSeenByWord, evening]);
+
   function toggleType(value) {
     // Jamais zéro type actif : une collection vide sans raison visible se lit
     // comme un bug. Décocher le dernier type le laisse actif.
@@ -1012,6 +1104,46 @@ function PanelMediatheque({ data, onNavigate }) {
     }
   }
 
+  // Marque un mot comme connu. Optimiste + rollback, comme writeProgress.
+  // seen_count s'incrémente pour mesurer si la bande sert vraiment ; il ne
+  // pilote aucune planification — il n'y en a pas.
+  async function markWord(word, status) {
+    const D2 = window.MEDIATHEQUE_DATA;
+    if (!Array.isArray(D2.jpSeen)) D2.jpSeen = [];
+    const prev = D2.jpSeen.find((r) => r.word === word.word);
+    // Copie complète et non le seul statut : `row` écrase aussi seen_count et
+    // updated_at, qu'un rollback partiel laisserait durablement faux.
+    const snapshot = prev ? { ...prev } : null;
+    const row = {
+      word: word.word,
+      status,
+      seen_count: (prev ? prev.seen_count || 0 : 0) + 1,
+      updated_at: new Date().toISOString(),
+    };
+    if (prev) Object.assign(prev, row);
+    else D2.jpSeen.push(row);
+    setTick((t) => t + 1);
+    try {
+      const url = window.SUPABASE_URL + "/rest/v1/jp_seen?on_conflict=word";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { ...window.sb.headers, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates,return=representation" },
+        body: JSON.stringify([row]),
+      });
+      if (!res.ok) throw new Error("jp_seen " + res.status);
+      window.track && window.track("jp_word_marked", { status, first_time: snapshot === null });
+    } catch (e) {
+      if (snapshot === null) {
+        const i = D2.jpSeen.findIndex((r) => r.word === word.word);
+        if (i >= 0) D2.jpSeen.splice(i, 1);
+      } else if (prev) {
+        Object.assign(prev, snapshot);
+      }
+      setTick((t) => t + 1);
+      cockpitToast("Mot non enregistré — réessaie.", { kind: "error" });
+    }
+  }
+
   async function writeRating(entry, value) {
     const D2 = window.MEDIATHEQUE_DATA;
     const prev = D2.progress.find((p) => p.entry_id === entry.id);
@@ -1115,6 +1247,13 @@ function PanelMediatheque({ data, onNavigate }) {
         <MdtHero hero={hero} progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress} />
+      )}
+
+      {/* Après la mise en avant, jamais avant : on décide quoi regarder, puis
+          on s'échauffe. L'inverse ferait barrage à l'usage principal. */}
+      {!queryActive && (
+        <MdtJapanese franchise={jpFranchise} words={jpWords}
+          seenByWord={jpSeenByWord} onMark={markWord} />
       )}
 
       {!queryActive && (

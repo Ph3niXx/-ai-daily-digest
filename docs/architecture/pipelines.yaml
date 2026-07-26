@@ -12,6 +12,25 @@
 #   avg_duration_s: durée moyenne d'un run en secondes (observationnel)
 #   budget_usd    : coût moyen par run en USD (0 pour tier gratuit)
 #   status        : active | draft | archived
+#   health        : contrat de surveillance, consommé par pipelines/pipeline_health.py
+#     panels          : onglets du cockpit qui affichent la donnée de ce pipeline.
+#                       Sert à savoir où poser le bandeau d'avertissement.
+#     table           : table dont on mesure la fraîcheur.
+#     date_column     : colonne de date/timestamp servant à mesurer l'âge.
+#     max_age_hours   : au-delà, la donnée est déclarée `stale` même si les runs
+#                       passent au vert — c'est ce qui attrape le no-op silencieux.
+#
+#     `table` et `max_age_hours` se déclarent SÉPARÉMENT, ce qui donne trois cas :
+#       table + max_age_hours  → fraîcheur mesurée ET sanctionnée. Pour les
+#                                pipelines qui écrivent à chaque run quoi qu'il
+#                                arrive (RSS, snapshots).
+#       table sans max_age     → fraîcheur mesurée, JAMAIS sanctionnée. Pour les
+#                                pipelines pilotés par l'activité de l'utilisateur
+#                                (Strava, Withings, Last.fm, TFT) : ne rien écrire
+#                                y est nominal — il n'a simplement pas couru. On
+#                                mesure quand même, pour pouvoir dire « plus rien
+#                                depuis 26 jours » au lieu d'un message muet.
+#       ni l'un ni l'autre     → seul le verdict du run compte.
 
 pipelines:
   - id: daily_digest
@@ -19,6 +38,11 @@ pipelines:
     cron: "0 6 * * *"
     human_time: "Tous les jours 06:00 UTC"
     workflow_file: ".github/workflows/daily_digest.yml"
+    health:
+      panels: [brief, updates, top]
+      table: articles
+      date_column: fetch_date
+      max_age_hours: 30
     script: "main.py"
     input_api: "RSS (flux veille IA) + Gemini 2.5 Flash-Lite"
     output_tables:
@@ -39,6 +63,15 @@ pipelines:
     cron: "0 22 * * 0"
     human_time: "Dimanche 22:00 UTC"
     workflow_file: ".github/workflows/weekly_analysis.yml"
+    health:
+      panels: [recos, challenges, opps, signals]
+      # On surveille learning_recommendations, PAS weekly_analysis : le run du
+      # 2026-07-19 a écrit sa ligne de compte-rendu avec 0 token / 0 appel /
+      # 0 recommandation. Surveiller la table de compte-rendu l'aurait donc
+      # déclaré frais. C'est la sortie utile qu'il faut mesurer, pas la trace.
+      table: learning_recommendations
+      date_column: created_at
+      max_age_hours: 192   # hebdo + 24 h de marge
     script: "weekly_analysis.py"
     input_api: "Claude Haiku 4.5 (Anthropic API)"
     output_tables:
@@ -62,6 +95,11 @@ pipelines:
     cron: "0 */2 * * *"
     human_time: "Toutes les 2 heures"
     workflow_file: ".github/workflows/tft-sync.yml"
+    health:
+      panels: [gaming]
+      # Mesurée mais pas sanctionnée : ne produit que si l'utilisateur joue.
+      table: tft_matches
+      date_column: played_at
     script: "tft_pipeline.py"
     input_api: "Riot Games API (TFT)"
     output_tables:
@@ -80,6 +118,12 @@ pipelines:
     cron: "30 4 * * *"
     human_time: "Quotidien 04:30 UTC"
     workflow_file: ".github/workflows/strava-sync.yml"
+    health:
+      panels: [perf]
+      # Mesurée mais pas sanctionnée (pas de max_age_hours) : pas de sortie =
+      # pas d'activité, pas une panne. Sert seulement à dater le bandeau.
+      table: strava_activities
+      date_column: start_date
     script: "pipelines/strava_sync.py"
     input_api: "Strava API (OAuth2)"
     output_tables:
@@ -98,6 +142,11 @@ pipelines:
     cron: "45 4 * * *"
     human_time: "Quotidien 04:45 UTC"
     workflow_file: ".github/workflows/withings-sync.yml"
+    health:
+      panels: [perf]
+      # Mesurée mais pas sanctionnée : pas de pesée = pas de donnée, pas une panne.
+      table: withings_measurements
+      date_column: measure_date
     script: "pipelines/withings_sync.py"
     input_api: "Withings API (OAuth2)"
     output_tables:
@@ -109,13 +158,18 @@ pipelines:
     avg_duration_s: 30
     budget_usd: 0
     status: active
-    notes: "Mode --backfill via workflow_dispatch pour réimporter depuis l'epoch. Écrit user_profile.withings_refresh_token après rotation OAuth."
+    notes: "Mode --backfill via workflow_dispatch pour réimporter depuis l'epoch. Écrit user_profile.withings_refresh_token après rotation OAuth — corrigé le 2026-07-26 : le token tourné était jusque-là jeté dans une variable `_new_refresh` au motif d'une « période de grâce » qui n'existe pas. Withings rotant à chaque appel et invalidant l'ancien immédiatement, le pipeline n'a réussi qu'une fois (2026-04-23) puis a échoué 3 mois sur invalid refresh_token. Le secret GitHub n'est valable que pour le premier run après (ré)autorisation ; ensuite la source de vérité est user_profile."
 
   - id: lastfm_sync
     name: "Last.fm scrobbles (+ enrichissement lundi)"
     cron: "0 5 * * *"
     human_time: "Quotidien 05:00 UTC"
     workflow_file: ".github/workflows/lastfm-sync.yml"
+    health:
+      panels: [music]
+      # Mesurée mais pas sanctionnée : pas d'écoute = pas de scrobble, pas une panne.
+      table: music_scrobbles
+      date_column: scrobbled_at
     script: "pipelines/lastfm_sync.py"
     input_api: "Last.fm API + Gemini (enrich lundi)"
     output_tables:
@@ -138,6 +192,11 @@ pipelines:
     cron: "30 5 * * *"
     human_time: "Quotidien 05:30 UTC"
     workflow_file: ".github/workflows/steam-sync.yml"
+    health:
+      panels: [gaming]
+      table: steam_games_snapshot   # snapshot quotidien, écrit même sans jeu lancé
+      date_column: snapshot_date
+      max_age_hours: 30
     script: "pipelines/steam_sync.py"
     input_api: "Steam Web API + Steam Store API"
     output_tables:
@@ -156,6 +215,11 @@ pipelines:
     cron: "30 6 * * *"
     human_time: "Quotidien 06:30 UTC"
     workflow_file: ".github/workflows/sport-sync.yml"
+    health:
+      panels: [sport]
+      table: sport_articles
+      date_column: fetch_date
+      max_age_hours: 30
     script: "pipelines/sport_sync.py"
     input_api: "RSS (L'Équipe, RMC Sport, Millenium, Cyclism'Actu…)"
     output_tables:
@@ -170,6 +234,11 @@ pipelines:
     cron: "45 6 * * *"
     human_time: "Quotidien 06:45 UTC"
     workflow_file: ".github/workflows/gaming-sync.yml"
+    health:
+      panels: [gaming_news]
+      table: gaming_articles
+      date_column: fetch_date
+      max_age_hours: 30
     script: "pipelines/gaming_sync.py"
     input_api: "RSS (JeuxVideo.com, Gamekult, IGN, Eurogamer, PC Gamer, Dexerto, GamesIndustry.biz…)"
     output_tables:
@@ -184,6 +253,11 @@ pipelines:
     cron: "0 7 * * *"
     human_time: "Quotidien 07:00 UTC"
     workflow_file: ".github/workflows/anime-sync.yml"
+    health:
+      panels: [anime]
+      table: anime_articles
+      date_column: fetch_date
+      max_age_hours: 30
     script: "pipelines/anime_sync.py"
     input_api: "RSS (AlloCiné, Première, ANN, Deadline, Variety…) + Jikan API v4 (MyAnimeList)"
     output_tables:
@@ -199,6 +273,11 @@ pipelines:
     cron: "30 7 * * *"
     human_time: "Quotidien 07:30 UTC"
     workflow_file: ".github/workflows/anime-tracker-sync.yml"
+    health:
+      panels: [mediatheque]
+      table: media_entries
+      date_column: updated_at
+      max_age_hours: 30
     script: "pipelines/anime_tracker_sync.py"
     input_api: "AniList GraphQL (public, sans clé)"
     output_tables:
@@ -218,6 +297,10 @@ pipelines:
     cron: "45 7 * * *"
     human_time: "Quotidien 07:45 UTC"
     workflow_file: ".github/workflows/tmdb-tracker-sync.yml"
+    health:
+      panels: [mediatheque]
+      # Pas de contrôle de fraîcheur : sans TMDB_API_KEY le pipeline sort en
+      # [skip] code 0 — un run vert et zéro écriture est ici un cas nominal.
     script: "pipelines/tmdb_tracker_sync.py"
     input_api: "TMDB REST v3 (TMDB_API_KEY)"
     output_tables:
@@ -237,6 +320,11 @@ pipelines:
     cron: "15 7 * * *"
     human_time: "Quotidien 07:15 UTC"
     workflow_file: ".github/workflows/news-sync.yml"
+    health:
+      panels: [news]
+      table: news_articles
+      date_column: fetch_date
+      max_age_hours: 30
     script: "pipelines/news_sync.py"
     input_api: "RSS (Le Monde, Le Figaro, FranceInfo, BFM Paris, BBC World, France 24, RFI…)"
     output_tables:
@@ -245,6 +333,94 @@ pipelines:
     avg_duration_s: 30
     budget_usd: 0
     status: active
+
+  - id: veille_picks
+    name: "Sélection de la veille (+ recalibrage)"
+    cron: "30 6 * * *"
+    human_time: "Quotidien 06:30 UTC"
+    workflow_file: ".github/workflows/veille-picks.yml"
+    script: "pipelines/veille_picks.py"
+    input_api: "Gemini 2.5 Flash-Lite"
+    output_tables:
+      - daily_picks
+      - user_profile          # veille_pref_rules + veille_pref_updated_at
+    read_tables:
+      - articles
+      - article_feedback
+      - user_profile
+    avg_duration_s: 30
+    budget_usd: 0
+    status: active
+    health:
+      panels: [brief, top]
+      table: daily_picks
+      date_column: created_at
+      max_age_hours: 30
+    notes: >
+      Tourne à 06:30 UTC, après daily_digest (06:00) qui remplit `articles`. Pipeline SÉPARÉ de
+      main.py délibérément : le digest n'a pas raté un jour en 114 jours et si la sélection casse,
+      le brief doit continuer — le front retombe alors sur l'ordre de crawl (buildTop, drapeau
+      `picked: false`). Recalibrage AVANT sélection pour que les règles fraîches servent le jour
+      même. Seuil MIN_VOTES_TO_RECALIBRATE=8 : en dessous on écrirait du bruit, et une règle fausse
+      coûte plus cher qu'une règle absente. Le profil injecté est filtré par liste blanche
+      (PROFILE_KEYS_FOR_PROMPT) — sans ça les clés d'API stockées dans user_profile (lastfm, tmdb)
+      partiraient chez Gemini ; verrouillé par tests/test_veille_picks.py.
+
+  - id: jp_vocab_sync
+    name: "Vocabulaire japonais (Médiathèque)"
+    cron: "0 8 * * *"
+    human_time: "Quotidien 08:00 UTC"
+    workflow_file: ".github/workflows/jp-vocab-sync.yml"
+    script: "pipelines/jp_vocab_sync.py"
+    input_api: "Gemini 2.5 Flash-Lite"
+    output_tables:
+      - jp_words
+    read_tables:
+      - media_franchises
+      - jp_words
+    avg_duration_s: 60
+    budget_usd: 0
+    status: active
+    health:
+      panels: [mediatheque]
+      # Pas de contrôle de fraîcheur : incrémental par conception, le run
+      # nominal n'écrit rien. Une table qui ne bouge pas est ici l'état normal.
+    notes: >
+      Tourne après anime_tracker_sync (07:30), seul pipeline pouvant faire apparaître de
+      nouvelles franchises. Ne retraite jamais une franchise déjà traitée : les 44 franchises
+      actuelles coûtent 44 appels au premier run, puis zéro. Borné à media_type=anime — un film
+      TMDB a un title_native qui n'est pas forcément japonais. Garde-fou anti-hallucination :
+      tout mot absent du title_native est rejeté (tests/test_jp_vocab.py).
+
+  - id: pipeline_health
+    name: "Santé des pipelines (observation externe)"
+    cron: "0 9 * * *"
+    human_time: "Quotidien 09:00 UTC"
+    workflow_file: ".github/workflows/pipeline-health.yml"
+    script: "pipelines/pipeline_health.py"
+    input_api: "API GitHub Actions (lecture des conclusions de run)"
+    output_tables:
+      - pipeline_health
+    read_tables:
+      - articles
+      - learning_recommendations
+      - steam_games_snapshot
+      - sport_articles
+      - gaming_articles
+      - anime_articles
+      - news_articles
+      - media_entries
+      - strava_activities
+      - withings_measurements
+      - music_scrobbles
+      - tft_matches
+    avg_duration_s: 20
+    budget_usd: 0
+    status: active
+    # Pas de bloc `health` : un surveillant qui se surveille lui-même ne détecte
+    # pas sa propre mort. C'est le front qui garde ce flanc, en comparant
+    # pipeline_health.checked_at à l'heure courante (cf. PipelineHealthBanner).
+    notes: "Tourne à 09:00 UTC, après le dernier cron du matin (07:45), donc sur un état stabilisé. Sort en code 0 même quand des pipelines sont dégradés : il rapporte l'état, il ne le subit pas."
 
 # Pipelines locaux (pas GitHub Actions) — listés ici pour la vue d'ensemble,
 # mais non inclus dans la timeline 24h côté UI.

@@ -327,3 +327,115 @@
   .panel-mediatheque { padding: 24px 16px 60px; }
   .mdt-tonight-head { flex-direction: column; align-items: flex-start; gap: 10px; }
 }
+
+/* ═══ « Avant l'épisode » — vocabulaire japonais ══════════════
+   Bande compacte sous la mise en avant. Doit rester secondaire :
+   la décision « quoi regarder » prime, ceci n'est qu'un échauffement
+   de 60 s. D'où l'échelle typo réduite et l'absence de fond marqué.
+   ────────────────────────────────────────────────────────── */
+.mdt-jp {
+  margin: var(--space-5) 0;
+  padding: var(--space-4);
+  border: 1px solid var(--bd);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.mdt-jp-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.mdt-jp-kicker {
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.mdt-jp-sub {
+  font-size: var(--text-xs);
+  color: var(--tx3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.mdt-jp-words {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.mdt-jp-word {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  flex: 1 1 180px;
+  padding: var(--space-3);
+  border: 1px solid var(--bd);
+  border-radius: var(--radius);
+  background: var(--bg2);
+}
+
+.mdt-jp-main { display: flex; align-items: baseline; gap: var(--space-2); }
+
+/* Pile de polices japonaises : sans elle, un rendu de secours casse les
+   glyphes et rend la lecture des kana pénible. */
+.mdt-jp-kanji,
+.mdt-jp-reading {
+  font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo",
+               "Noto Sans JP", "MS Gothic", sans-serif;
+}
+
+.mdt-jp-kanji {
+  font-size: var(--text-xl);
+  color: var(--tx);
+  line-height: 1.2;
+}
+
+.mdt-jp-reading { font-size: var(--text-xs); color: var(--tx3); }
+
+.mdt-jp-gloss {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+.mdt-jp-romaji { font-size: var(--text-2xs); color: var(--tx3); font-style: italic; }
+.mdt-jp-meaning { font-size: var(--text-sm); color: var(--tx2); }
+
+.mdt-jp-btn {
+  align-self: flex-start;
+  margin-top: var(--space-1);
+  padding: 4px 10px;
+  border: 1px solid var(--bd);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--tx3);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.mdt-jp-btn:hover { color: var(--brand); border-color: var(--brand); }
+
+/* État « tout connu » : présent mais discret. Faire disparaître la bande
+   se lirait comme un bug plutôt que comme une réussite. */
+.mdt-jp--done {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+}
+.mdt-jp-done-text { margin: 0; font-size: var(--text-sm); color: var(--tx3); }
+
+@media (max-width: 720px) {
+  .mdt-jp-word { flex: 1 1 100%; }
+}

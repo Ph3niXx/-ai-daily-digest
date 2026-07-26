@@ -1,0 +1,57 @@
+name: Sélection de la veille (+ recalibrage)
+
+# Tourne à 06:30 UTC, après daily_digest (06:00) qui remplit `articles`.
+#
+# Pipeline SÉPARÉ de main.py, et ce n'est pas un détail : le digest quotidien
+# n'a pas raté un jour en 114 jours et reste la seule chose du cockpit qui
+# fonctionne sans faute. Si la sélection casse, le brief doit continuer sans
+# elle — et le front retombe sur son ancien comportement.
+
+on:
+  schedule:
+    - cron: "30 6 * * *"
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Jour à sélectionner (YYYY-MM-DD, vide = aujourd'hui)"
+        type: string
+        default: ""
+      recalibrate_only:
+        description: "Recalculer les règles sans refaire la sélection"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  picks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests google-genai
+
+      - name: Pick and recalibrate
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Entrées passées par l'environnement, jamais interpolées dans le
+          # shell : une valeur comme `x; curl … | sh` serait exécutée.
+          IN_DATE: ${{ inputs.date }}
+          IN_RECAL: ${{ inputs.recalibrate_only }}
+        run: |
+          ARGS=""
+          case "$IN_DATE" in
+            "" ) ;;
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] ) ARGS="$ARGS --date $IN_DATE" ;;
+            * ) echo "date attendue au format YYYY-MM-DD — ignorée" ;;
+          esac
+          if [ "$IN_RECAL" = "true" ]; then ARGS="$ARGS --recalibrate-only"; fi
+          python pipelines/veille_picks.py $ARGS

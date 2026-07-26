@@ -20,7 +20,9 @@ Prolongement du Brief pour qui veut plus que les 3 incontournables de la home et
 ## Fonctionnalités
 - **Titre daté** : en tête de page, la mention "Top du jour · semaine S… · date du jour en toutes lettres" pour situer la sélection en un coup d'œil.
 - **Filtre par section** : une barre de pills (Tous / LLMs / Agents / Régulation…) générée automatiquement à partir des sections présentes, avec le nombre d'articles inscrit sur chaque pill.
-- **Layout magazine 1-2-3** : le premier article en grande carte hero avec son score sur 100, les deuxième et troisième en cartes secondaires plus compactes à droite.
+- **Sélection motivée, pas classement** : les articles retenus le sont par une sélection quotidienne qui lit le profil, les règles apprises des votes passés et les articles du jour. Chaque article porte **le motif pour lequel il a été retenu pour cette personne**, affiché avant le résumé — pas un résumé de plus. Quand la sélection n'a pas tourné, l'onglet le dit et n'affiche que les derniers articles récupérés, sans prétendre les avoir triés.
+- **Fin du score inventé** : l'écran affichait auparavant un « score sur 100 · impact » et une barre de progression remplie en conséquence, sous un sous-titre annonçant un calcul « sur la pertinence pour ton rôle, la fraîcheur et la convergence de signaux entre sources ». Aucun de ces calculs n'existait : la valeur était dérivée du rang dans la liste, soit 94, 88 puis 82, toujours. Remplacé par le niveau de confiance réel de la sélection, affiché seulement quand il existe.
+- **Layout magazine 1-2-3** : le premier article en grande carte hero, les deuxième et troisième en cartes secondaires plus compactes à droite.
 - **Suite du classement** : liste dense (rang, source, titre, section, date) en dessous pour parcourir les articles suivants quand il y en a plus de trois.
 - **Export markdown** : un bouton qui copie la sélection du jour au format markdown dans le presse-papiers (titre daté + liste de liens), prêt à coller dans Slack ou un carnet de notes, avec un feedback "Copié !" visuel.
 - **Message vide** : quand un filtre ne retourne aucun article, un message explicite invite à élargir la sélection.
@@ -100,6 +102,8 @@ Aucun autre table. Pas de fetch propre au panel (Tier 1 only).
 - [ ] **`isoWeekTop` dupliqué** : même logique d'ISO week que dans [data-loader.js:40-50](cockpit/lib/data-loader.js:40) environ — à mutualiser dans `cockpit/lib/`.
 
 ## Dernière MAJ
+2026-07-26 — la veille qui apprend. Le « Top du jour » n'était pas un top : `buildTop()` prenait `order=date_fetched.desc` puis `.slice(0, 3)` — les trois derniers articles aspirés par le crawler — et leur affectait `Math.max(60, 94 - i * 6)` affiché comme un score de pertinence. En face : 40 000 articles en base et `link_clicked` à 24 événements au total, le dernier le 25 avril. Remplacé par une vraie sélection (`pipelines/veille_picks.py`, cron 06:30 UTC, tables `daily_picks` / `article_feedback`, migration `sql/025_veille_learning.sql`) avec un motif par article et un vote 👍/👎 qui recalibre `user_profile.veille_pref_rules`. Boucle calquée sur Jobs Radar, la seule du cockpit dont on ait la preuve qu'elle ajuste réellement quelque chose. Le score fabriqué a été retiré de ses trois points d'affichage (Top, Brief, Historique).
+
 2026-04-26 — tag temps de lecture estimé "X min" (230 mots/min, titre + résumé) sur chaque carte feat hero et side. Helper `estimateReadingTime` partagé via `window` depuis home.jsx.
 2026-04-24 — réécriture Parcours utilisateur en vocabulaire produit.
 2026-04-24 — réécriture Fonctionnalités en vocabulaire produit.

@@ -109,6 +109,78 @@ function Stub({ id, theme, onBack }) {
   );
 }
 
+// ── Bandeau santé des pipelines ──────────────────────────────────────
+// Affiché au-dessus de n'importe quel panel dont la source de données est
+// dégradée. Existe parce que strava/withings/tft ont échoué quotidiennement
+// pendant des semaines pendant que Forme et Gaming affichaient leur vieux
+// contenu sans rien signaler : un onglet qui montre du périmé sans le dire ment.
+//
+// Volontairement NON dismissible. Un bandeau qu'on peut faire taire est un
+// bandeau qu'on fait taire une fois puis qu'on oublie — soit exactement le
+// silence qu'on cherche à corriger. Il disparaît quand le pipeline repart.
+function PipelineHealthBanner({ panelId, rows }) {
+  const all = rows || [];
+  const mine = all.filter(r => (r.panels || []).includes(panelId));
+  const hits = mine.filter(r => r.status === "failing" || r.status === "stale");
+
+  // Surveiller le surveillant : si le checker n'a pas tourné, la table gèle sur
+  // son dernier verdict et un « tout va bien » périmé serait pire que rien.
+  // 48 h = deux fois sa cadence quotidienne, donc pas d'alerte sur un run raté.
+  const lastCheck = all.reduce((max, r) => {
+    const t = r.checked_at ? new Date(r.checked_at).getTime() : 0;
+    return t > max ? t : max;
+  }, 0);
+  const checkStale = mine.length > 0 && lastCheck > 0 &&
+    (Date.now() - lastCheck) > 48 * 3600 * 1000;
+
+  if (!hits.length && !checkStale) return null;
+
+  const fmtAge = (row) => {
+    const ref = row.data_last_seen || row.last_success_at;
+    if (!ref) return null;
+    const days = Math.floor((Date.now() - new Date(ref).getTime()) / 86400000);
+    if (days >= 2) return `${days} jours`;
+    const hours = Math.max(1, Math.floor((Date.now() - new Date(ref).getTime()) / 3600000));
+    return `${hours} h`;
+  };
+
+  return (
+    <div className="phb" role="status">
+      {checkStale && (
+        <div className="phb-row phb-row--stale">
+          <Icon name="plug" size={14} stroke={1.75} />
+          <div className="phb-text">
+            <strong>Surveillance à l'arrêt</strong>
+            {" — le contrôle de santé n'a pas tourné depuis plus de 48 h. Les états ci-dessous datent du "}
+            {new Date(lastCheck).toLocaleDateString("fr-FR")} et peuvent être faux.
+          </div>
+        </div>
+      )}
+      {hits.map(row => {
+        const age = fmtAge(row);
+        const failing = row.status === "failing";
+        return (
+          <div key={row.pipeline_id} className={`phb-row phb-row--${row.status}`}>
+            <Icon name="plug" size={14} stroke={1.75} />
+            <div className="phb-text">
+              <strong>{row.label}</strong>
+              {" — "}
+              {failing
+                ? <>la synchronisation échoue{age ? `, plus rien de neuf depuis ${age}` : ""}. Ce que tu vois ici est figé.</>
+                : <>les runs passent mais rien n'est produit{age ? ` depuis ${age}` : ""}. Ce que tu vois ici est figé.</>}
+            </div>
+            {row.last_run_url && (
+              <a className="phb-link" href={row.last_run_url} target="_blank" rel="noopener noreferrer">
+                voir le run
+              </a>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Loader shown while a Tier 2 panel fetches its data. Keeps the fake
 // skeleton hidden until real data lands — no more "is this my data?" UX.
 function PanelLoader({ id }) {
@@ -529,6 +601,7 @@ function App() {
       )}
       <Sidebar theme={theme} activeId={activePanel} onSelect={handleNavigate} data={data} onThemeChange={(id) => { try { localStorage.setItem("cockpit-theme-explicit", "1"); } catch {} setThemeId(id); }} mobileOpen={sbMobileOpen} onMobileClose={() => setSbMobileOpen(false)} />
       <main className="main" id="main-content" tabIndex="-1">
+        <PipelineHealthBanner panelId={activePanel} rows={data && data.pipeline_health} />
         <PanelErrorBoundary panelId={activePanel}>{content}</PanelErrorBoundary>
       </main>
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />

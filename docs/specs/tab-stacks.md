@@ -13,6 +13,7 @@ Centraliser en un panel la santé des 4 services tech qui font tourner le cockpi
 2. Lecture du hero : eyebrow "Stacks & Limits · 4 services suivis" + bouton "↻ Rafraîchir" qui vide le cache et recharge la situation. Titre coloré selon le nombre d'alertes (rouge / warn / vert). Sous-titre avec contexte dynamique (coût du mois, service critique…).
 3. Lecture des quatre KPIs hero : coût du mois en cours avec avancement jour/jour, projection fin de mois (rouge si au-dessus du budget), nombre d'alertes actives, répartition paid/free × safe/warn/critical.
 4. Scan des alertes consolidées : bandeau en haut listant toutes les alertes critical et warn de tous les services, les critical en premier.
+4bis. Lecture de la liste « Pipelines » : chaque synchronisation automatique avec une pastille de couleur, son état en clair (ok / en panne / figé), la raison quand elle est dégradée, et un lien pour aller voir le détail de la dernière exécution. Les pipelines en panne remontent en haut de liste.
 5. Utilisation des deux filtres : Type (Tous / Paid / Free) et Statut (Tous / Critical / Warn / Safe) combinables.
 6. Pour chaque service (Claude, Gemini, Supabase, GitHub) : lecture du header — logo coloré, nom, plan, point de statut, date de dernière utilisation, lien direct vers la console externe, bouton "Mettre à jour" pour Claude et Gemini.
 7. Clic sur "Mettre à jour le solde Claude" ouvre une modal avec quatre champs (solde USD, crédit initial, date d'expiration, budget mensuel) sauvegardés au clic sur Enregistrer.
@@ -23,6 +24,8 @@ Centraliser en un panel la santé des 4 services tech qui font tourner le cockpi
 - **Hero 4 KPIs** : coût du mois en cours avec avancement jour/jour, projection fin de mois (rouge si dépasse le budget), nombre d'alertes actives, répartition paid/free × safe/warn/critical.
 - **Bouton « ↻ refresh »** : en header, vide le cache et relance les fetchs pour avoir la dernière situation sans recharger la page.
 - **Alertes consolidées** : bandeau en haut listant toutes les alertes critical et warn de tous les services, triées avec les critical en premier, pour ne rien rater.
+- **Liste de santé des pipelines** : état de chaque synchronisation automatique, dégradées en tête. Deux pannes distinctes sont signalées séparément — celle où la synchronisation échoue, et celle où elle réussit sans plus rien produire, qui passait jusqu'ici pour un fonctionnement normal. La date du dernier contrôle est affichée : si le contrôle lui-même s'arrête, la liste le dit au lieu d'afficher un « tout va bien » périmé.
+- **Avertissement sur l'onglet concerné** : quand une synchronisation est en panne ou figée, un bandeau apparaît en haut de l'onglet qui affiche ces données — Forme, Gaming, Musique, les corpus de veille — pour dire que le contenu visible est figé. Il n'est pas masquable : un avertissement qu'on peut faire taire est un avertissement qu'on oublie.
 - **Deux filtres** : Type (Tous / Paid / Free) et Statut (Tous / Critical / Warn / Safe) combinables, avec compteur « N / M services affichés ».
 - **Bloc par service** : Claude, Gemini, Supabase, GitHub, chacun avec logo coloré, nom, plan, point de statut coloré, date de dernière utilisation, lien direct vers la console externe.
 - **Mise à jour manuelle du solde Claude** : bouton qui ouvre une modal (solde USD, crédit initial, date d'expiration, budget mensuel) avec raccourci Ctrl+Entrée pour sauvegarder — priorise la saisie manuelle sur les calculs automatiques quand elle est renseignée.
@@ -84,6 +87,7 @@ Route id = `"stacks"`. **Panel Tier 2**.
 | `gemini_api_calls` | Lu via RPC `get_gemini_usage_stats(p_days=30)`. Retourne `{series[{date,calls,rate_limits}], today_calls, today_rate_limits, total_calls, total_tokens, total_rate_limits, last_rate_limit_at}`. | **80 calls** |
 | RPC `get_stack_stats()` | Retourne `{db_size_bytes, top_tables[{table_name, size_bytes, estimated_rows}], row_counts{articles, memories_vectors, …}, generated_at}`. Nécessaire pour Supabase. | — |
 | `user_profile` clés `stacks.*` | Lu depuis `__COCKPIT_RAW.profileRows` (Tier 1). 9 clés possibles : `stacks.anthropic_balance_usd`, `_balance_updated_at`, `_credit_usd`, `_credit_expires`, `stacks.gemini_rate_limit_hit`, `_peak_rpm`, `_peak_rpm_limit`, `_model_limited`, `_observed_at`. | **0 saisies** actuellement |
+| `pipeline_health` | Lu en **Tier 1** (table minuscule, ~14 lignes), exposé sur `COCKPIT_DATA.pipeline_health`. Alimente la liste Pipelines de ce panel ET le bandeau global de `app.jsx`. On charge toutes les lignes, pas seulement les dégradées : sans les lignes saines on ne peut pas distinguer « rien à signaler » de « le contrôle est mort et la table a gelé » (arbitrage via `checked_at`). | **14 lignes** (2026-07-26 : 9 `ok`, 3 `failing`, 1 `stale`, 1 `unknown`) |
 
 **Colonnes `gemini_api_calls`** : `id bigint, created_at, pipeline, step, model, status, prompt_chars, response_chars, input_tokens, output_tokens, total_tokens, latency_ms, error_message`. Écrit par `main.py::_log_gemini_call()` à chaque appel Gemini (fire-and-forget, jamais levé).
 
@@ -155,6 +159,7 @@ Route id = `"stacks"`. **Panel Tier 2**.
 - [ ] **`stacks.*` namespace user_profile** : conventions nommage non documentée en dehors du code. Si quelqu'un modifie les clés, le loader tombe en silence sur ses defaults.
 
 ## Dernière MAJ
+2026-07-26 — ajout de la santé des pipelines : nouvelle table `pipeline_health` (migration [sql/023](sql/023_pipeline_health.sql)), workflow d'observation externe [pipeline-health.yml](.github/workflows/pipeline-health.yml) + [pipelines/pipeline_health.py](pipelines/pipeline_health.py), section `StPipelineHealth` dans ce panel et bandeau global `PipelineHealthBanner` dans [app.jsx](cockpit/app.jsx). Déclenché par le constat que `strava_sync`, `withings_sync` et `tft_sync` échouaient quotidiennement depuis des semaines sans aucune surface pour le dire, et que le run weekly du 19/07 s'est terminé en succès avec 0 token / 0 recommandation. Le contrat de surveillance (`panels`, `table`, `max_age_hours`) est déclaré par pipeline dans [pipelines.yaml](docs/architecture/pipelines.yaml).
 2026-04-29 — switch `window.prompt`/`confirm`/`alert` → composant `StModal` thémable + toast inline. Drift spec/code fixé (StEditModal mentionné en avril mais jamais shipé). Versions bumpées : `panel-stacks.jsx?v=2`, `styles-stacks.css?v=2`.
 2026-04-24 — réécriture Parcours utilisateur en vocabulaire produit.
 2026-04-24 — réécriture Fonctionnalités en vocabulaire produit.

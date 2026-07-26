@@ -9,7 +9,7 @@
       "dom_id": "brief",
       "scope": "mixte",
       "status": "documented",
-      "last_updated": "2026-04-30"
+      "last_updated": "2026-07-26"
     },
     {
       "slug": "evening",
@@ -39,7 +39,7 @@
       "dom_id": "top",
       "scope": "mixte",
       "status": "documented",
-      "last_updated": "2026-04-26"
+      "last_updated": "2026-07-26"
     },
     {
       "slug": "week",
@@ -279,7 +279,7 @@
       "dom_id": "mediatheque",
       "scope": "perso",
       "status": "documented",
-      "last_updated": "2026-07-25"
+      "last_updated": "2026-07-26"
     },
     {
       "slug": "stacks",
@@ -289,7 +289,7 @@
       "dom_id": "stacks",
       "scope": "mixte",
       "status": "documented",
-      "last_updated": "2026-04-29"
+      "last_updated": "2026-07-26"
     },
     {
       "slug": "history",
@@ -299,7 +299,7 @@
       "dom_id": "history",
       "scope": "mixte",
       "status": "documented",
-      "last_updated": "2026-05-01"
+      "last_updated": "2026-07-26"
     }
   ]
 }

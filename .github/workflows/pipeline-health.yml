@@ -1,0 +1,38 @@
+name: Santé des pipelines
+
+# Observe les autres workflows de l'extérieur et écrit le verdict dans
+# pipeline_health. Tourne à 09:00 UTC : tous les crons du matin (04:30 → 07:45)
+# sont passés, on mesure donc un état stabilisé de la journée.
+#
+# Ne doit jamais échouer à cause d'un pipeline dégradé — il rapporte l'état,
+# il ne le subit pas. Sinon on remplacerait un échec silencieux par un autre.
+
+on:
+  schedule:
+    - cron: "0 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read      # requis pour lire les conclusions des autres workflows
+
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests pyyaml
+
+      - name: Check pipeline health
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: python pipelines/pipeline_health.py

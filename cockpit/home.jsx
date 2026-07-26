@@ -2,6 +2,23 @@
 // but the theme's vibe tokens (dividerStyle, accentShape, etc.)
 // meaningfully reshape the layout feel.
 
+// ── Sélection de la veille ───────────────────────────────────────────
+// Confiance réelle de la sélection du jour (pipelines/veille_picks.py),
+// affichée uniquement quand elle existe. Remplace un « score de pertinence »
+// qui valait `94 - i * 6` : trois chiffres décroissants collés aux trois
+// derniers articles crawlés, barre de progression à l'appui.
+const TOP_CONF_LABEL = { high: "sûr", medium: "probable", low: "à voir" };
+
+// Raisons proposées sur un 👎. Miroir de Jobs Radar : on demande POURQUOI,
+// parce qu'un pouce nu n'apprend presque rien — c'est le motif qui permet de
+// réécrire les règles de sélection.
+const TOP_DOWN_REASONS = [
+  { key: "seen", label: "déjà vu" },
+  { key: "off_topic", label: "pas mon sujet" },
+  { key: "shallow", label: "trop superficiel" },
+  { key: "not_actionable", label: "rien d'actionnable" },
+];
+
 // Audio brief — reads the macro title + body via Web Speech API.
 // No external provider: uses the browser's built-in French voice.
 function AudioBriefChip({ macro }) {
@@ -234,6 +251,44 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
       try { window.track && window.track("top_card_collapsed", { rank }); } catch {}
     }
   };
+  // ── Vote sur la sélection ──────────────────────────────────
+  // Boucle d'apprentissage : le verdict remonte dans article_feedback, que
+  // veille_picks.py relit pour réécrire user_profile.veille_pref_rules. Copie
+  // conforme de Jobs Radar, la seule boucle du cockpit dont on ait la preuve
+  // qu'elle change quelque chose (42 votes, règles réellement ajustées).
+  const [votes, setVotes] = React.useState(() => {
+    const m = {};
+    (data.article_feedback || []).forEach(f => { m[f.article_id] = f.verdict; });
+    return m;
+  });
+  // Quel article attend qu'on précise son motif de rejet.
+  const [askReason, setAskReason] = React.useState(null);
+
+  async function sendVote(articleId, verdict, reason) {
+    if (!articleId) return;
+    const prev = votes[articleId];
+    setVotes(v => ({ ...v, [articleId]: verdict }));
+    setAskReason(null);
+    try {
+      const res = await fetch(window.SUPABASE_URL + "/rest/v1/article_feedback?on_conflict=article_id", {
+        method: "POST",
+        headers: { ...window.sb.headers, "Content-Type": "application/json",
+                   "Prefer": "resolution=merge-duplicates" },
+        body: JSON.stringify([{
+          article_id: articleId, verdict, reason: reason || null,
+          pick_date: new Date().toISOString().slice(0, 10),
+        }]),
+      });
+      if (!res.ok) throw new Error("feedback " + res.status);
+      window.track && window.track("veille_feedback", { verdict, reason: reason || null });
+    } catch (e) {
+      // Rollback : un vote qu'on croit enregistré et qui ne l'est pas fausse
+      // silencieusement le recalibrage.
+      setVotes(v => { const n = { ...v }; if (prev) n[articleId] = prev; else delete n[articleId]; return n; });
+      window.cockpitToast && window.cockpitToast("Vote non enregistré — réessaie.", { kind: "error" });
+    }
+  }
+
   const [snoozedTop, setSnoozedTop] = React.useState({});
   const snoozeCard = (id, rank) => {
     if (!id || !window.snooze) return;
@@ -445,7 +500,9 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
                     <li key={t._id || t.id || `delta-${i}`}>
                       <span className="src">{t.source}</span>
                       <span className="ttl">{truncate60(t.title)}</span>
-                      <span className="score">{t.score}</span>
+                      {/* Affichait `t.score` — un `94 - i*6` sans référent.
+                          La section est au moins une information vraie. */}
+                      <span className="score">{t.section}</span>
                     </li>
                   ))}
                   {newTopItems.length > 4 && (
@@ -585,10 +642,16 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
             >
               <div className="top-card-rail">
                 <span className="top-rank">{String(t.rank).padStart(2, "0")}</span>
-                <span className="top-score" title="Score de pertinence">
-                  <span className="top-score-bar"><span className="top-score-fill" style={{ width: `${t.score}%` }} /></span>
-                  <span className="top-score-num">{t.score}</span>
-                </span>
+                {/* Il y avait ici une barre « Score de pertinence » remplie à
+                    `94 - i*6` %. Trois derniers articles crawlés, notés 94/88/82
+                    par pure arithmétique. Remplacé par la confiance réelle de la
+                    sélection, affichée seulement quand elle existe. */}
+                {t.picked && t.confidence && (
+                  <span className={`top-conf top-conf--${t.confidence}`}
+                    title={`Confiance de la sélection : ${TOP_CONF_LABEL[t.confidence]}`}>
+                    {TOP_CONF_LABEL[t.confidence]}
+                  </span>
+                )}
               </div>
               <div className="top-card-body">
                 <div className="top-meta">
@@ -599,12 +662,36 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
                   {t.unread && !readTop[t.rank] && <span className="top-unread-dot" />}
                 </div>
                 <h3 className="top-title">{t.title}</h3>
+                {/* Le « pourquoi toi » passe avant le résumé : c'est la seule
+                    chose qui justifie que cet article soit là plutôt qu'un autre. */}
+                {t.why && <p className="top-why">{t.why}</p>}
                 <p className="top-summary">{t.summary}</p>
                 <div className="top-card-foot" onClick={(e) => e.stopPropagation()}>
                   <div className="top-tags">
                     {t.tags.map(tag => <span key={tag} className="top-tag">{tag}</span>)}
                   </div>
                   <div className="top-actions">
+                    {t.picked && (
+                      <span className="top-vote" role="group" aria-label="Cette sélection était-elle bonne ?">
+                        <button
+                          className={`card-action card-action--up${votes[t._id] === "up" ? " is-on" : ""}`}
+                          aria-pressed={votes[t._id] === "up"}
+                          aria-label="Bonne sélection"
+                          title="Bonne sélection"
+                          onClick={() => sendVote(t._id, "up")}>
+                          <Icon name="thumbs_up" size={12} stroke={2} />
+                        </button>
+                        <button
+                          className={`card-action card-action--down${votes[t._id] === "down" ? " is-on" : ""}`}
+                          aria-pressed={votes[t._id] === "down"}
+                          aria-expanded={askReason === t._id}
+                          aria-label="Mauvaise sélection"
+                          title="Mauvaise sélection"
+                          onClick={() => setAskReason(askReason === t._id ? null : t._id)}>
+                          <Icon name="thumbs_down" size={12} stroke={2} />
+                        </button>
+                      </span>
+                    )}
                     <button className="card-action card-action--bookmark" aria-label="Garder cet article (bientôt disponible)" title="Sauvegarde — bientôt disponible" disabled>
                       <Icon name="bookmark" size={12} stroke={2} />
                     </button>
@@ -633,6 +720,20 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
                     </button>
                   </div>
                 </div>
+                {/* Le motif du rejet, pas seulement le rejet : c'est lui qui
+                    permet de réécrire les règles de sélection. Un pouce nu
+                    n'apprend presque rien. */}
+                {askReason === t._id && (
+                  <div className="top-reasons" onClick={(e) => e.stopPropagation()}>
+                    <span className="top-reasons-label">Pourquoi&nbsp;?</span>
+                    {TOP_DOWN_REASONS.map(r => (
+                      <button key={r.key} className="top-reason"
+                        onClick={() => sendVote(t._id, "down", r.key)}>
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </article>
             );

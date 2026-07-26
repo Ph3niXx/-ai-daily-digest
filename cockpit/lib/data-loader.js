@@ -74,6 +74,15 @@
     const date = isoToday();
     return q("articles", `fetch_date=eq.${date}&order=date_fetched.desc&limit=100`);
   }
+  // Sélection du jour, calculée par pipelines/veille_picks.py. On embarque
+  // l'article via la clé étrangère pour n'avoir qu'un aller-retour.
+  // Peut être vide : le pipeline peut ne pas avoir tourné, ou n'avoir rien
+  // retenu d'une journée faible. buildTop() sait retomber sur ses pieds.
+  async function loadDailyPicks(){
+    const date = isoToday();
+    return q("daily_picks",
+      `pick_date=eq.${date}&order=rank.asc&select=rank,why,confidence,articles(*)`);
+  }
   async function loadDailyBrief(){
     // daily_briefs columns: date, brief_html, article_count, created_at
     const rows = await q("daily_briefs", "order=date.desc&limit=1");
@@ -165,23 +174,14 @@
     };
   }
 
-  function buildTop(articles){
+  function buildTop(articles, picks){
     const rm = getReadMap();
-    // Snooze : retire les articles encore en attente, promeut ceux dont
-    // la fenêtre de rappel est échue (réémergent en tête du top).
-    let pool = articles || [];
-    if (window.snooze) {
-      const dueIds = new Set(window.snooze.dueToday());
-      const promoted = pool.filter(a => dueIds.has(a.id));
-      const rest = pool.filter(a => !window.snooze.isActive(a.id) && !dueIds.has(a.id));
-      pool = [...promoted, ...rest];
-    }
-    return pool.slice(0, 3).map((a, i) => ({
+
+    const shape = (a, i, extra) => ({
       rank: i + 1,
       source: a.source || "—",
       section: (a.section || "").toUpperCase(),
       date: relTime(a.date_published),
-      score: Math.max(60, 94 - i * 6),
       title: a.title || "",
       summary: stripHtml(a.summary || "").slice(0, 280),
       tags: (a.tags || []).slice(0, 3).map(t => "#" + String(t).replace(/^#/, "")),
@@ -190,6 +190,36 @@
       fetch_iso: a.date_fetched || (a.fetch_date ? a.fetch_date + "T06:00:00Z" : null),
       _id: a.id,
       _url: a.url,
+      ...extra,
+    });
+
+    // Chemin nominal : la sélection raisonnée du jour, avec son « pourquoi toi ».
+    const valid = (picks || []).filter(p => p && p.articles && p.articles.id);
+    if (valid.length) {
+      return valid.map((p, i) => shape(p.articles, i, {
+        why: p.why || null,
+        confidence: p.confidence || null,
+        picked: true,
+      }));
+    }
+
+    // Repli : pipeline non passé, ou journée sans rien à retenir. On garde les
+    // trois derniers articles crawlés — mais SANS score.
+    //
+    // L'ancien code affichait ici `Math.max(60, 94 - i * 6)` sous un libellé
+    // « Score de pertinence », barre de progression comprise : 94, 88, 82 pour
+    // les trois derniers articles aspirés, quels qu'ils soient. Un nombre
+    // d'apparence savante calculé à partir de rien. `picked: false` permet à
+    // l'UI de dire honnêtement qu'il n'y a pas eu de sélection aujourd'hui.
+    let pool = articles || [];
+    if (window.snooze) {
+      const dueIds = new Set(window.snooze.dueToday());
+      const promoted = pool.filter(a => dueIds.has(a.id));
+      const rest = pool.filter(a => !window.snooze.isActive(a.id) && !dueIds.has(a.id));
+      pool = [...promoted, ...rest];
+    }
+    return pool.slice(0, 3).map((a, i) => shape(a, i, {
+      why: null, confidence: null, picked: false,
     }));
   }
 
@@ -1140,7 +1170,7 @@
 
   // ── Tier 1 boot — runs BEFORE <App/> mounts ──────────────
   async function bootTier1(){
-    const [articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis, mediaReleases] = await Promise.all([
+    const [articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis, mediaReleases, pipelineHealth, dailyPicks, articleFeedback] = await Promise.all([
       once("articles_today", loadArticlesToday).catch(() => []),
       once("daily_brief", loadDailyBrief).catch(() => null),
       once("signals", loadSignals).catch(() => []),
@@ -1152,6 +1182,18 @@
         const from = new Date(Date.now() - 7 * 86400000).toISOString();
         return q("media_releases", `acknowledged=eq.false&detected_at=gte.${from}&order=detected_at.desc&limit=5`);
       }).catch(() => []),
+      // Santé des pipelines — table minuscule (~13 lignes), lue en T1 parce que
+      // le bandeau doit pouvoir s'afficher sur n'importe quel onglet dès le mount.
+      // On charge TOUT, y compris les pipelines sains : sans ça on ne peut pas
+      // distinguer « aucun pipeline dégradé » de « le checker lui-même est mort
+      // et la table a gelé ». Le front lit checked_at pour trancher.
+      once("pipeline_health", () =>
+        q("pipeline_health", "order=status.asc,pipeline_id.asc")
+      ).catch(() => []),
+      once("daily_picks", loadDailyPicks).catch(() => []),
+      once("article_feedback", () =>
+        q("article_feedback", "select=article_id,verdict,reason&order=created_at.desc&limit=200")
+      ).catch(() => []),
     ]);
 
     const stats = buildStats(articlesToday, signals);
@@ -1180,7 +1222,7 @@
       date: buildDateShape(),
       stats,
       macro: buildMacro(articlesToday, brief),
-      top: buildTop(articlesToday),
+      top: buildTop(articlesToday, dailyPicks),
       signals: buildSignals(signals),
       nav: getNav(),
       radar: buildRadar(radarRows),
@@ -1188,6 +1230,8 @@
       recos: [],       // Tier 2
       challenges: [],  // Tier 2
       media_releases: mediaReleases,  // encart Médiathèque du Brief (T1 léger)
+      pipeline_health: pipelineHealth || [],  // uniquement les pipelines dégradés
+      article_feedback: articleFeedback || [],  // votes déjà émis, pour l'état des boutons
     };
 
     // Morning Card — 3 choses qui comptent aujourd'hui
@@ -1196,6 +1240,7 @@
     // Expose raw tables for tier-2 loaders that may want them
     window.__COCKPIT_RAW = {
       articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis, mediaReleases,
+      pipelineHealth, dailyPicks, articleFeedback,
     };
 
     // Shape exposed as window.COCKPIT_DATA — panels read from it directly.
@@ -1286,6 +1331,9 @@
     async media_franchises(){ return once("media_franchises", () => q("media_franchises", "select=*&order=added_at.desc&limit=500")); },
     async media_entries(){ return once("media_entries", () => q("media_entries", "select=*&order=sort_order.asc&limit=5000")); },
     async media_progress(){ return once("media_progress", () => q("media_progress", "select=*&limit=5000")); },
+    // « Avant l'épisode » — vocabulaire japonais des titres natifs.
+    async jp_words(){ return once("jp_words", () => q("jp_words", "select=*&order=sort_order.asc&limit=1000")); },
+    async jp_seen(){ return once("jp_seen", () => q("jp_seen", "select=*&limit=1000")); },
     async media_releases(){
       const from = new Date(Date.now() - 30 * 86400000).toISOString();
       return once("media_releases", () => q("media_releases", `detected_at=gte.${from}&order=detected_at.desc&limit=100`));
@@ -3662,12 +3710,16 @@
       totalArticles += count;
       if (stillStreak) { if (count > 0) streak++; else if (i > 0) stillStreak = false; }
       const brief = briefByDate[iso];
+      // Deuxième copie du score fabriqué `94 - idx * 6`, retirée avec la
+      // première (cf. buildTop). Pour les jours antérieurs à daily_picks il
+      // n'existe aucune sélection raisonnée à afficher : ces trois articles
+      // sont les premiers du jour, rien de plus, et l'UI ne prétend plus
+      // l'inverse. Le libellé de section est au moins exact.
       const top = arts.slice(0, 3).map((a, idx) => ({
         rank: idx + 1,
         source: a.source || "—",
         section: a.section || "",
         title: a.title || "",
-        score: Math.max(60, 94 - idx * 6),
         url: a.url,
         _id: a.id,
       }));
@@ -4732,12 +4784,14 @@
         return { jobs: allJobs, todayScan, last7Scans };
       }
       case "mediatheque": {
-        const [franchises, entries, progress, releases, briefRows] = await Promise.all([
+        const [franchises, entries, progress, releases, briefRows, jpWords, jpSeen] = await Promise.all([
           T2.media_franchises().catch(() => []),
           T2.media_entries().catch(() => []),
           T2.media_progress().catch(() => []),
           T2.media_releases().catch(() => []),
           T2.activity_brief_today().catch(() => []),
+          T2.jp_words().catch(() => []),
+          T2.jp_seen().catch(() => []),
         ]);
         // Ne module QUE la phrase d'accroche de « Ce soir », jamais le
         // classement. Absente (observer éteint), la carte s'affiche à
@@ -4750,8 +4804,10 @@
           window.MEDIATHEQUE_DATA.progress = progress;
           window.MEDIATHEQUE_DATA.releases = releases;
           window.MEDIATHEQUE_DATA.dayLoad = dayLoad;
+          window.MEDIATHEQUE_DATA.jpWords = jpWords;
+          window.MEDIATHEQUE_DATA.jpSeen = jpSeen;
         }
-        return { franchises, entries, progress, releases, dayLoad };
+        return { franchises, entries, progress, releases, dayLoad, jpWords, jpSeen };
       }
       default:
         // No Tier 2 work for this panel — return null so the App effect

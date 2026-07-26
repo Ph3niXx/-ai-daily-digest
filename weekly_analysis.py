@@ -120,6 +120,15 @@ def call_claude(system_prompt, user_prompt, max_tokens=MAX_OUTPUT_TOKENS):
     for block in data.get("content", []):
         if block.get("type") == "text":
             text += block.get("text", "")
+
+    # Une réponse coupée au plafond est un JSON tronqué : le parse échouera
+    # plus loin et l'étape rendra 0 sans un mot. C'est exactement ce qui a
+    # laissé weekly_opportunities vide en permanence. On le dit fort ici,
+    # au seul endroit qui connaît la vraie cause.
+    if data.get("stop_reason") == "max_tokens":
+        print(f"   [TRONQUÉ] Réponse coupée au plafond de {max_tokens} tokens — "
+              f"le JSON sera invalide. Augmente max_tokens pour cette étape.")
+
     return text
 
 
@@ -585,9 +594,13 @@ def analyze_opportunities():
     today = datetime.now()
     week_start = (today - timedelta(days=today.weekday())).strftime("%Y-%m-%d")
 
-    # Reset : purger toutes les anciennes opportunités (biaisées pré-refacto)
-    # puis ne régénérer que la semaine courante à chaque run
-    sb_delete("weekly_opportunities", f"week_start=lte.{week_start}")
+    # Ne purger QUE la semaine courante, pour que le run soit idempotent sans
+    # détruire l'historique. La version précédente faisait `week_start=lte.` —
+    # un reset ponctuel (« purger les opportunités biaisées pré-refacto »)
+    # resté par erreur dans le chemin récurrent : il vidait toute la table
+    # chaque dimanche. Combiné au parse qui échouait en silence juste après,
+    # ça garantissait une table vide en permanence.
+    sb_delete("weekly_opportunities", f"week_start=eq.{week_start}")
 
     # Récupérer les articles de la semaine
     articles = sb_get("articles", f"fetch_date=gte.{week_start}&order=date_fetched.desc&limit=60&select=title,summary,url,section,source")
@@ -646,16 +659,33 @@ RÈGLES :
 - Sois honnête sur le niveau de confiance : "high" seulement si l'article montre un vrai signal de marché
 - Le relevance_score tient compte de ses compétences actuelles ET de ses lacunes"""
 
-    result = call_claude(system, prompt, max_tokens=4096)
+    # 8192 et non le défaut 4096 : 5 à 8 opportunités portant chacune une
+    # description, un « pourquoi c'est pertinent » et une action concrète
+    # dépassent systématiquement 4096 tokens de sortie. C'est la seule étape
+    # du pipeline dont la réponse est aussi volumineuse.
+    result = call_claude(system, prompt, max_tokens=8192)
     parsed = parse_json_response(result)
     if not parsed:
+        # Échec bruyant : cette étape a rendu 0 en silence pendant des mois,
+        # et l'onglet Opportunités est resté vide sans que rien ne l'explique.
+        print("   [ERREUR] Réponse Claude non parsable — aucune opportunité écrite.")
+        if result:
+            print(f"   Début de la réponse : {result[:300]}")
+            print(f"   Fin de la réponse   : {result[-200:]}")
+        else:
+            print("   Réponse vide (budget dépassé ou erreur API en amont).")
         return 0
 
     count = 0
+    failed = 0
     for opp in parsed:
         opp["week_start"] = week_start
         if sb_post("weekly_opportunities", opp):
             count += 1
+        else:
+            failed += 1
+    if failed:
+        print(f"   [ERREUR] {failed} opportunité(s) refusée(s) à l'écriture sur {len(parsed)}.")
     return count
 
 

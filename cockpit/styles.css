@@ -1270,26 +1270,66 @@ select:focus-visible {
   font-feature-settings: "tnum";
 }
 .top-card--rank1 .top-rank { color: var(--brand); }
-.top-score {
-  display: flex; flex-direction: column; gap: 4px;
+/* .top-score / -bar / -fill / -num supprimés avec le score fabriqué qu'ils
+   habillaient (`94 - i * 6` sous un libellé « Score de pertinence », barre de
+   progression comprise). Remplacés par la confiance réelle de la sélection,
+   qui n'a pas de valeur numérique à afficher. */
+.top-conf {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: .05em;
   color: var(--tx3);
-  width: 100%;
+  white-space: nowrap;
 }
-.top-score-bar {
-  display: block;
-  height: 3px;
-  background: var(--bd);
-  border-radius: 2px;
-  overflow: hidden;
+.top-conf--high   { color: var(--positive); }
+.top-conf--medium { color: var(--tx2); }
+.top-conf--low    { color: var(--tx3); }
+
+/* Le « pourquoi toi », posé entre le titre et le résumé : c'est ce qui
+   distingue une sélection d'une liste. Italique pour le détacher du corps
+   de l'article, qui n'est pas de la même voix. */
+.top-why {
+  margin: var(--space-2) 0 0;
+  font-size: var(--text-sm);
+  font-style: italic;
+  color: var(--brand);
+  line-height: 1.45;
 }
-.top-score-fill {
-  display: block; height: 100%;
-  background: var(--brand);
-  border-radius: 2px;
+.top-feat-why {
+  margin: var(--space-2) 0 var(--space-3);
+  font-size: var(--text-md);
+  font-style: italic;
+  color: var(--brand);
+  line-height: 1.5;
 }
-.top-score-num { font-weight: 600; color: var(--tx2); }
+
+/* Vote sur la sélection */
+.top-vote { display: inline-flex; gap: 2px; }
+.card-action--up.is-on   { color: var(--positive); border-color: var(--positive); }
+.card-action--down.is-on { color: var(--alert);    border-color: var(--alert); }
+
+.top-reasons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--bd);
+}
+.top-reasons-label { font-size: var(--text-xs); color: var(--tx3); }
+.top-reason {
+  padding: 3px 10px;
+  border: 1px solid var(--bd);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--tx2);
+  font-size: var(--text-2xs);
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.top-reason:hover { color: var(--alert); border-color: var(--alert); }
 
 .top-card-body { min-width: 0; display: flex; flex-direction: column; }
 .top-meta {
@@ -4697,6 +4737,62 @@ select:focus-visible {
 .ck-dialog-btn--ok:hover { background: var(--brand); border-color: var(--brand); }
 .ck-dialog-btn--ok.is-danger { background: var(--alert); border-color: var(--alert); color: var(--bg); }
 .ck-dialog-btn--ok.is-danger:hover { background: var(--alert); filter: brightness(1.08); }
+
+/* ═══ Bandeau santé des pipelines ════════════════════════════
+   Posé dans <main> au-dessus du panel actif quand la source de
+   données de l'onglet est dégradée. Uniquement des tokens de
+   thème — pas d'hex en dur, il doit suivre Dawn/Obsidian/Atlas.
+   ────────────────────────────────────────────────────────── */
+.phb {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-4);
+}
+
+.phb-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--bd);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  color: var(--tx2);
+  background: var(--surface);
+}
+
+/* Panne franche : le run échoue. */
+.phb-row--failing {
+  border-color: var(--alert);
+  background: var(--alert-tint);
+}
+.phb-row--failing > svg { color: var(--alert); flex: none; }
+
+/* Péremption : les runs passent mais rien n'est produit. Moins
+   alarmant qu'une panne, tout aussi mensonger pour l'affichage. */
+.phb-row--stale {
+  border-color: var(--neutral);
+  background: var(--neutral-tint);
+}
+.phb-row--stale > svg { color: var(--neutral); flex: none; }
+
+.phb-text { flex: 1; min-width: 0; }
+.phb-text strong { color: var(--tx); font-weight: 600; }
+
+.phb-link {
+  flex: none;
+  color: var(--tx2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+}
+.phb-link:hover { color: var(--tx); }
+
+@media (max-width: 720px) {
+  .phb-row { flex-wrap: wrap; }
+  .phb-text { flex: 1 1 100%; order: 2; }
+}
 
 /* ═══ Kill-switch global pour reduced-motion ═════════════════
    Couvre les 9 animations infinies réparties dans

@@ -45,6 +45,9 @@ function PanelTop({ data, onNavigate }) {
   const [filter, setFilter] = useStateTop("all");
   const [copied, setCopied] = useStateTop(false);
   const allTop = data.top || [];
+  // Vrai dès qu'une sélection raisonnée existe pour aujourd'hui. Faux quand le
+  // pipeline n'a pas tourné : l'en-tête ne doit alors rien promettre.
+  const picked = allTop.some((t) => t.picked);
   const sections = ["all", ...new Set(allTop.map((t) => t.section).filter(Boolean))];
   const filtered = filter === "all" ? allTop : allTop.filter((t) => t.section === filter);
   const [feat1, feat2, feat3, ...rest] = filtered;
@@ -64,12 +67,21 @@ function PanelTop({ data, onNavigate }) {
       <div className="panel-hero">
         <div className="panel-hero-eyebrow">Top du jour · S{weekNum} · {dateLabel.charAt(0).toUpperCase() + dateLabel.slice(1)}</div>
         <h1 className="panel-hero-title">
-          {allTop.length > 0
-            ? `Les ${allTop.length} lectures${allTop.length > 1 ? "" : ""} incontournables, triées par impact métier`
-            : "Aucun top disponible pour aujourd'hui"}
+          {allTop.length === 0
+            ? "Aucun top disponible pour aujourd'hui"
+            : picked
+              ? `${allTop.length} article${allTop.length > 1 ? "s" : ""} retenu${allTop.length > 1 ? "s" : ""} pour toi aujourd'hui`
+              : `Les ${allTop.length} derniers articles récupérés`}
         </h1>
+        {/* L'ancien sous-titre annonçait un « score calculé sur la pertinence
+            pour ton rôle, la fraîcheur et la convergence de signaux entre
+            sources ». Aucun de ces trois calculs n'existait : le score valait
+            `94 - i * 6`. On décrit maintenant ce qui se passe réellement, y
+            compris quand la sélection n'a pas tourné. */}
         <p className="panel-hero-sub">
-          Score calculé sur la pertinence pour ton rôle (RTE, assurance), la fraîcheur, et la convergence de signaux entre sources. Les 3 premiers sont à lire avant 9h.
+          {picked
+            ? "Sélection du jour, motivée article par article et recalibrée par tes retours. Le pouce en bas demande pourquoi — c'est ce motif qui affine les prochaines."
+            : "La sélection du jour n'a pas tourné : voici simplement les derniers articles récupérés, sans tri ni classement."}
         </p>
       </div>
 
@@ -119,11 +131,14 @@ function PanelTop({ data, onNavigate }) {
                 <span>{feat1.date}</span>
               </div>
               <h2 className="top-feat-title">{feat1.title}</h2>
+              {feat1.why && <p className="top-feat-why">{feat1.why}</p>}
               <p className="top-feat-summary">{feat1.summary}</p>
               <div className="top-feat-foot">
+                {/* Affichait `{feat1.score} / 100 · impact` — soit 94, toujours,
+                    pour le premier article de la liste. Un « impact » qui ne
+                    mesurait que la position dans un tableau. */}
                 <div className="top-feat-score">
-                  <span className="top-feat-score-num">{feat1.score}</span>
-                  <span>/ 100 · impact</span>
+                  <span>{feat1.picked ? "sélection du jour" : feat1.section}</span>
                 </div>
                 <span>Lire →</span>
               </div>
@@ -139,7 +154,7 @@ function PanelTop({ data, onNavigate }) {
                 <p className="top-feat-side-summary">{feat2.summary}</p>
                 <div className="top-feat-side-foot">
                   <span>{feat2.section}</span>
-                  <span>{feat2.score}/100</span>
+                  <span>{feat2.picked ? "sélection" : ""}</span>
                 </div>
               </article>
             )}
@@ -154,7 +169,7 @@ function PanelTop({ data, onNavigate }) {
                 <p className="top-feat-side-summary">{feat3.summary}</p>
                 <div className="top-feat-side-foot">
                   <span>{feat3.section}</span>
-                  <span>{feat3.score}/100</span>
+                  <span>{feat3.picked ? "sélection" : ""}</span>
                 </div>
               </article>
             )}

@@ -1,0 +1,58 @@
+name: Vocabulaire japonais (Médiathèque)
+
+# Extrait le vocabulaire des titres natifs des franchises anime pour la bande
+# « Avant l'épisode ». Tourne à 08:00 UTC, après anime_tracker_sync (07:30)
+# qui est le seul à pouvoir faire apparaître de nouvelles franchises.
+#
+# Incrémental : ne retraite jamais une franchise déjà traitée. Le run nominal
+# ne fait donc AUCUN appel Gemini — seuls les ajouts en coûtent un.
+
+on:
+  schedule:
+    - cron: "0 8 * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Retraiter toutes les franchises (ignore l'incrémental)"
+        type: boolean
+        default: false
+      limit:
+        description: "Borner le nombre de franchises traitées (vide = toutes)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests google-genai
+
+      - name: Extract Japanese vocabulary
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # Les entrées passent par l'environnement, jamais par interpolation
+          # ${{ }} dans le shell : une valeur comme `1; curl … | sh` serait
+          # exécutée telle quelle. Ici le shell ne voit que des variables.
+          IN_FORCE: ${{ inputs.force }}
+          IN_LIMIT: ${{ inputs.limit }}
+        run: |
+          ARGS=""
+          if [ "$IN_FORCE" = "true" ]; then ARGS="$ARGS --force"; fi
+          case "$IN_LIMIT" in
+            ""            ) ;;                                  # non renseigné
+            *[!0-9]*      ) echo "limit doit être un entier — ignoré" ;;
+            *             ) ARGS="$ARGS --limit $IN_LIMIT" ;;
+          esac
+          python pipelines/jp_vocab_sync.py $ARGS

@@ -243,7 +243,8 @@ function HiDrawer({ day, onClose, onTogglePin, isPinned }) {
                       <div className="hi-drawer-top-title">{t.title}</div>
                       <div className="hi-drawer-top-meta">{t.source} · {t.section}</div>
                     </div>
-                    <div className="hi-drawer-top-score"><strong>{t.score}</strong>/100</div>
+                    {/* Affichait `{t.score}/100` — un `94 - idx*6` sans référent. */}
+                    <div className="hi-drawer-top-score">{t.section}</div>
                   </div>
                 ))}
               </div>

@@ -169,6 +169,8 @@ challenge_completed 1  (non mappé)
 - [ ] **Drawer fixed-right** pas responsive sur mobile.
 
 ## Dernière MAJ
+2026-07-26 — retrait du score fabriqué dans le tiroir d'une journée passée. Le « Top 3 incontournables » y affichait `score/100` calculé par `Math.max(60, 94 - idx * 6)` — deuxième copie de la même formule que le Brief. Pour les jours antérieurs à la sélection raisonnée, aucun classement réel n'existe : la vue montre désormais la section, qui est exacte.
+
 2026-05-01 — sync spec ↔ code : note les guards défensifs sur `hist?.totals` + `t.peak_day?.short_label` + `t.total_articles ?? 0` ajoutés le 2026-04-30 (commit `69ea05b`, P33) pour neutraliser le crash quand l'agrégat `transformHistory()` retournait des champs manquants. Aucun changement fonctionnel observable — fix de robustesse uniquement.
 2026-04-24 — réécriture Parcours utilisateur en vocabulaire produit.
 2026-04-24 — réécriture Fonctionnalités en vocabulaire produit.
