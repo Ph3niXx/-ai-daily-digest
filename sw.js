@@ -2,11 +2,12 @@
 // Cache-first for static shell (cockpit/* + CDN libs pinned by SRI),
 // network-first for Supabase/API calls — so the app stays installable
 // and fast offline while always preferring fresh data when online.
-const CACHE = "cockpit-v90";
+const CACHE = "cockpit-v91";
 
 const STATIC = [
   "/jarvis-cockpit/",
   "/jarvis-cockpit/assets/icon-cockpit-180.png",
+  "/jarvis-cockpit/assets/icon-mediatheque-180.png",
   "/jarvis-cockpit/cockpit/app.jsx?v=34",
   "/jarvis-cockpit/cockpit/command-palette.jsx?v=1",
   "/jarvis-cockpit/cockpit/components-ticket.jsx?v=2",
@@ -35,6 +36,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/icons.jsx?v=3",
   "/jarvis-cockpit/cockpit/lib/anilist.js?v=2",
   "/jarvis-cockpit/cockpit/lib/auth.js?v=2",
+  "/jarvis-cockpit/cockpit/lib/boot-mediatheque.js?v=1",
   "/jarvis-cockpit/cockpit/lib/bootstrap.js?v=2",
   "/jarvis-cockpit/cockpit/lib/data-loader.js?v=39",
   "/jarvis-cockpit/cockpit/lib/dialog.js?v=1",
@@ -93,7 +95,9 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/styles.css?v=35",
   "/jarvis-cockpit/cockpit/themes.js?v=2",
   "/jarvis-cockpit/index.html",
+  "/jarvis-cockpit/manifest-mediatheque.json",
   "/jarvis-cockpit/manifest.json",
+  "/jarvis-cockpit/mediatheque.html",
 ];
 
 self.addEventListener("install", (e) => {

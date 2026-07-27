@@ -4871,6 +4871,7 @@
   window.cockpitDataLoader = {
     bootTier1,
     loadPanel,
+    loadUserProfile,      // consomme par boot-mediatheque.js (page d'entree mobile)
     invalidateCache,
     hydrateGlobalsFromTier1,
     TIER2_PANELS,
