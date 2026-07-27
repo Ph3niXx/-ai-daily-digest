@@ -6,6 +6,56 @@
 // ne lit rien de COCKPIT_DATA, seulement window.MEDIATHEQUE_DATA et la cle
 // tmdb_api_key de PROFILE_DATA (panel-mediatheque.jsx:776). Tier 1 couterait
 // 11 requetes dont articles/30j et signal_tracking pour rien.
+
+// Frontiere d'erreur — sans elle, un throw pendant le rendu demonte toute la
+// racine et laisse une page blanche, sans Web Inspector accessible depuis
+// Windows pour diagnostiquer (bug deja vecu de cette forme, voir
+// panel-mediatheque.jsx:927-929). Calquee sur PanelErrorBoundary (app.jsx:67-96),
+// en React.createElement pur : ce script est classique (pas Babel), pas de
+// JSX disponible ici.
+//
+// Cette frontiere DOIT rester stable (jamais recreee) alors que l'element
+// qu'elle enveloppe (voir renderPanel() plus bas) change de key a chaque
+// refresh(). Si la frontiere elle-meme etait recreee a chaque remount, une
+// erreur captee serait effacee au refresh suivant : un panel qui replante de
+// facon deterministe (meme bug a chaque montage, exactement le cas
+// documente ci-dessus) replanterait puis serait recapture indefiniment au
+// fil des refresh, au lieu de rester bloque sur le message. En restant
+// stable, l'instance qui capte l'erreur garde son state.err et ne tente
+// plus jamais de rendre this.props.children tant que la page n'a pas ete
+// rechargee pour de vrai — ce que le bouton ci-dessous declenche.
+class MdtErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state = { err: null }; }
+  static getDerivedStateFromError(err){ return { err }; }
+  componentDidCatch(err, info){
+    console.error("[MdtErrorBoundary]", err, info && info.componentStack);
+  }
+  render(){
+    if (this.state.err) {
+      return React.createElement(
+        "div",
+        { style: { padding: "80px 24px", maxWidth: 480, margin: "0 auto", fontFamily: "var(--font-body, Inter)", textAlign: "center" } },
+        React.createElement(
+          "h2",
+          { style: { fontFamily: "var(--font-display, serif)", fontSize: 20, color: "var(--tx)", marginBottom: 12 } },
+          "La médiathèque n'a pas pu s'afficher"
+        ),
+        React.createElement(
+          "p",
+          { style: { fontSize: 14, color: "var(--tx2)", marginBottom: 20 } },
+          "Une erreur est survenue. Recharge la page pour réessayer."
+        ),
+        React.createElement(
+          "button",
+          { className: "btn btn--ghost", onClick: () => window.location.reload() },
+          "Recharger"
+        )
+      );
+    }
+    return this.props.children;
+  }
+}
+
 (async function boot(){
   const loader = document.createElement("div");
   loader.id = "mdt-loader";
@@ -19,6 +69,32 @@
     const l = document.getElementById("mdt-loader");
     if (l) l.remove();
   };
+
+  // Rend la frontiere d'erreur (stable, cf. MdtErrorBoundary plus haut)
+  // autour du panel, dont la key CHANGE a chaque appel : c'est un remount
+  // complet, pas un simple re-render.
+  //
+  // Pourquoi un remount plutot qu'ajouter une dependance a un seul useMemo
+  // (BLOCKING 1) : `evening` n'est pas la seule valeur derivee de l'heure —
+  // pickTonight(), tonightHeadline(), airedToday() et les libelles
+  // "aujourd'hui"/"demain" de l'agenda en dependent aussi. Changer la key
+  // force React a demonter puis remonter tout le panel (au lieu de
+  // reconcilier la fiber existante) : useState/useMemo repartent de zero et
+  // TOUTES les valeurs derivees de l'heure sont recalculees, pas seulement
+  // celle qu'on aurait pu penser a corriger en ajoutant une dependance.
+  // Cout accepte : une feuille ouverte ou une recherche en cours se ferment
+  // apres une absence de plus de 5 min (STALE_MS plus bas) — budget, types et
+  // collectionOpen sont relus depuis localStorage au montage, rien de
+  // durable n'est perdu.
+  function renderPanel(){
+    window.__mdtRoot.render(
+      React.createElement(
+        MdtErrorBoundary,
+        null,
+        React.createElement(window.PanelMediatheque, { key: "r" + Date.now() })
+      )
+    );
+  }
 
   // Recharge les donnees Tier 2 et re-rend. Expose pour l'ecouteur de reprise.
   // Garde de re-entrance : un boolean suffit (pas de queue). Les GET sont
@@ -37,7 +113,7 @@
       dl.invalidateCache("user_profile");
       dl.invalidateCache("activity_brief");
       await loadData();
-      if (window.__mdtRoot) window.__mdtRoot.render(React.createElement(window.PanelMediatheque));
+      if (window.__mdtRoot) renderPanel();
     } finally {
       refreshing = false;
     }
@@ -47,7 +123,7 @@
     const dl = window.cockpitDataLoader;
     const [, profileRows] = await Promise.all([
       dl.loadPanel("mediatheque").catch((e) => { console.error("[boot-mdt] Tier 2", e); return null; }),
-      dl.loadUserProfile().catch(() => []),
+      dl.loadUserProfile().catch((e) => { console.error("[boot-mdt] profil", e); return []; }),
     ]);
     // transformProfile() est exportee par data-loader.js — meme fonction que
     // celle utilisee par hydrateGlobalsFromTier1() pour ce champ, source
@@ -65,6 +141,7 @@
     if (!window.sb || !window.cockpitAuth || !window.cockpitDataLoader) {
       console.error("[boot-mdt] scripts lib manquants");
       removeLoader();
+      document.getElementById("root").textContent = "Échec du chargement.";
       return;
     }
     await window.cockpitAuth.waitForAuth();
@@ -87,7 +164,7 @@
     return;
   }
   window.__mdtRoot = ReactDOM.createRoot(document.getElementById("root"));
-  window.__mdtRoot.render(React.createElement(window.PanelMediatheque));
+  renderPanel();
   window.__mdtRefresh = refresh;
 
   // iOS suspend une PWA plutot que de la fermer : rouverte le lendemain, elle
