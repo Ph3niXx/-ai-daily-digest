@@ -762,7 +762,10 @@ function mdtSurface(){
   } catch { return "cockpit"; }
 }
 function mdtTrack(type, payload){
-  window.track && window.track(type, Object.assign({ surface: mdtSurface() }, payload || {}));
+  // payload EN DERNIER : sinon un futur payload portant sa propre cle
+  // `surface` ecraserait celle calculee ici, et docs/telemetry.md:11 promet
+  // que ca n'arrive jamais.
+  window.track && window.track(type, Object.assign({}, payload || {}, { surface: mdtSurface() }));
 }
 
 function PanelMediatheque({ data, onNavigate }) {

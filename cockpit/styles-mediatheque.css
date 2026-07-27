@@ -486,10 +486,17 @@
       portent autoFocus, donc le zoom part tout seul.
    ────────────────────────────────────────────────────────────── */
 @media (max-width: 760px) {
+  /* Ecart delibere a 40px (pas 44) : .mdt-viewtoggle-btn, .mdt-stepper-count
+     input et .mdt-rating input sont des controles secondaires (bascule de
+     vue, saisie fine chiffree), coherent avec le precedent
+     styles-mobile.css:233-242 (primaires 44px, secondaires 40px). Ne pas
+     "corriger" ces trois-la vers 44px — ce bloc n'est pas une garantie AAA
+     globale. */
+
   /* — Stepper : le geste principal — */
   .mdt-stepper { gap: 8px; }
   .mdt-stepper button { width: 44px; height: 44px; font-size: 18px; }
-  .mdt-stepper-count { min-width: 64px; font-size: 16px; }
+  .mdt-stepper-count { min-width: 64px; min-height: 44px; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; }
   .mdt-stepper-count input { width: 60px; height: 40px; font-size: 16px; }
 
   /* — Note par saison — */
