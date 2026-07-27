@@ -43,6 +43,15 @@ const read = new Set(
                      "addEventListener", "removeEventListener", "setTimeout",
                      "clearTimeout", "open", "scrollTo", "navigator", "document"].includes(g))
 );
+
+// Plancher anti-vacuite : si le panel cessait de lire la moindre globale
+// (regex cassee par un refactor, filtre trop large...), les deux checks
+// suivants passeraient trivialement sur un ensemble vide — "tout est
+// couvert" parce qu'il n'y a plus rien a couvrir. C'est le seul garde-fou
+// automatise sur l'invariant central de ce fichier.
+check("le panel lit au moins une globale window.X", read.size > 0,
+  `read.size = ${read.size} — regex cassee, ou panel qui ne lit plus rien via window.X ?`);
+
 const assigned = new Set(
   [...PANEL.matchAll(/window\.([A-Za-z_][A-Za-z0-9_]*)\s*=/g)].map((m) => m[1])
 );
@@ -77,10 +86,17 @@ check("boot-mediatheque.js est charge apres panel-mediatheque.jsx",
   iPanel !== -1 && iBoot !== -1 && iPanel < iBoot,
   `panel a l'index ${iPanel}, boot a l'index ${iBoot}`);
 
-// L'argument economique de toute la page : peu de scripts Babel.
-const babel = [...HTML.matchAll(/type="text\/babel"\s+src="([^"]+)"/g)].map((m) => m[1]);
-check("mediatheque.html ne transpile que 2 scripts Babel", babel.length === 2,
-  `${babel.length} script(s) : ${babel.join(", ")}`);
+// L'argument economique de toute la page : peu de scripts Babel. On isole
+// chaque balise <script ...> entiere puis on cherche l'attribut dedans,
+// plutot qu'une regex ancree sur "type AVANT src" : un troisieme script
+// Babel ecrit src=... puis type="text/babel" doit etre vu, pas echapper au
+// comptage qui protege la seule justification economique de cette page.
+const babelTags = [...HTML.matchAll(/<script\b[^>]*>/g)]
+  .map((m) => m[0])
+  .filter((tag) => /type="text\/babel"/.test(tag));
+const babelSrcs = babelTags.map((tag) => (tag.match(/src="([^"]+)"/) || [, "?"])[1]);
+check("mediatheque.html ne transpile que 2 scripts Babel", babelTags.length === 2,
+  `${babelTags.length} script(s) : ${babelSrcs.join(", ")}`);
 
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);

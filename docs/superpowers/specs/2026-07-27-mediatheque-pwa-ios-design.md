@@ -314,8 +314,11 @@ Garde-fous CI existants à respecter (règles cardinales du `CLAUDE.md`) : `lint
 (bloquant — MAJ de `docs/specs/tab-mediatheque.md` et bump de `last_updated` dans
 `docs/specs/index.json`), `validate-arch` (bloquant — nouvelle entrée dans
 `docs/architecture/`, `flows/perso-mediatheque.yaml` et un ADR pour la seconde page
-d'entrée), `sw-sync.yml`. Lancer `validate_spec.py` avec `PYTHONUTF8=1` : il échoue sur
-les caractères ✅ en console Windows alors que la validation elle-même est passée.
+d'entrée), `sw-sync.yml`. Le linter qui bloque réellement sur `docs/specs/**` est
+`scripts/lint_specs_produit.py` (exécuté par `.github/workflows/lint-specs.yml`) —
+`scripts/validate_spec.py` valide `jarvis/spec.json` en dur et ne lit jamais
+`sys.argv`, donc l'invoquer avec `docs/specs/tab-mediatheque.md` en argument
+validerait silencieusement un autre fichier que celui visé.
 
 ## Télémétrie — la sonde de survie
 

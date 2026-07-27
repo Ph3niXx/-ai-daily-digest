@@ -34,7 +34,7 @@ Toute PR touchant pipeline/panel/migration SQL/cron/composant Jarvis → MAJ cor
 Checklist par type de modif + garde-fous CI (`validate-arch` bloquant, `arch-drift-check` warning) : [docs/architecture/README.md](docs/architecture/README.md).
 
 ### Service worker
-Après modif `index.html` ou `cockpit/**` → `node scripts/sync-sw.mjs` (ou auto via [.github/workflows/sw-sync.yml](.github/workflows/sw-sync.yml)). Ne jamais éditer `STATIC[]` ou `CACHE` à la main.
+Après modif `index.html`, `mediatheque.html`, `cockpit/**`, `manifest*.json` ou `assets/**` → `node scripts/sync-sw.mjs` (ou auto via [.github/workflows/sw-sync.yml](.github/workflows/sw-sync.yml)). Ne jamais éditer `STATIC[]` ou `CACHE` à la main.
 
 ### Télémétrie
 Tout nouvel `event_type` → entrée dans [docs/telemetry.md](docs/telemetry.md) AVANT le commit + appel `track('type', payload)` dans le code. Schéma `usage_events` ouvert (JSONB), pas de migration.
@@ -44,19 +44,19 @@ Tout nouveau secret GitHub Actions → entrée dans [docs/secrets.md](docs/secre
 
 ## Sécurité
 
-- **Auth obligatoire avant mount** : `cockpit/lib/bootstrap.js` attend `cockpitAuth.waitForAuth()` AVANT tout mount React. JWT injecté dans les headers REST, rotation auto sur `TOKEN_REFRESHED`.
+- **Auth obligatoire avant mount** : `cockpit/lib/bootstrap.js` (cockpit) et son équivalent `cockpit/lib/boot-mediatheque.js` (PWA `mediatheque.html`) attendent chacun `cockpitAuth.waitForAuth()` AVANT tout mount React. JWT injecté dans les headers REST, rotation auto sur `TOKEN_REFRESHED`.
 - **RLS `authenticated`** : toutes les tables exigent un utilisateur connecté pour SELECT (migration `sql/006_rls_authenticated.sql`). Exceptions assumées : `jobs` / `job_scans` en `using(true)` (routine Jobs Radar distante, écrit via MCP Supabase — ADR-19).
 - **Pipelines backend = `SUPABASE_SERVICE_KEY` uniquement** (bypass RLS). Jarvis refuse de démarrer sans.
 - **XSS** : DOMPurify via helper `safe()`. **CSP** : meta tag restrictif (`frame-src: none`, `'unsafe-eval'` requis pour Babel standalone).
 
 ## Data layer front
 
-- **Tier 1 (bloquant, avant mount)** — `cockpit/lib/data-loader.js::bootTier1()` fetch en parallèle : `articles` jour, `daily_briefs`, `skill_radar`, `signal_tracking`, `user_profile`, `articles` 30j, `weekly_analysis` 8 sem. Construit `window.COCKPIT_DATA` + hydrate `APPRENTISSAGE_DATA.radar`, `PROFILE_DATA`, `SIGNALS_DATA`.
+- **Tier 1 (bloquant, avant mount)** — `cockpit/lib/data-loader.js::bootTier1()` fetch en parallèle : `articles` jour, `daily_briefs`, `skill_radar`, `signal_tracking`, `user_profile`, `articles` 30j, `weekly_analysis` 8 sem. Construit `window.COCKPIT_DATA` + hydrate `APPRENTISSAGE_DATA.radar`, `PROFILE_DATA`, `SIGNALS_DATA`. Ne concerne que l'entrée cockpit (`bootstrap.js`) : `boot-mediatheque.js` (page `mediatheque.html`) saute Tier 1 et monte directement sur Tier 2 seul.
 - **Tier 2 (lazy, au clic sidebar)** — `loadPanel(id)` fetch le corpus, mute `window.X_DATA`, résout la promesse. Re-render forcé via `dataVersion` dans `app.jsx` (`panelKey = activePanel + ":" + dataVersion`). Mémoïsé via `once()`.
 
 ## Conventions code
 
-- React 18 + `@babel/standalone` via unpkg, no build step, ouvrable en `file://` pour itérer. Composants exposés sur `window.X` (pas d'imports ES modules — incompatible Babel standalone). Entrée : `cockpit/lib/bootstrap.js` → waitForAuth → bootTier1 → `window.__cockpitMount()`.
+- React 18 + `@babel/standalone` via unpkg, no build step, ouvrable en `file://` pour itérer. Composants exposés sur `window.X` (pas d'imports ES modules — incompatible Babel standalone). Entrée : `cockpit/lib/bootstrap.js` → waitForAuth → bootTier1 → `window.__cockpitMount()` (deuxième entrée PWA `mediatheque.html` : `cockpit/lib/boot-mediatheque.js`, sans Tier 1).
 - Panels consomment `window.COCKPIT_DATA.*` (Tier 1) et `window.X_DATA` (Tier 2).
 - Publishable Supabase key en dur dans `cockpit/lib/supabase.js` (c'est une clé publique).
 - Pas de `max-width` sur le contenu — le cockpit utilise toute la largeur dispo.
