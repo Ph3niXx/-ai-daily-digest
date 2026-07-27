@@ -29,5 +29,7 @@ tables:
 panels:
   - id: mediatheque
     detail: "Panel Médiathèque — bandeau Sorties, agenda des diffusions de la semaine, rail « Continuer à regarder », collection repliée (statuts dérivés), recherche bibliothèque + AniList, fiche franchise avec steppers"
+  - id: mediatheque-pwa
+    detail: "Page d'entree mobile dediee (mediatheque.html + boot-mediatheque.js) — meme panel, sans sidebar ni Tier 1 ; 2 scripts Babel au lieu de 30"
   - id: brief
     detail: "Encart MdtBriefCard (media_releases non acquittées < 7j, Tier 1)"

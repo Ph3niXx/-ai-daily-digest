@@ -103,7 +103,7 @@ function MdtStepper({ entry, progressById, onProgress }) {
       <span className="mdt-stepper-count" onClick={() => !disabled && setEditing(true)}>
         {editing ? (
           <input
-            autoFocus type="number" min="0" max={max} defaultValue={watched}
+            autoFocus type="number" inputMode="numeric" min="0" max={max} defaultValue={watched}
             onBlur={(e) => { setEditing(false); onProgress(entry, clamp(Number(e.target.value) || 0)); }}
             onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditing(false); }}
           />
@@ -124,7 +124,7 @@ function MdtRating({ entry, ratingById, onRating }) {
     return (
       <span className="mdt-rating">
         <input
-          autoFocus type="number" min="0" max="100"
+          autoFocus type="number" inputMode="numeric" min="0" max="100"
           defaultValue={rating != null ? rating : ""}
           onBlur={(e) => {
             setEditing(false);
@@ -152,7 +152,10 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
   if (fiche.mode === "preview") {
     if (fiche.loading) return (
       <div className="mdt-modal-backdrop" onClick={onClose}>
-        <div className="mdt-modal" onClick={(e) => e.stopPropagation()}><div className="mdt-spinner">Construction de la fiche franchise…</div></div>
+        <div className="mdt-modal" onClick={(e) => e.stopPropagation()}>
+          <button className="mdt-fiche-close" onClick={onClose} aria-label="Fermer la fiche">✕</button>
+          <div className="mdt-spinner">Construction de la fiche franchise…</div>
+        </div>
       </div>
     );
     if (fiche.src === "tmdb") {
@@ -215,6 +218,7 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
   return (
     <div className="mdt-modal-backdrop" onClick={onClose}>
       <div className="mdt-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <button className="mdt-fiche-close" onClick={onClose} aria-label="Fermer la fiche">✕</button>
         <div className="mdt-fiche-head" style={head.banner ? { backgroundImage: `url(${head.banner})` } : undefined}>
           <div className="mdt-fiche-scrim" />
           <div className="mdt-fiche-head-inner">
@@ -320,7 +324,7 @@ function MdtWeek({ D, tick, types, onOpen }) {
   const timeLabel = (ts) => new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   const open = (item) => {
     onOpen(item.franchiseId);
-    window.track && window.track("mediatheque_week_click", { days_ahead: item.daysAhead, entry_kind: item.kind });
+    mdtTrack("mediatheque_week_click", { days_ahead: item.daysAhead, entry_kind: item.kind });
   };
   const laterNote = (item) => {
     if (item.reason === "undated") return "date inconnue";
@@ -424,7 +428,7 @@ function MdtHero({ hero, progressById, onOpen, onProgress }) {
   const bg = fr.banner_url || fr.cover_url;
   const openFiche = () => {
     onOpen(fr);
-    window.track && window.track("mediatheque_hero_action", {
+    mdtTrack("mediatheque_hero_action", {
       action: kind === "resume" ? "resume" : kind === "discover" ? "start" : "open", status: st.id });
   };
   return (
@@ -599,7 +603,7 @@ function MdtTonight({ picks, headline, budget, onBudget, progressById, onOpen, o
                   </span>
                   <button type="button" className="mdt-tonight-cta"
                     onClick={() => {
-                      window.track && window.track("mediatheque_tonight_pick", {
+                      mdtTrack("mediatheque_tonight_pick", {
                         role: p.role,
                         media_type: p.card.f.media_type || "anime",
                         runtime_minutes: p.runtime,
@@ -746,6 +750,24 @@ function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusF
   );
 }
 
+// Sonde de survie de la PWA mobile. Le payload de usage_events est un JSONB
+// ouvert : un champ suffit, pas de migration ni de nouvel event_type.
+// Question a laquelle elle repond dans trois semaines : le telephone est-il
+// reellement sorti pour ca ? Un volume nul est une reponse, pas un retard.
+function mdtSurface(){
+  try {
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+      || window.navigator.standalone
+      ? "pwa" : "cockpit";
+  } catch { return "cockpit"; }
+}
+function mdtTrack(type, payload){
+  // payload EN DERNIER : sinon un futur payload portant sa propre cle
+  // `surface` ecraserait celle calculee ici, et docs/telemetry.md:11 promet
+  // que ca n'arrive jamais.
+  window.track && window.track(type, Object.assign({}, payload || {}, { surface: mdtSurface() }));
+}
+
 function PanelMediatheque({ data, onNavigate }) {
   const D = window.MEDIATHEQUE_DATA || { franchises: [], entries: [], progress: [], releases: [] };
   const [tick, setTick] = useMdtState(0);            // bump après mutation locale de D
@@ -761,7 +783,7 @@ function PanelMediatheque({ data, onNavigate }) {
     const next = !collectionOpen;
     setCollectionOpen(next);
     try { localStorage.setItem("mdt-collection-open", next ? "1" : "0"); } catch {}
-    window.track && window.track("mediatheque_collection_toggle", { open: next, count: visible.length });
+    mdtTrack("mediatheque_collection_toggle", { open: next, count: visible.length });
   }
   const [query, setQuery] = useMdtState("");          // >= 1 char => filtre la bibliothèque locale, >= 3 chars => recherche AniList aussi
   const [view, setView] = useMdtState("library");     // "library" | "search" — bascule explicite recherche/bibliothèque
@@ -799,7 +821,7 @@ function PanelMediatheque({ data, onNavigate }) {
     if (!prevQ.current) setView(localMatches.length > 0 ? "library" : "search");
     prevQ.current = q;
     const t = setTimeout(() => {
-      window.track && window.track("mediatheque_filter_local", { q_len: q.length, matches: localMatches.length });
+      mdtTrack("mediatheque_filter_local", { q_len: q.length, matches: localMatches.length });
     }, 400);
     return () => clearTimeout(t);
   }, [q, queryActive]);
@@ -843,7 +865,7 @@ function PanelMediatheque({ data, onNavigate }) {
       setResults([...aniRows, ...tmdbRows].sort((a, b) => b.score - a.score));
       setSearchErr(failed === 2 ? "Aucune source ne répond — réessaie dans un instant."
         : failed === 1 ? "Une source n'a pas répondu — résultats partiels." : null);
-      window.track && window.track("mediatheque_search", {
+      mdtTrack("mediatheque_search", {
         q_len: q.length, results: aniRows.length + tmdbRows.length,
         sources: (aniRows.length ? 1 : 0) + (tmdbRows.length ? 1 : 0),
       });
@@ -981,7 +1003,7 @@ function PanelMediatheque({ data, onNavigate }) {
       && (jpSeenByWord.get(w.word) || {}).status !== "known").length;
     if (!fresh) return;
     jpShownRef.current = true;
-    window.track && window.track("jp_band_shown",
+    mdtTrack("jp_band_shown",
       { words: Math.min(fresh, MDT_JP_MAX), evening });
   }, [jpFranchise, jpWords, jpSeenByWord, evening]);
 
@@ -994,13 +1016,13 @@ function PanelMediatheque({ data, onNavigate }) {
     if (next === types) return;
     setTypes(next);
     try { localStorage.setItem(MDT_TYPE_KEY, JSON.stringify(next)); } catch (_) {}
-    window.track && window.track("mediatheque_type_filter", { types: next, count: next.length });
+    mdtTrack("mediatheque_type_filter", { types: next, count: next.length });
   }
 
   function pickBudget(value) {
     setBudget(value);
     mdtWriteBudget(value, Date.now());
-    window.track && window.track("mediatheque_tonight_budget",
+    mdtTrack("mediatheque_tonight_budget",
       { budget_min: value, candidates: tonight.length });
   }
 
@@ -1008,7 +1030,7 @@ function PanelMediatheque({ data, onNavigate }) {
   // que le budget est trop serré ou la bibliothèque à jour. On veut le savoir.
   useMdtEffect(() => {
     if (evening && !tonight.length) {
-      window.track && window.track("mediatheque_tonight_empty",
+      mdtTrack("mediatheque_tonight_empty",
         { budget_min: budget, hour: new Date().getHours() });
     }
   }, [evening, tonight.length, budget]);
@@ -1067,7 +1089,7 @@ function PanelMediatheque({ data, onNavigate }) {
       window.MEDIATHEQUE_DATA.entries.push(...savedEntries);
       setTick((t) => t + 1);
       setFiche({ mode: "library", franchiseId: fr.id });
-      window.track && window.track("mediatheque_add", {
+      mdtTrack("mediatheque_add", {
         franchise_root_id: rootId, entries: savedEntries.length, source: frRow.source,
       });
       cockpitToast(`${fr.title_english || fr.title_romaji} ajouté à ta bibliothèque.`, { kind: "success" });
@@ -1094,7 +1116,7 @@ function PanelMediatheque({ data, onNavigate }) {
       });
       if (!res.ok) throw new Error("progress " + res.status);
       const released = mdtReleased(entry);
-      window.track && window.track("mediatheque_progress", { entry_kind: entry.kind, delta: value - (prevValue || 0), completed: value >= released && released > 0 });
+      mdtTrack("mediatheque_progress", { entry_kind: entry.kind, delta: value - (prevValue || 0), completed: value >= released && released > 0 });
     } catch (e) {
       // Rollback.
       if (prevValue === null) { const i = D2.progress.findIndex((p) => p.entry_id === entry.id); if (i >= 0) D2.progress.splice(i, 1); }
@@ -1131,7 +1153,7 @@ function PanelMediatheque({ data, onNavigate }) {
         body: JSON.stringify([row]),
       });
       if (!res.ok) throw new Error("jp_seen " + res.status);
-      window.track && window.track("jp_word_marked", { status, first_time: snapshot === null });
+      mdtTrack("jp_word_marked", { status, first_time: snapshot === null });
     } catch (e) {
       if (snapshot === null) {
         const i = D2.jpSeen.findIndex((r) => r.word === word.word);
@@ -1160,7 +1182,7 @@ function PanelMediatheque({ data, onNavigate }) {
         body: JSON.stringify([{ entry_id: entry.id, rating: value, updated_at: new Date().toISOString() }]),
       });
       if (!res.ok) throw new Error("rating " + res.status);
-      window.track && window.track("mediatheque_rate", { entry_kind: entry.kind, rating: value, cleared: value === null });
+      mdtTrack("mediatheque_rate", { entry_kind: entry.kind, rating: value, cleared: value === null });
     } catch (e) {
       if (prevRating === undefined) { const i = D2.progress.findIndex((p) => p.entry_id === entry.id); if (i >= 0) D2.progress.splice(i, 1); }
       else { const p = D2.progress.find((x) => x.entry_id === entry.id); if (p) p.rating = prevRating; }
@@ -1186,7 +1208,7 @@ function PanelMediatheque({ data, onNavigate }) {
       D2.releases = D2.releases.filter((r) => r.franchise_id !== franchiseId);
       setTick((t) => t + 1);
       setFiche(null);
-      window.track && window.track("mediatheque_remove", { franchise_root_id: f ? f.source_root_id : null });
+      mdtTrack("mediatheque_remove", { franchise_root_id: f ? f.source_root_id : null });
     } catch (e) {
       cockpitToast("Suppression impossible — réessaie.", { kind: "error" });
     }
@@ -1203,7 +1225,7 @@ function PanelMediatheque({ data, onNavigate }) {
         window.SUPABASE_URL + "/rest/v1/media_franchises?id=eq." + franchiseId,
         { shelved: next });
       if (!res.ok) throw new Error("shelve " + res.status);
-      window.track && window.track("mediatheque_shelve", { shelved: next, franchise_root_id: f.source_root_id });
+      mdtTrack("mediatheque_shelve", { shelved: next, franchise_root_id: f.source_root_id });
     } catch (e) {
       f.shelved = !next;                      // rollback
       setTick((t) => t + 1);
@@ -1219,7 +1241,7 @@ function PanelMediatheque({ data, onNavigate }) {
         window.SUPABASE_URL + "/rest/v1/media_releases?id=eq." + release.id,
         { acknowledged: true });
       if (!res.ok) throw new Error("ack " + res.status);
-      window.track && window.track("mediatheque_release_ack", { event_type: release.event_type });
+      mdtTrack("mediatheque_release_ack", { event_type: release.event_type });
     } catch (e) {
       release.acknowledged = false;
       setTick((t) => t + 1);

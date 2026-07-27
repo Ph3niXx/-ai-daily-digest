@@ -10,9 +10,12 @@ Vue lisible du repo. Source de vérité fonctionnelle : `docs/architecture/pipel
 | `weekly_analysis.py` | Pipeline hebdomadaire Claude (wiki, signaux, recos, challenges, opps, RTE) |
 | `tft_pipeline.py` | Pipeline TFT (Riot API → Supabase) |
 | `index.html` | Coquille React — charge React/Babel + `cockpit/*` |
+| `mediatheque.html` | Deuxième page d'entrée — médiathèque seule, PWA installable iOS (pas de sidebar, 2 scripts Babel contre 30 pour `index.html`) |
 | `requirements.txt` | feedparser, google-generativeai, openai, requests |
 | `manifest.json` | PWA manifest (theme rouille Dawn) |
+| `manifest-mediatheque.json` | PWA manifest dédié à `mediatheque.html` (`start_url`, icône, `theme_color` propres) |
 | `sw.js` | Service worker PWA (cache-first shell, network-only API) |
+| `assets/` | Icônes PWA (`icon-cockpit-180.png`, `icon-mediatheque-180.png` + sources `.svg`) |
 | `CLAUDE.md` | Index minimal pour les sessions Claude Code |
 | `.gitmessage` | Template de commit avec checklist "Specs mises à jour" |
 
@@ -38,7 +41,8 @@ Vue lisible du repo. Source de vérité fonctionnelle : `docs/architecture/pipel
 | `auth.js` | Google OAuth overlay + `waitForAuth()` |
 | `telemetry.js` | `track()` best-effort → `usage_events` |
 | `data-loader.js` | `bootTier1` (Home sync) + `loadPanel` (Tier 2 lazy) |
-| `bootstrap.js` | Entrypoint : auth → Tier 1 → mount React |
+| `bootstrap.js` | Entrypoint cockpit : auth → Tier 1 → mount React |
+| `boot-mediatheque.js` | Entrypoint PWA `mediatheque.html` : auth → Tier 2 seul → mount React (pas de Tier 1) |
 
 ## `pipelines/` — Pipelines de sync API → Supabase
 
@@ -91,6 +95,7 @@ Migrations Jarvis spécifiques : `jarvis/migrations/`.
 | `validate-arch.yml` · `arch-drift-check.yml` | Garde-fous archi |
 | `validate-spec.yml` · `spec-drift-check.yml` · `lint-specs.yml` | Garde-fous specs |
 | `sw-sync.yml` | Sync auto du `STATIC[]` dans `sw.js` |
+| `tests.yml` | Lance tous les `tests/test_*.mjs` (node) sur push `main` + PR |
 
 ## `jarvis/` — Module assistant local
 

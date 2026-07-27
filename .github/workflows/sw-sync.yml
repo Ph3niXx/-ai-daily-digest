@@ -3,7 +3,10 @@ on:
   pull_request:
     paths:
       - "index.html"
+      - "mediatheque.html"
       - "cockpit/**"
+      - "manifest*.json"
+      - "assets/**"
 permissions:
   contents: write
 jobs:

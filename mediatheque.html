@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src 'self' https://mrmgptqpflzyavdfqwwv.supabase.co wss://mrmgptqpflzyavdfqwwv.supabase.co http://localhost:8765 https://*.trycloudflare.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://ws.audioscrobbler.com https://api.frankfurter.dev https://graphql.anilist.co https://api.themoviedb.org; img-src 'self' data: https://raw.communitydragon.org https://lastfm.freetls.fastly.net https://*.lastfm.freetls.fastly.net https://coverartarchive.org https://*.archive.org https://*.dzcdn.net https://cdn-images.dzcdn.net https://*.steamstatic.com https://media.steampowered.com https://cdn.akamai.steamstatic.com https://s4.anilist.co https://image.tmdb.org; frame-src 'none'; object-src 'none'; base-uri 'self';">
+<title>Médiathèque</title>
+<link rel="manifest" href="manifest-mediatheque.json">
+<link rel="apple-touch-icon" href="assets/icon-mediatheque-180.png">
+<meta name="theme-color" content="#F5EFE4">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Médiathèque">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..700&family=Inter:wght@400;500;600;700&family=Instrument+Serif&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cockpit/styles.css?v=35">
+<link rel="stylesheet" href="cockpit/styles-mediatheque.css?v=9">
+<link rel="stylesheet" href="cockpit/styles-mobile.css?v=3">
+</head>
+<body>
+<div id="root"></div>
+
+<!-- Libs externes : memes URLs et memes SRI que index.html -->
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.3/dist/purify.min.js"></script>
+
+<!-- nav.js AVANT data-loader.js : ce dernier lit window.COCKPIT_NAV (data-loader.js:1167) -->
+<script src="cockpit/nav.js?v=2"></script>
+<script src="cockpit/themes.js?v=2"></script>
+
+<script src="cockpit/lib/supabase.js?v=1"></script>
+<script src="cockpit/lib/telemetry.js?v=1"></script>
+<script src="cockpit/lib/auth.js?v=2"></script>
+<script src="cockpit/lib/dialog.js?v=1"></script>
+<script src="cockpit/lib/data-loader.js?v=39"></script>
+<script src="cockpit/lib/anilist.js?v=2"></script>
+<script src="cockpit/lib/tmdb.js?v=1"></script>
+<script src="cockpit/lib/mediatheque-view.js?v=3"></script>
+
+<!-- Formes de repli (le fetch Tier 2 les ecrase) -->
+<script src="cockpit/data-mediatheque.js?v=1"></script>
+<script src="cockpit/data-profile.js?v=2"></script>
+
+<!-- Les DEUX seuls scripts que Babel doit transpiler. 71 ko contre 859 pour
+     index.html : c'est toute la justification de cette page. Ne rien ajouter
+     ici sans mesurer. -->
+<script type="text/babel" src="cockpit/icons.jsx?v=3"></script>
+<script type="text/babel" src="cockpit/panel-mediatheque.jsx?v=13"></script>
+
+<script src="cockpit/lib/boot-mediatheque.js?v=3"></script>
+
+<script>
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
