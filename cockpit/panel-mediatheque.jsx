@@ -215,6 +215,7 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
   return (
     <div className="mdt-modal-backdrop" onClick={onClose}>
       <div className="mdt-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <button className="mdt-fiche-close" onClick={onClose} aria-label="Fermer la fiche">✕</button>
         <div className="mdt-fiche-head" style={head.banner ? { backgroundImage: `url(${head.banner})` } : undefined}>
           <div className="mdt-fiche-scrim" />
           <div className="mdt-fiche-head-inner">
