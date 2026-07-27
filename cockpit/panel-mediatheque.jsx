@@ -152,7 +152,10 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
   if (fiche.mode === "preview") {
     if (fiche.loading) return (
       <div className="mdt-modal-backdrop" onClick={onClose}>
-        <div className="mdt-modal" onClick={(e) => e.stopPropagation()}><div className="mdt-spinner">Construction de la fiche franchise…</div></div>
+        <div className="mdt-modal" onClick={(e) => e.stopPropagation()}>
+          <button className="mdt-fiche-close" onClick={onClose} aria-label="Fermer la fiche">✕</button>
+          <div className="mdt-spinner">Construction de la fiche franchise…</div>
+        </div>
       </div>
     );
     if (fiche.src === "tmdb") {
