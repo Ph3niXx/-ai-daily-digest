@@ -47,7 +47,9 @@
 .mdt-chip { padding: 6px 13px; font-family: var(--font-mono); font-size: 11.5px; border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--tx) 14%, transparent); background: transparent; color: var(--tx2); cursor: pointer;
   transition: border-color .15s ease, color .15s ease; }
-.mdt-chip:hover { color: var(--tx); border-color: color-mix(in srgb, var(--tx) 30%, transparent); }
+@media (hover: hover) {
+  .mdt-chip:hover { color: var(--tx); border-color: color-mix(in srgb, var(--tx) 30%, transparent); }
+}
 .mdt-chip.is-active { background: var(--tx); color: var(--bg); border-color: var(--tx); }
 .mdt-select { padding: 6px 10px; font-family: var(--font-mono); font-size: 11.5px; color: var(--tx3);
   background: transparent; border: 1px solid color-mix(in srgb, var(--tx) 12%, transparent); border-radius: 999px; }
@@ -58,7 +60,9 @@
   background: color-mix(in srgb, var(--tx) 4%, transparent); }
 .mdt-viewtoggle-btn { padding: 6px 14px; font-family: var(--font-mono); font-size: 11.5px;
   border: none; border-radius: 999px; background: transparent; color: var(--tx2); cursor: pointer; white-space: nowrap; }
-.mdt-viewtoggle-btn:hover { color: var(--tx); }
+@media (hover: hover) {
+  .mdt-viewtoggle-btn:hover { color: var(--tx); }
+}
 .mdt-viewtoggle-btn.is-active { background: var(--tx); color: var(--bg); }
 
 /* Bandeau Sorties — slim, discret */
@@ -68,7 +72,9 @@
 .mdt-release { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13.5px; }
 .mdt-release-date { font-family: var(--font-mono); font-size: 11px; color: var(--tx3); margin-left: auto; white-space: nowrap; }
 .mdt-release-ack { border: none; background: transparent; color: var(--tx3); cursor: pointer; font-size: 14px; padding: 2px 6px; }
-.mdt-release-ack:hover { color: var(--brand); }
+@media (hover: hover) {
+  .mdt-release-ack:hover { color: var(--brand); }
+}
 /* En-têtes de section (rail, semainier, collection) */
 .mdt-section { margin-bottom: 6px; }
 .mdt-section-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 26px 0 10px; }
@@ -89,9 +95,17 @@
   transition: transform .18s ease, box-shadow .18s ease; }
 .mdt-rail-shot img, .mdt-rail-ph { display: block; width: 100%; aspect-ratio: 16/9; object-fit: cover;
   background: color-mix(in srgb, var(--tx) 8%, transparent); }
-.mdt-rail-card:hover .mdt-rail-shot, .mdt-rail-card:focus-within .mdt-rail-shot {
+/* Le focus reste actif partout : la navigation clavier en depend. */
+.mdt-rail-card:focus-within .mdt-rail-shot {
   transform: translateY(-4px);
-  box-shadow: 0 16px 32px rgba(0,0,0,.26), 0 0 0 1px color-mix(in srgb, var(--brand) 40%, transparent); }
+  box-shadow: 0 16px 32px rgba(0,0,0,.26), 0 0 0 1px color-mix(in srgb, var(--brand) 40%, transparent);
+}
+@media (hover: hover) {
+  .mdt-rail-card:hover .mdt-rail-shot {
+    transform: translateY(-4px);
+    box-shadow: 0 16px 32px rgba(0,0,0,.26), 0 0 0 1px color-mix(in srgb, var(--brand) 40%, transparent);
+  }
+}
 .mdt-rail-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: rgba(0,0,0,.45); }
 .mdt-rail-bar > div { height: 100%; background: var(--brand); }
 .mdt-rail-body { padding: 9px 2px 0; }
@@ -120,9 +134,11 @@
   border: 1px solid color-mix(in srgb, var(--tx) 10%, transparent);
   background: color-mix(in srgb, var(--tx) 2%, transparent);
   transition: border-color .15s ease, background-color .15s ease; }
-.mdt-agenda-item:hover { border-color: color-mix(in srgb, var(--brand) 55%, transparent);
-  background: color-mix(in srgb, var(--brand) 5%, transparent); }
-.mdt-agenda-item:hover .mdt-agenda-name { color: var(--brand); }
+@media (hover: hover) {
+  .mdt-agenda-item:hover { border-color: color-mix(in srgb, var(--brand) 55%, transparent);
+    background: color-mix(in srgb, var(--brand) 5%, transparent); }
+  .mdt-agenda-item:hover .mdt-agenda-name { color: var(--brand); }
+}
 .mdt-agenda-thumb { flex: 0 0 auto; display: block; width: 34px; aspect-ratio: 2/3;
   object-fit: cover; border-radius: 5px;
   background: color-mix(in srgb, var(--tx) 8%, transparent); }
@@ -152,8 +168,10 @@
   background: transparent; font: inherit; cursor: pointer; transition: border-color .15s ease; }
 .mdt-later-pill strong { font-size: 11.5px; font-weight: 600; color: var(--tx2); }
 .mdt-later-pill > span { font-family: var(--font-mono); font-size: 10px; color: var(--tx3); white-space: nowrap; }
-.mdt-later-pill:hover { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
-.mdt-later-pill:hover strong { color: var(--brand); }
+@media (hover: hover) {
+  .mdt-later-pill:hover { border-color: color-mix(in srgb, var(--brand) 55%, transparent); }
+  .mdt-later-pill:hover strong { color: var(--brand); }
+}
 
 .mdt-agenda-item:focus-visible, .mdt-later-pill:focus-visible {
   outline: 2px solid var(--brand); outline-offset: 2px; }
@@ -208,7 +226,9 @@
 .mdt-results { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
 .mdt-result { display: flex; gap: 12px; padding: 10px; border: 1px solid color-mix(in srgb, var(--tx) 12%, transparent);
   border-radius: 10px; cursor: pointer; background: transparent; text-align: left; font: inherit; color: inherit; }
-.mdt-result:hover { border-color: var(--brand); }
+@media (hover: hover) {
+  .mdt-result:hover { border-color: var(--brand); }
+}
 .mdt-result img { width: 56px; aspect-ratio: 2/3; object-fit: cover; border-radius: 6px; }
 .mdt-result-title { font-size: 13.5px; font-weight: 600; margin: 0; }
 .mdt-result-sub { font-size: 11.5px; color: var(--tx3); margin: 2px 0 4px; }
@@ -276,7 +296,9 @@
 .mdt-budget { padding: 6px 13px; font-family: var(--font-mono); font-size: 11.5px; border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--tx) 14%, transparent); background: transparent;
   color: var(--tx2); cursor: pointer; transition: border-color .15s ease, color .15s ease; }
-.mdt-budget:hover { color: var(--tx); border-color: color-mix(in srgb, var(--tx) 30%, transparent); }
+@media (hover: hover) {
+  .mdt-budget:hover { color: var(--tx); border-color: color-mix(in srgb, var(--tx) 30%, transparent); }
+}
 .mdt-budget.is-active { background: var(--tx); color: var(--bg); border-color: var(--tx); }
 
 .mdt-tonight-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
@@ -285,9 +307,17 @@
   border: 1px solid color-mix(in srgb, var(--tx) 9%, transparent);
   border-radius: var(--radius-lg, 12px); padding: 12px; min-width: 0;
   transition: border-color .18s ease, transform .18s ease; }
-.mdt-tonight-card:hover, .mdt-tonight-card:focus-within {
+/* Le focus reste actif partout : la navigation clavier en depend. */
+.mdt-tonight-card:focus-within {
   transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--brand) 40%, transparent); }
+  border-color: color-mix(in srgb, var(--brand) 40%, transparent);
+}
+@media (hover: hover) {
+  .mdt-tonight-card:hover {
+    transform: translateY(-2px);
+    border-color: color-mix(in srgb, var(--brand) 40%, transparent);
+  }
+}
 .mdt-tonight-cover { flex: 0 0 78px; padding: 0; border: none; background: none; cursor: pointer; }
 .mdt-tonight-cover img, .mdt-tonight-nocover { display: block; width: 78px; height: 110px;
   object-fit: cover; border-radius: 8px; }
@@ -424,7 +454,9 @@
   cursor: pointer;
   transition: color .15s, border-color .15s;
 }
-.mdt-jp-btn:hover { color: var(--brand); border-color: var(--brand); }
+@media (hover: hover) {
+  .mdt-jp-btn:hover { color: var(--brand); border-color: var(--brand); }
+}
 
 /* État « tout connu » : présent mais discret. Faire disparaître la bande
    se lirait comme un bug plutôt que comme une réussite. */
@@ -438,4 +470,66 @@
 
 @media (max-width: 720px) {
   .mdt-jp-word { flex: 1 1 100%; }
+}
+
+/* ═══ MOBILE — cibles tactiles et clavier iOS ════════════════════
+   Deux invariants, tous deux verifiables a l'oeil sur l'appareil :
+
+   1. 44 px de cible tactile (WCAG 2.1 AAA, seuil deja retenu par le
+      projet dans styles-mobile.css:233). Le stepper +1 episode est le
+      geste principal de l'application et faisait 26 px.
+   2. font-size >= 16px sur tout champ focusable. En dessous, Safari iOS
+      ZOOME la page a la mise au point — et les deux champs numeriques
+      portent autoFocus, donc le zoom part tout seul.
+   ────────────────────────────────────────────────────────────── */
+@media (max-width: 760px) {
+  /* — Stepper : le geste principal — */
+  .mdt-stepper { gap: 8px; }
+  .mdt-stepper button { width: 44px; height: 44px; font-size: 18px; }
+  .mdt-stepper-count { min-width: 64px; font-size: 16px; }
+  .mdt-stepper-count input { width: 60px; height: 40px; font-size: 16px; }
+
+  /* — Note par saison — */
+  .mdt-rating-pill { min-height: 44px; padding: 0 14px; font-size: 13px; }
+  .mdt-rating input { width: 60px; height: 40px; font-size: 16px; }
+
+  /* — Pastilles et filtres — */
+  .mdt-budget,
+  .mdt-chip { min-height: 44px; padding: 0 16px; display: inline-flex; align-items: center; }
+  .mdt-viewtoggle-btn { min-height: 40px; padding: 0 16px; }
+  .mdt-select { min-height: 44px; font-size: 16px; }
+
+  /* — Acquittement d'une sortie et « je connais » — */
+  .mdt-release-ack { min-width: 44px; min-height: 44px; font-size: 18px; }
+  .mdt-jp-btn { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; }
+
+  /* — Boutons d'action — */
+  .mdt-btn { min-height: 44px; }
+  .mdt-tonight-cta { min-height: 44px; padding: 0 18px; display: inline-flex; align-items: center; }
+
+  /* — Recherche : pleine largeur, 16px contre le zoom — */
+  .mdt-search { flex: 1 1 100%; font-size: 16px; min-height: 44px; }
+
+  /* — Mise en page — */
+  .mdt-title { font-size: 28px; }
+  .mdt-hero { min-height: 200px; }
+  .mdt-hero-inner { padding: 20px 18px; max-width: none; }
+  .mdt-tonight-title { font-size: 22px; }
+
+  /* Le stepper a 44px ne tient plus sur la meme ligne que le titre. */
+  .mdt-entry { flex-wrap: wrap; gap: 8px 10px; padding: 12px 0; }
+  .mdt-entry-info { flex: 1 1 100%; }
+
+  .mdt-fiche-actions { flex-direction: column-reverse; gap: 8px; }
+  .mdt-fiche-actions .mdt-btn { width: 100%; }
+
+  /* Bas de page : degager la barre d'accueil des iPhone sans bouton. */
+  .panel-mediatheque { padding-bottom: max(60px, env(safe-area-inset-bottom)); }
+}
+
+/* Collection : 3 colonnes plutot que 2 sur telephone — 47 franchises font
+   24 lignes de defilement a 2 colonnes. A confirmer sur l'appareil (Step 6). */
+@media (max-width: 480px) {
+  .mdt-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 16px 12px; }
+  .mdt-card-title { font-size: 12.5px; }
 }

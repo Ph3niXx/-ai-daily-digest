@@ -103,7 +103,7 @@ function MdtStepper({ entry, progressById, onProgress }) {
       <span className="mdt-stepper-count" onClick={() => !disabled && setEditing(true)}>
         {editing ? (
           <input
-            autoFocus type="number" min="0" max={max} defaultValue={watched}
+            autoFocus type="number" inputMode="numeric" min="0" max={max} defaultValue={watched}
             onBlur={(e) => { setEditing(false); onProgress(entry, clamp(Number(e.target.value) || 0)); }}
             onKeyDown={(e) => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditing(false); }}
           />
@@ -124,7 +124,7 @@ function MdtRating({ entry, ratingById, onRating }) {
     return (
       <span className="mdt-rating">
         <input
-          autoFocus type="number" min="0" max="100"
+          autoFocus type="number" inputMode="numeric" min="0" max="100"
           defaultValue={rating != null ? rating : ""}
           onBlur={(e) => {
             setEditing(false);
