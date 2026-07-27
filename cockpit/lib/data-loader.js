@@ -4880,7 +4880,7 @@
     // shape builders re-exported for panels that want to rebuild parts live
     buildSignals, buildRadar, buildTop, buildMacro, buildWeek, buildStats, buildDateShape, buildUser,
     applyAttemptsToChallenges, mapWeeklyChallengeRow, buildWikiFromConcepts, buildSignalsFromDB,
-    buildOpportunitiesFromDB, buildIdeasFromDB,
+    buildOpportunitiesFromDB, buildIdeasFromDB, transformProfile,
     // helpers
     isoWeek, dayOfYear, relTime, stripHtml, getReadMap, computeStreak,
   };

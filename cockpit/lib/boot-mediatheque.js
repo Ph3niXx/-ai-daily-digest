@@ -37,16 +37,15 @@
       dl.loadPanel("mediatheque").catch((e) => { console.error("[boot-mdt] Tier 2", e); return null; }),
       dl.loadUserProfile().catch(() => []),
     ]);
-    // Meme construction que transformProfile() dans data-loader.js (fonction
-    // privee, non exportee — cf. hydrateGlobalsFromTier1() qui l'utilise pour
-    // ce meme champ) : paires key/value a plat, lignes sans `key` ignorees.
-    // On ne reproduit que cette expression, pas hydrateGlobalsFromTier1() en
-    // entier : le panel ne lit que _values.tmdb_api_key, jamais _raw ni
-    // identity (panel-mediatheque.jsx:776).
+    // transformProfile() est exportee par data-loader.js — meme fonction que
+    // celle utilisee par hydrateGlobalsFromTier1() pour ce champ, source
+    // unique (pas de copie a maintenir en phase). On n'appelle pas
+    // hydrateGlobalsFromTier1() elle-meme : elle attend un __COCKPIT_RAW
+    // complet (radarRows, signals…) construit par bootTier1(), qu'on ne fait
+    // pas tourner ici. Le panel ne lit que _values.tmdb_api_key, jamais _raw
+    // ni identity (panel-mediatheque.jsx:776).
     if (window.PROFILE_DATA && profileRows && profileRows.length) {
-      const kv = {};
-      profileRows.forEach((r) => { if (r.key) kv[r.key] = r.value; });
-      window.PROFILE_DATA._values = kv;
+      window.PROFILE_DATA._values = dl.transformProfile(profileRows);
     }
   }
 
