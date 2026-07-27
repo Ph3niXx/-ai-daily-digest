@@ -1,8 +1,0 @@
-{
-  "name": "Probe",
-  "short_name": "Probe",
-  "start_url": "./probe-auth.html",
-  "display": "standalone",
-  "background_color": "#F5EFE4",
-  "theme_color": "#C2410C"
-}

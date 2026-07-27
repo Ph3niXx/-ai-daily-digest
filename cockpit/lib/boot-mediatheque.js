@@ -21,14 +21,26 @@
   };
 
   // Recharge les donnees Tier 2 et re-rend. Expose pour l'ecouteur de reprise.
+  // Garde de re-entrance : un boolean suffit (pas de queue). Les GET sont
+  // idempotents donc rien ne se corromprait sans elle, mais deux cycles
+  // invalidate+fetch+render concurrents (ex. visibilitychange qui se
+  // redeclenche pendant qu'un refresh est deja en vol) sont un gaspillage
+  // evitable.
+  let refreshing = false;
   async function refresh(){
-    const dl = window.cockpitDataLoader;
-    dl.invalidateCache("media_");
-    dl.invalidateCache("jp_");
-    dl.invalidateCache("user_profile");
-    dl.invalidateCache("activity_brief");
-    await loadData();
-    if (window.__mdtRoot) window.__mdtRoot.render(React.createElement(window.PanelMediatheque));
+    if (refreshing) return;
+    refreshing = true;
+    try {
+      const dl = window.cockpitDataLoader;
+      dl.invalidateCache("media_");
+      dl.invalidateCache("jp_");
+      dl.invalidateCache("user_profile");
+      dl.invalidateCache("activity_brief");
+      await loadData();
+      if (window.__mdtRoot) window.__mdtRoot.render(React.createElement(window.PanelMediatheque));
+    } finally {
+      refreshing = false;
+    }
   }
 
   async function loadData(){
@@ -77,4 +89,17 @@
   window.__mdtRoot = ReactDOM.createRoot(document.getElementById("root"));
   window.__mdtRoot.render(React.createElement(window.PanelMediatheque));
   window.__mdtRefresh = refresh;
+
+  // iOS suspend une PWA plutot que de la fermer : rouverte le lendemain, elle
+  // reprend l'etat de la veille et loadPanel est memoise par once(). On refetch
+  // au retour au premier plan si l'absence a depasse le seuil.
+  const STALE_MS = 5 * 60 * 1000;
+  let hiddenAt = null;
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
+    if (hiddenAt && Date.now() - hiddenAt > STALE_MS) {
+      hiddenAt = null;
+      refresh().catch((e) => console.error("[boot-mdt] refresh", e));
+    }
+  });
 })();

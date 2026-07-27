@@ -324,7 +324,7 @@ function MdtWeek({ D, tick, types, onOpen }) {
   const timeLabel = (ts) => new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
   const open = (item) => {
     onOpen(item.franchiseId);
-    window.track && window.track("mediatheque_week_click", { days_ahead: item.daysAhead, entry_kind: item.kind });
+    mdtTrack("mediatheque_week_click", { days_ahead: item.daysAhead, entry_kind: item.kind });
   };
   const laterNote = (item) => {
     if (item.reason === "undated") return "date inconnue";
@@ -428,7 +428,7 @@ function MdtHero({ hero, progressById, onOpen, onProgress }) {
   const bg = fr.banner_url || fr.cover_url;
   const openFiche = () => {
     onOpen(fr);
-    window.track && window.track("mediatheque_hero_action", {
+    mdtTrack("mediatheque_hero_action", {
       action: kind === "resume" ? "resume" : kind === "discover" ? "start" : "open", status: st.id });
   };
   return (
@@ -750,6 +750,21 @@ function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusF
   );
 }
 
+// Sonde de survie de la PWA mobile. Le payload de usage_events est un JSONB
+// ouvert : un champ suffit, pas de migration ni de nouvel event_type.
+// Question a laquelle elle repond dans trois semaines : le telephone est-il
+// reellement sorti pour ca ? Un volume nul est une reponse, pas un retard.
+function mdtSurface(){
+  try {
+    return (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+      || window.navigator.standalone
+      ? "pwa" : "cockpit";
+  } catch { return "cockpit"; }
+}
+function mdtTrack(type, payload){
+  window.track && window.track(type, Object.assign({ surface: mdtSurface() }, payload || {}));
+}
+
 function PanelMediatheque({ data, onNavigate }) {
   const D = window.MEDIATHEQUE_DATA || { franchises: [], entries: [], progress: [], releases: [] };
   const [tick, setTick] = useMdtState(0);            // bump après mutation locale de D
@@ -765,7 +780,7 @@ function PanelMediatheque({ data, onNavigate }) {
     const next = !collectionOpen;
     setCollectionOpen(next);
     try { localStorage.setItem("mdt-collection-open", next ? "1" : "0"); } catch {}
-    window.track && window.track("mediatheque_collection_toggle", { open: next, count: visible.length });
+    mdtTrack("mediatheque_collection_toggle", { open: next, count: visible.length });
   }
   const [query, setQuery] = useMdtState("");          // >= 1 char => filtre la bibliothèque locale, >= 3 chars => recherche AniList aussi
   const [view, setView] = useMdtState("library");     // "library" | "search" — bascule explicite recherche/bibliothèque
@@ -847,7 +862,7 @@ function PanelMediatheque({ data, onNavigate }) {
       setResults([...aniRows, ...tmdbRows].sort((a, b) => b.score - a.score));
       setSearchErr(failed === 2 ? "Aucune source ne répond — réessaie dans un instant."
         : failed === 1 ? "Une source n'a pas répondu — résultats partiels." : null);
-      window.track && window.track("mediatheque_search", {
+      mdtTrack("mediatheque_search", {
         q_len: q.length, results: aniRows.length + tmdbRows.length,
         sources: (aniRows.length ? 1 : 0) + (tmdbRows.length ? 1 : 0),
       });
@@ -1071,7 +1086,7 @@ function PanelMediatheque({ data, onNavigate }) {
       window.MEDIATHEQUE_DATA.entries.push(...savedEntries);
       setTick((t) => t + 1);
       setFiche({ mode: "library", franchiseId: fr.id });
-      window.track && window.track("mediatheque_add", {
+      mdtTrack("mediatheque_add", {
         franchise_root_id: rootId, entries: savedEntries.length, source: frRow.source,
       });
       cockpitToast(`${fr.title_english || fr.title_romaji} ajouté à ta bibliothèque.`, { kind: "success" });
@@ -1098,7 +1113,7 @@ function PanelMediatheque({ data, onNavigate }) {
       });
       if (!res.ok) throw new Error("progress " + res.status);
       const released = mdtReleased(entry);
-      window.track && window.track("mediatheque_progress", { entry_kind: entry.kind, delta: value - (prevValue || 0), completed: value >= released && released > 0 });
+      mdtTrack("mediatheque_progress", { entry_kind: entry.kind, delta: value - (prevValue || 0), completed: value >= released && released > 0 });
     } catch (e) {
       // Rollback.
       if (prevValue === null) { const i = D2.progress.findIndex((p) => p.entry_id === entry.id); if (i >= 0) D2.progress.splice(i, 1); }
@@ -1164,7 +1179,7 @@ function PanelMediatheque({ data, onNavigate }) {
         body: JSON.stringify([{ entry_id: entry.id, rating: value, updated_at: new Date().toISOString() }]),
       });
       if (!res.ok) throw new Error("rating " + res.status);
-      window.track && window.track("mediatheque_rate", { entry_kind: entry.kind, rating: value, cleared: value === null });
+      mdtTrack("mediatheque_rate", { entry_kind: entry.kind, rating: value, cleared: value === null });
     } catch (e) {
       if (prevRating === undefined) { const i = D2.progress.findIndex((p) => p.entry_id === entry.id); if (i >= 0) D2.progress.splice(i, 1); }
       else { const p = D2.progress.find((x) => x.entry_id === entry.id); if (p) p.rating = prevRating; }
@@ -1190,7 +1205,7 @@ function PanelMediatheque({ data, onNavigate }) {
       D2.releases = D2.releases.filter((r) => r.franchise_id !== franchiseId);
       setTick((t) => t + 1);
       setFiche(null);
-      window.track && window.track("mediatheque_remove", { franchise_root_id: f ? f.source_root_id : null });
+      mdtTrack("mediatheque_remove", { franchise_root_id: f ? f.source_root_id : null });
     } catch (e) {
       cockpitToast("Suppression impossible — réessaie.", { kind: "error" });
     }
@@ -1207,7 +1222,7 @@ function PanelMediatheque({ data, onNavigate }) {
         window.SUPABASE_URL + "/rest/v1/media_franchises?id=eq." + franchiseId,
         { shelved: next });
       if (!res.ok) throw new Error("shelve " + res.status);
-      window.track && window.track("mediatheque_shelve", { shelved: next, franchise_root_id: f.source_root_id });
+      mdtTrack("mediatheque_shelve", { shelved: next, franchise_root_id: f.source_root_id });
     } catch (e) {
       f.shelved = !next;                      // rollback
       setTick((t) => t + 1);
@@ -1223,7 +1238,7 @@ function PanelMediatheque({ data, onNavigate }) {
         window.SUPABASE_URL + "/rest/v1/media_releases?id=eq." + release.id,
         { acknowledged: true });
       if (!res.ok) throw new Error("ack " + res.status);
-      window.track && window.track("mediatheque_release_ack", { event_type: release.event_type });
+      mdtTrack("mediatheque_release_ack", { event_type: release.event_type });
     } catch (e) {
       release.acknowledged = false;
       setTick((t) => t + 1);

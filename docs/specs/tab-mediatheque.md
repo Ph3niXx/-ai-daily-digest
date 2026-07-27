@@ -39,6 +39,15 @@ Toute source est traduite dans un vocabulaire unique à l'ingestion (ADR-29) : l
 ## Front — structure UI
 `cockpit/panel-mediatheque.jsx` (`window.PanelMediatheque`) : toolbar (`.mdt-search`), bascule segmentée `.mdt-viewtoggle` (état `view` = `library`/`search`), bandeau `<MdtReleasesStrip>` (événements non acquittés), bande `<MdtTonight>` **ou** hero `<MdtHero>` (`pickHero`) selon `isEvening(Date.now())` — les deux ne coexistent jamais, rail `<MdtRail>`, agenda `<MdtWeek>` (`.mdt-agenda`), section repliable `<MdtCollection>` (grille `.mdt-grid` de `<MdtCard>`, poster + méta seulement — la progression se déclare dans la fiche), modale `<FicheFranchise>`, stepper `<MdtStepper>`. Toute la logique de présentation pure (statuts dérivés, libellés, choix du hero, recherche locale, rail, semainier) vit dans `cockpit/lib/mediatheque-view.js` (`window.mdtView`, testé par `tests/test_mediatheque_view.mjs`) ; le panel n'en garde que des délégués d'une ligne. Encart Brief : `<MdtBriefCard>` dans `cockpit/home.jsx`. Styles : `cockpit/styles-mediatheque.css` (préfixe `mdt-`).
 
+**Seconde page d'entrée (mobile).** `mediatheque.html` monte le même `<PanelMediatheque/>`
+sans sidebar et sans Tier 1, via `cockpit/lib/boot-mediatheque.js` (auth → `loadPanel("mediatheque")`
++ `loadUserProfile()` → mount, puis refetch sur `visibilitychange` au-delà de 5 min d'absence).
+Installable en PWA sur l'écran d'accueil iOS avec `manifest-mediatheque.json`. Elle ne fait
+transpiler que 2 scripts Babel (71 ko) contre 30 (859 ko) pour `index.html` — c'est sa raison
+d'être (ADR-30). Sous 760 px la fiche franchise devient une feuille plein écran avec bouton
+`✕` collant, et les cibles tactiles passent à 44 px. L'accord entre les globales lues par le
+panel et les scripts chargés par la page est verrouillé par `tests/test_mediatheque_entry.mjs`.
+
 ## Front — fonctions JS
 | Fonction | Rôle | Fichier |
 |----------|------|---------|
@@ -104,6 +113,19 @@ Toute source est traduite dans un vocabulaire unique à l'ingestion (ADR-29) : l
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
+2026-07-27 — application iOS (PWA dédiée). Seconde page d'entrée `mediatheque.html` plutôt
+qu'une application native : l'utilisateur est sous Windows (Xcode exige macOS) et le coût
+dominant du démarrage à froid sur iPhone n'est pas le réseau mais Babel, qui transpile 859 ko
+de JSX dans le navigateur pour le cockpit contre 71 ko ici — rapport de 12 pour 1. Passe
+mobile complète : stepper à 44 px (il faisait 26), champs à 16 px pour couper le zoom
+automatique de Safari, dix règles `:hover` isolées dans `@media (hover: hover)` pour ne plus
+rester collées après un tap, fiche franchise en feuille plein écran. Sonde de survie : les dix
+events `mediatheque_*` portent un champ `surface` (`pwa` / `cockpit`) — trois semaines sans
+`mediatheque_progress` en `surface:"pwa"` signifie que le portage n'a pas trouvé son usage.
+Correctif amont : le service worker ne s'était jamais enregistré (`register("/sw.js")` → 404
+sous un Pages de projet servi en `/jarvis-cockpit/`) et ses 88 entrées de précache étaient
+toutes des 404.
+
 2026-07-26 — bande « Avant l'épisode ». Vocabulaire japonais contextuel greffé sous la mise en avant : 2-3 mots du `title_native` de la série proposée, lecture + romaji + sens français. Nouvelles tables `jp_words` / `jp_seen` (migration `sql/024_jp_vocab.sql`), extraction Gemini incrémentale (`pipelines/jp_vocab_sync.py`, cron 08:00 UTC après le tracker anime), garde-fou anti-hallucination verrouillé par `tests/test_jp_vocab.py` (tout mot absent du titre est rejeté). Choix structurant : **aucun mécanisme de révision espacée, aucun backlog** — l'utilisateur a déjà Anki et Duolingo, et l'outil de révision précédent (Atlas) est mort d'un arriéré de 47 cartes en retard, avec une seule journée de pratique en trois mois. La télémétrie `jp_word_marked` sert de sonde de survie : volume nul sur trois semaines = retirer la bande.
 
 2026-07-26 — fiches TMDB en anglais. Les deux clients (`cockpit/lib/tmdb.js`, `pipelines/tmdb_tracker_sync.py`) demandent `language=en-US` au lieu de `fr-FR` : titres, synopsis et libellés de saison s'alignent sur le catalogue AniList, déjà anglophone à 95 % — « Sauve qui pécho ! » redevient « Single's Inferno ». Le titre d'origine reste dans `title_native` ; les dates restent formatées en français côté UI. Replis en dur alignés eux aussi (`Season N` / `Specials`) pour qu'une saison sans nom ne produise pas un libellé français au milieu des autres. Les entrées se rafraîchissent seules au sync quotidien (upsert complet) ; le titre et les genres de franchise, que le patch pipeline n'écrit pas, ont été backfillés à la main sur les 2 franchises TMDB existantes.
