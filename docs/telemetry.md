@@ -8,13 +8,14 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 
 ## Events instrumentés
 
-> **`surface`** — les events `mediatheque_search`, `_add`, `_progress`, `_remove`,
-> `_release_ack`, `_shelve`, `_rate`, `_hero_action`, `_week_click` et `_collection_toggle`
-> portent depuis le 2026-07-27 un champ `surface` valant `"pwa"` (application installée sur
-> l'écran d'accueil, détectée par `display-mode: standalone`) ou `"cockpit"` (onglet du
-> cockpit). C'est la sonde de survie de la page d'entrée mobile : trois semaines sans
-> `mediatheque_progress` en `surface:"pwa"` signifie que le portage n'a pas trouvé son
-> usage — voir `docs/superpowers/specs/2026-07-27-mediatheque-pwa-ios-design.md`.
+> **`surface`** — tous les events émis par `panel-mediatheque.jsx` (`mediatheque_*` et
+> `jp_*`, ci-dessous) portent depuis le 2026-07-27 un champ `surface` valant `"pwa"`
+> (application installée sur l'écran d'accueil, détectée par `display-mode: standalone`)
+> ou `"cockpit"` (onglet du cockpit) — via le wrapper `mdtTrack()` que tout appel de ce
+> panel doit utiliser, pour qu'aucun nouvel event n'échappe à la règle. C'est la sonde de
+> survie de la page d'entrée mobile : trois semaines sans `mediatheque_progress` en
+> `surface:"pwa"` signifie que le portage n'a pas trouvé son usage — voir
+> `docs/superpowers/specs/2026-07-27-mediatheque-pwa-ios-design.md`.
 
 | event_type | payload | Point d'instrumentation |
 |---|---|---|

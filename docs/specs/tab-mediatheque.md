@@ -119,9 +119,10 @@ dominant du démarrage à froid sur iPhone n'est pas le réseau mais Babel, qui 
 de JSX dans le navigateur pour le cockpit contre 71 ko ici — rapport de 12 pour 1. Passe
 mobile complète : stepper à 44 px (il faisait 26), champs à 16 px pour couper le zoom
 automatique de Safari, dix règles `:hover` isolées dans `@media (hover: hover)` pour ne plus
-rester collées après un tap, fiche franchise en feuille plein écran. Sonde de survie : les dix
-events `mediatheque_*` portent un champ `surface` (`pwa` / `cockpit`) — trois semaines sans
-`mediatheque_progress` en `surface:"pwa"` signifie que le portage n'a pas trouvé son usage.
+rester collées après un tap, fiche franchise en feuille plein écran. Sonde de survie : tous les
+events émis par `panel-mediatheque.jsx` (`mediatheque_*` et `jp_*`) portent un champ `surface`
+(`pwa` / `cockpit`) — trois semaines sans `mediatheque_progress` en `surface:"pwa"` signifie
+que le portage n'a pas trouvé son usage.
 Correctif amont : le service worker ne s'était jamais enregistré (`register("/sw.js")` → 404
 sous un Pages de projet servi en `/jarvis-cockpit/`) et ses 88 entrées de précache étaient
 toutes des 404.

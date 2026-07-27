@@ -603,7 +603,7 @@ function MdtTonight({ picks, headline, budget, onBudget, progressById, onOpen, o
                   </span>
                   <button type="button" className="mdt-tonight-cta"
                     onClick={() => {
-                      window.track && window.track("mediatheque_tonight_pick", {
+                      mdtTrack("mediatheque_tonight_pick", {
                         role: p.role,
                         media_type: p.card.f.media_type || "anime",
                         runtime_minutes: p.runtime,
@@ -818,7 +818,7 @@ function PanelMediatheque({ data, onNavigate }) {
     if (!prevQ.current) setView(localMatches.length > 0 ? "library" : "search");
     prevQ.current = q;
     const t = setTimeout(() => {
-      window.track && window.track("mediatheque_filter_local", { q_len: q.length, matches: localMatches.length });
+      mdtTrack("mediatheque_filter_local", { q_len: q.length, matches: localMatches.length });
     }, 400);
     return () => clearTimeout(t);
   }, [q, queryActive]);
@@ -1000,7 +1000,7 @@ function PanelMediatheque({ data, onNavigate }) {
       && (jpSeenByWord.get(w.word) || {}).status !== "known").length;
     if (!fresh) return;
     jpShownRef.current = true;
-    window.track && window.track("jp_band_shown",
+    mdtTrack("jp_band_shown",
       { words: Math.min(fresh, MDT_JP_MAX), evening });
   }, [jpFranchise, jpWords, jpSeenByWord, evening]);
 
@@ -1013,13 +1013,13 @@ function PanelMediatheque({ data, onNavigate }) {
     if (next === types) return;
     setTypes(next);
     try { localStorage.setItem(MDT_TYPE_KEY, JSON.stringify(next)); } catch (_) {}
-    window.track && window.track("mediatheque_type_filter", { types: next, count: next.length });
+    mdtTrack("mediatheque_type_filter", { types: next, count: next.length });
   }
 
   function pickBudget(value) {
     setBudget(value);
     mdtWriteBudget(value, Date.now());
-    window.track && window.track("mediatheque_tonight_budget",
+    mdtTrack("mediatheque_tonight_budget",
       { budget_min: value, candidates: tonight.length });
   }
 
@@ -1027,7 +1027,7 @@ function PanelMediatheque({ data, onNavigate }) {
   // que le budget est trop serré ou la bibliothèque à jour. On veut le savoir.
   useMdtEffect(() => {
     if (evening && !tonight.length) {
-      window.track && window.track("mediatheque_tonight_empty",
+      mdtTrack("mediatheque_tonight_empty",
         { budget_min: budget, hour: new Date().getHours() });
     }
   }, [evening, tonight.length, budget]);
@@ -1150,7 +1150,7 @@ function PanelMediatheque({ data, onNavigate }) {
         body: JSON.stringify([row]),
       });
       if (!res.ok) throw new Error("jp_seen " + res.status);
-      window.track && window.track("jp_word_marked", { status, first_time: snapshot === null });
+      mdtTrack("jp_word_marked", { status, first_time: snapshot === null });
     } catch (e) {
       if (snapshot === null) {
         const i = D2.jpSeen.findIndex((r) => r.word === word.word);
