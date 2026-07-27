@@ -77,31 +77,40 @@ Détail de la charge Tier 2 : `media_entries` 218 lignes / 73 ko, `media_franchi
 
 À faire **avant** tout le reste : c'est un bug existant, et le démarrage rapide en dépend.
 
-Le site est un GitHub Pages **de projet**, servi sous `/jarvis-cockpit/`. `sw.js`
-précache des chemins absolus depuis la racine du domaine :
+Le site est un GitHub Pages **de projet**, servi sous `/jarvis-cockpit/`. Tout le PWA a
+été écrit en supposant une racine de domaine. Trois choses en découlent, vérifiées par
+requête HTTP le 2026-07-27 :
 
 ```
+404  https://ph3nixx.github.io/sw.js                           ← ce que index.html:128 enregistre
+200  https://ph3nixx.github.io/jarvis-cockpit/sw.js            ← ce qui existe
+
 404  https://ph3nixx.github.io/cockpit/app.jsx                 ← ce que STATIC[] demande
 200  https://ph3nixx.github.io/jarvis-cockpit/cockpit/app.jsx  ← ce qui existe
 404  https://ph3nixx.github.io/                                ← sw.js:8
 404  https://ph3nixx.github.io/index.html                      ← sw.js:94
 ```
 
-`caches.addAll()` rejette au premier échec et n'écrit rien ; le rejet est avalé par le
-`.catch(() => {})` de `sw.js:100`. **Le précache n'a donc jamais fonctionné** — aucune des
-88 entrées, pas seulement quelques-unes. Le
-handler `fetch` sauve les meubles en cachant au fil de l'eau (`sw.js:126-131`), ce qui
-explique que personne ne l'ait vu, mais la promesse d'en-tête du fichier — « installable
-et rapide hors ligne » — n'est pas tenue.
+1. **Le service worker ne s'enregistre pas.** `index.html:128` appelle
+   `navigator.serviceWorker.register("/sw.js")`, qui est un 404 ; l'échec est avalé par
+   son `.catch(() => {})`. Il n'y a donc aujourd'hui **aucun service worker actif** — ni
+   précache, ni cache au fil de l'eau.
+2. **Même s'il s'enregistrait, il ne précacherait rien.** Les 88 entrées de `STATIC[]`
+   sont des 404 ; `caches.addAll()` rejette au premier échec et n'écrit rien, rejet
+   avalé par le `.catch(() => {})` de `sw.js:100`.
+3. **`manifest.json` a un `start_url: "/"` qui pointe sur un 404.** Cela ne se voit pas
+   uniquement parce que la spec W3C fait retomber un `start_url` hors scope sur l'URL du
+   document courant.
 
-Même cause pour `manifest.json` : `start_url: "/"` pointe sur un 404. Cela ne se voit
-pas uniquement parce que la spec W3C fait retomber un `start_url` hors scope sur l'URL du
-document courant.
+La promesse d'en-tête de `sw.js` — « installable et rapide hors ligne » — n'a donc jamais
+été tenue, et la mesure de démarrage à froid ci-dessus est un plancher : le second
+lancement coûte aujourd'hui autant que le premier.
 
-Correctif dans `scripts/sync-sw.mjs` : préfixer les chemins générés par la base réelle et
-**ajouter une assertion** que chaque entrée de `STATIC[]` existe sur le disque. Sans
-cette assertion, le bug revient à la première réorganisation. `manifest.json` passe à
-`start_url: "./"`.
+Correctif : enregistrement en chemin relatif (`"./sw.js"`, qui donne aussi le bon scope
+`/jarvis-cockpit/`, couvrant les deux pages), préfixe de base dans
+`scripts/sync-sw.mjs`, et **assertion que chaque entrée de `STATIC[]` existe sur le
+disque**. Sans cette assertion le bug revient à la première réorganisation.
+`manifest.json` passe à `start_url: "./"`.
 
 ## Architecture
 
@@ -159,8 +168,23 @@ prochain ajout de table — ce qui vient précisément d'arriver avec `jp_words`
 
 ### Ce qui n'est pas touché
 
-`index.html`, `app.jsx`, `sidebar.jsx`, `styles.css`, `bootstrap.js`, `data-loader.js`,
-`nav.js`. Le risque de régression sur le cockpit est nul par construction.
+`app.jsx`, `sidebar.jsx`, `styles.css`, `bootstrap.js`, `nav.js`. Le risque de régression
+sur le cockpit est nul par construction.
+
+Deux exceptions, minimes et sans changement de comportement :
+
+- **`data-loader.js`** — `loadUserProfile` est aujourd'hui une fonction privée du module,
+  absente de l'objet exporté (`data-loader.js:4871-4885`), et `T2` n'offre pas
+  d'équivalent. On l'ajoute à la liste d'export : une ligne, aucun effet sur le cockpit.
+  L'alternative — refetch `user_profile` à la main dans `boot-mediatheque.js` —
+  dupliquerait une requête pour économiser une ligne.
+- **`index.html`** — l'enregistrement du service worker passe en chemin relatif (voir
+  Prérequis), et la page reçoit son `apple-touch-icon`.
+
+`mediatheque.html` charge par ailleurs `nav.js` avant `data-loader.js` : ce dernier lit
+`window.COCKPIT_NAV` (`data-loader.js:1167-1169`), certes de façon paresseuse et avec un
+repli sur `[]`, mais l'ordre de `index.html:51-52` est documenté comme obligatoire et il
+ne coûte rien de le respecter.
 
 ## La passe mobile
 
@@ -279,6 +303,12 @@ script qui fournit chacune. C'est exactement le test qui aurait attrapé la dép
 
 **Assertion dans `scripts/sync-sw.mjs`** — chaque chemin de `STATIC[]` doit exister sur le
 disque et porter le bon préfixe. Le bug documenté plus haut ne pourrait pas revenir.
+
+**Ces deux garde-fous n'ont d'intérêt que s'ils tournent.** Aucun des 23 workflows actuels
+ne lance de test : `tests/test_mediatheque_view.mjs` et `tests/test_jp_vocab.py` sont
+manuels, et `sw-sync.yml` est le seul à exécuter node. On ajoute donc un workflow `tests`
+qui lance les tests node du dépôt — sans quoi le test d'entrée ne protégera rien le jour
+où il compte.
 
 Garde-fous CI existants à respecter (règles cardinales du `CLAUDE.md`) : `lint-specs`
 (bloquant — MAJ de `docs/specs/tab-mediatheque.md` et bump de `last_updated` dans
