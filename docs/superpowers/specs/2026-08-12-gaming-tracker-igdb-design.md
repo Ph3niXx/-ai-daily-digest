@@ -193,9 +193,10 @@ encore, plafonné à 50 par run.
 Nécessaire uniquement au **lot 2** (recherche front pour ajouter un jeu console à la
 main). Le pipeline appelle IGDB directement.
 
-Le projet a déjà `jsearch-proxy`, mais son pattern ne doit **pas** être copié tel quel :
-il porte sa clé RapidAPI en dur dans le source et tourne en `verify_jwt: false`. Pour
-`igdb-proxy` :
+Le projet avait une Edge Function `jsearch-proxy` — **supprimée le 2026-08-13** parce
+qu'elle portait sa clé RapidAPI en dur et tournait sans vérification de JWT, sans qu'aucun
+appelant ne l'utilise (voir [secrets.md](../../secrets.md)). Son pattern ne doit donc pas
+servir de modèle. Pour `igdb-proxy` :
 
 - secret via `Deno.env.get("TWITCH_CLIENT_SECRET")`, jamais dans le source
 - `verify_jwt: true` — le cockpit envoie déjà son JWT
@@ -206,8 +207,7 @@ il porte sa clé RapidAPI en dur dans le source et tourne en `verify_jwt: false`
 Bénéfice de bord : contrairement à la clé TMDB posée en clair dans `user_profile`, le
 secret Twitch ne quitte jamais le serveur.
 
-> Constaté au passage, hors périmètre : `jsearch-proxy` expose une clé RapidAPI en dur
-> derrière une fonction sans vérification de JWT. À traiter séparément.
+> Traité le 2026-08-13 : `jsearch-proxy` supprimée, constat consigné dans `secrets.md`.
 
 ## Lot 1 — la boucle sur la page d'accueil
 

@@ -90,6 +90,16 @@ La routine Jobs Radar ([cowork-routines/jobs-radar.md](cowork-routines/jobs-rada
 
 > Ne pas ajouter de secret `RAPIDAPI_KEY` aux GitHub Actions : aucun workflow ne l'utilise (le plan GH Actions + Gemini a été abandonné, cf. ADR-19).
 
+### Edge Function `jsearch-proxy` — supprimée le 2026-08-13
+
+Une Edge Function Supabase `jsearch-proxy` (déployée le 2026-05-28, vestige de la migration JSearch) portait une **seconde copie de la clé RapidAPI en clair dans son source**, en contradiction avec la règle ci-dessus, et tournait en `verify_jwt: false` — donc appelable sans authentification par quiconque devinait son slug, l'URL de base du projet étant publique ([cockpit/lib/supabase.js](../cockpit/lib/supabase.js)). Chaque appel aurait puisé dans le quota de **200 requêtes/mois** qui a déjà mis le radar en panne deux fois (juin 2026, puis 10-27 juillet 2026).
+
+Aucun appelant : rien dans le repo, zéro `functions/v1` côté front, 0 invocation sur 24 h — la routine interroge JSearch en `curl` direct. Fonction supprimée plutôt que verrouillée, la clé RapidAPI ne devant vivre qu'à **un** endroit.
+
+**Leçon** : une clé peut avoir des copies hors du repo. `git grep` ne les voit pas — vérifier aussi les Edge Functions (`supabase functions list`) et les prompts de routines distantes.
+
+Si un proxy redevient nécessaire (IGDB l'exige, cf. [spec tracker jeux](superpowers/specs/2026-08-12-gaming-tracker-igdb-design.md)) : secret via `Deno.env.get()`, jamais en dur, et `verify_jwt: true`.
+
 ## Règle de maintenance
 
 Tout nouveau secret ajouté à GitHub Actions doit :
