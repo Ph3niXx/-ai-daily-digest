@@ -20,8 +20,8 @@
 panels:
   - id: brief
     file: cockpit/home.jsx
-    reads: [articles, daily_briefs, signal_tracking, skill_radar, user_profile, weekly_analysis, daily_picks, article_feedback]  # daily_picks = sélection raisonnée du jour (remplace le slice(0,3)), article_feedback = état des boutons de vote
-    writes: [article_feedback]  # vote 👍/👎, qui alimente le recalibrage de veille_picks
+    reads: [articles, daily_briefs, signal_tracking, skill_radar, user_profile, weekly_analysis, daily_picks, article_feedback, game_releases]  # daily_picks = sélection raisonnée du jour (remplace le slice(0,3)), article_feedback = état des boutons de vote, game_releases = encart GamesBriefCard (non acquittés < 30j, Tier 1)
+    writes: [article_feedback, game_releases, game_franchises]  # vote 👍/👎 (recalibrage veille_picks) ; GamesBriefCard : ack() patch game_releases.acknowledged, unwatch() patch game_franchises.watched=false + acquitte l'événement
 
   - id: evening
     file: cockpit/panel-evening.jsx
@@ -191,8 +191,14 @@ panels:
       - gaming_stats_daily
       - tft_rank_history
       - tft_matches
-      - gaming_wishlist
-    writes: [gaming_wishlist]
+    writes: []
+    # gaming_wishlist retirée de reads/writes : la §5 (lecture seule) a été
+    # dépubliée du panel le 2026-08-13, absorbée dans game_progress via
+    # igdb_tracker_sync::import_wishlist() (Task 6). La table reste en base
+    # (8 lignes), simplement plus lue par ce panel — voir ADR-34 et
+    # docs/specs/tab-gaming.md.
+    # Lot 2 (conditionné à la sonde de survie, cf. flows/perso-jeux.yaml) :
+    # lira game_franchises, game_titles, game_progress, game_releases.
 
   - id: mediatheque
     file: cockpit/panel-mediatheque.jsx
@@ -268,6 +274,31 @@ tables:
     owner_pipeline: jarvis_nightly_learner
     rls: authenticated
     domain: jarvis
+
+  - name: game_franchises
+    owner_pipeline: igdb_tracker_sync
+    rls: authenticated
+    domain: gaming
+
+  - name: game_progress
+    owner_pipeline: front
+    rls: authenticated
+    domain: gaming
+    notes: >
+      User-owned : aucun pipeline n'y écrit sauf igdb_tracker_sync::import_wishlist()
+      (one-shot Task 6, en ignore_dupes — n'écrase jamais un statut posé par
+      l'utilisateur). Le lot 2 y branchera le front (statuts wishlist/playing/
+      finished/dropped).
+
+  - name: game_releases
+    owner_pipeline: igdb_tracker_sync
+    rls: authenticated
+    domain: gaming
+
+  - name: game_titles
+    owner_pipeline: igdb_tracker_sync
+    rls: authenticated
+    domain: gaming
 
   - name: gaming_articles
     owner_pipeline: gaming_sync

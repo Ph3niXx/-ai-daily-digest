@@ -1,0 +1,37 @@
+# Flow : Tracker jeux video (IGDB + seed Steam)
+# STUB — voir pipelines.yaml::igdb_tracker_sync.
+
+id: perso-jeux
+label: "Tracker jeux (bibliotheque, licences suivies, sorties annoncees)"
+domain: perso
+status: todo
+
+source_api:
+  - name: "IGDB v4"
+    detail: "api.igdb.com/v4 — OAuth client_credentials Twitch ; collections, games, external_games (pont Steam), game_time_to_beats ; 4 req/s ; CORS refuse cote navigateur"
+  - name: "steam_games_snapshot (interne)"
+    detail: "inventaire PC deja alimente par steam_sync — sert de seed, pas de source de statut"
+
+pipeline:
+  id: igdb_tracker_sync
+  workflow: ".github/workflows/igdb-tracker-sync.yml"
+  script: "pipelines/igdb_tracker_sync.py"
+  cron: "30 8 * * *"
+
+tables:
+  - name: game_franchises
+    write: true
+  - name: game_titles
+    write: true
+  - name: game_releases
+    write: true
+  - name: game_progress
+    write: false   # user-owned, front uniquement
+  - name: steam_games_snapshot
+    write: false   # lecture seule (seed)
+
+panels:
+  - id: brief
+    detail: "Encart GamesBriefCard (game_releases non acquittes < 30j, Tier 1) — seul point de contact du lot 1"
+  - id: gaming
+    detail: "Lot 2 (conditionne a la sonde de survie) — bibliotheque a statuts, rail « A venir »"

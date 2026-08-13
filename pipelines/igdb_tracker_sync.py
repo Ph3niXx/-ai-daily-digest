@@ -7,7 +7,10 @@ Quatre phases :
   C. diff  — les changements deviennent des game_releases
   D. duree — game_time_to_beat pour les titres qui n'en ont pas
 
-N'ecrit JAMAIS game_progress : c'est la table de l'utilisateur.
+N'ecrit game_progress que via import_wishlist(), en ignore_dupes — jamais
+ailleurs. Cette fonction n'ecrase jamais un statut deja pose par l'utilisateur ;
+les quatre autres phases (A/B/C/D) ne touchent pas a cette table, qui reste
+la propriete de l'utilisateur.
 
 Reutilise le transport Supabase de media_tracker_common (sb_get / sb_upsert /
 sb_patch) mais PAS diff_events, qui parle episodes et statuts de diffusion.

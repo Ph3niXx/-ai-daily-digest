@@ -315,6 +315,33 @@ pipelines:
     status: active
     notes: "Jumeau de anime_tracker_sync pour la source TMDB, décalé de 15 min pour ne pas empiler deux syncs de media_entries sur la même minute. Borné à source in (tmdb_movie, tmdb_tv / tmdb_season). Traduit TMDB dans le contrat AniList à l'ingestion — duplication assumée de cockpit/lib/tmdb.js (un pipeline Python ne peut pas importer un module JS), verrouillée par les tests jumeaux tests/test_tmdb_map.py et .mjs. Sans TMDB_API_KEY : sortie [skip] code 0, le workflow reste vert. NE PAS confondre avec tmdb_sync.py (calendrier de l'onglet Veille)."
 
+  - id: igdb_tracker_sync
+    name: "Tracker jeux (IGDB + seed Steam)"
+    cron: "30 8 * * *"
+    human_time: "Quotidien 08:30 UTC"
+    workflow_file: ".github/workflows/igdb-tracker-sync.yml"
+    health:
+      panels: [brief]
+      # Pas de contrôle de fraîcheur : sans les secrets Twitch le pipeline
+      # sort en [skip] code 0 — un run vert et zéro écriture est nominal.
+      # Et un run sans événement est le cas ordinaire : une licence n'annonce
+      # pas une suite tous les jours.
+    script: "pipelines/igdb_tracker_sync.py"
+    input_api: "IGDB v4 (TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET)"
+    output_tables:
+      - game_franchises
+      - game_titles
+      - game_releases
+    read_tables:
+      - game_franchises
+      - game_titles
+      - steam_games_snapshot
+      - gaming_wishlist
+    avg_duration_s: 120
+    budget_usd: 0
+    status: active
+    notes: "Quatre phases — seed (appids Steam traduits en ids IGDB via external_games), refresh des collections watched, diff, durée de jeu (game_time_to_beats, cap 50/run). N'écrit JAMAIS game_progress, qui appartient à l'utilisateur — sauf via import_wishlist() en ignore_dupes, qui n'écrase jamais un statut déjà posé (voir docstring du script). La colonne game_franchises.bootstrapped_at garantit qu'une franchise peuplée pour la première fois n'émet aucun événement : sans elle le premier run inonderait le Brief de centaines d'annonces pour des jeux sortis il y a dix ans. IGDB limite à 4 req/s (throttle 0.25 s) et refuse le CORS navigateur — la recherche front du lot 2 exigera une Edge Function. Sans les secrets Twitch : sortie [skip] code 0."
+
   - id: news_sync
     name: "Actualités généralistes RSS"
     cron: "15 7 * * *"
