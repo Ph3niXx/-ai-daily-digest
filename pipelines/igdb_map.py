@@ -98,13 +98,65 @@ def to_title_row(game):
     }
 
 
-def diff_game_events(old_by_igdb_id, fresh_rows):
+TERMINAL_STATUS = ("cancelled", "delisted", "offline")
+UPCOMING_MIN_HYPES = 20   # sans date, seul un titre reellement attendu compte
+
+
+def is_upcoming(row, today):
+    """Vrai si le titre n'est pas encore sorti.
+
+    **La date fait foi, pas `status`.** IGDB laisse `status` a NULL sur la
+    grande majorite de son catalogue, y compris les jeux a venir, et
+    `map_status()` retombe alors sur « released ». S'y fier classait donc
+    « sorti » des jeux qui sortent en 2026 et 2027 — constate en production
+    le 2026-08-13 sur Marvel's Wolverine (sept. 2026), Trails in the Sky
+    2nd Chapter (sept. 2026) et God of War Laufey (fev. 2027), tous invisibles
+    alors qu'ils sont exactement ce que le tracker existe pour annoncer.
+
+    `status` ne sert plus qu'a ecarter les impasses (annule, retire, serveurs
+    fermes) : « Annonce : Mass Effect Corsair » pour un jeu annule serait faux.
+
+    Sans date, IGDB melange les annonces sans calendrier (« Untitled God of
+    War Sequel ») et de vieilles fiches mortes (« CivWorld ») ; `hypes`, le
+    nombre de gens qui suivent le titre, est ce qui les separe.
+    """
+    if row.get("igdb_status") in TERMINAL_STATUS:
+        return False
+    date = row.get("first_release_date")
+    if date:
+        return str(date) > str(today)
+    return (row.get("hypes") or 0) >= UPCOMING_MIN_HYPES
+
+
+def upcoming_events(fresh_rows, today):
+    """Les titres pas encore sortis, sous forme d'evenements `announced`.
+
+    Emis a CHAQUE run, y compris au peuplement initial d'une licence — et
+    c'est voulu. Un jeu a venir dans une licence qu'on aime est la nouvelle
+    qu'on attend, qu'il ait ete decouvert aujourd'hui ou il y a un mois ;
+    l'etouffer au bootstrap laissait l'ecran vide alors que sept titres
+    reels attendaient. L'unicite `(title_id, event_type)` en base fait que
+    chaque titre ne le dit qu'une fois, jamais deux, et un evenement
+    acquitte ne revient pas.
+    """
+    return [("announced", f"À venir : {r.get('name') or '#' + str(r['igdb_id'])}",
+             r.get("first_release_date"), r["igdb_id"])
+            for r in fresh_rows if is_upcoming(r, today)]
+
+
+def diff_game_events(old_by_igdb_id, fresh_rows, today=None):
     """Compare l'etat DB aux lignes fraiches -> [(event_type, title, event_date, igdb_id)].
+
+    Ne couvre que les TRANSITIONS (date qui tombe, sortie, annulation). Ce qui
+    est simplement « pas encore sorti » releve de upcoming_events(), qui n'a
+    pas besoin d'un etat anterieur pour le dire.
 
     L'appelant est responsable de NE PAS appeler cette fonction pour une
     franchise dont bootstrapped_at est null : au premier peuplement, tous
     ses titres sont « inedits » et l'inondation serait garantie.
     """
+    if today is None:
+        today = datetime.now(timezone.utc).date().isoformat()
     events = []
     for row in fresh_rows:
         gid = row["igdb_id"]
@@ -113,13 +165,10 @@ def diff_game_events(old_by_igdb_id, fresh_rows):
         date = row.get("first_release_date")
 
         if old is None:
-            # Un jeu deja sorti qui apparait pour la premiere fois n'est pas
-            # une annonce : c'est un frere de collection decouvert au fil de
-            # l'eau. Seul ce qui n'est pas encore sorti merite une alerte —
-            # et un titre decouvert deja cancelled, delisted ou offline n'est
-            # pas non plus une annonce : « Annonce : X » y serait faux.
-            if row.get("igdb_status") not in ("released", "cancelled", "delisted", "offline"):
-                events.append(("announced", f"Annoncé : {label}", date, gid))
+            # Un titre inedit ne produit rien ici : s'il est a venir,
+            # upcoming_events() s'en charge ; s'il est deja sorti, c'est un
+            # frere de collection decouvert au fil de l'eau, et l'annoncer
+            # serait faux.
             continue
 
         if not old.get("first_release_date") and date:

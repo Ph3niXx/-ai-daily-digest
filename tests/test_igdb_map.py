@@ -5,8 +5,10 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pipelines"))
-from igdb_map import map_status, map_precision, cover_url, to_title_row, diff_game_events
+from igdb_map import (map_status, map_precision, cover_url, to_title_row,
+                      diff_game_events, is_upcoming, upcoming_events)
 
+TODAY = "2026-08-13"
 failures = 0
 
 
@@ -88,32 +90,50 @@ def title(gid, status="rumored", date=None, name="Suite"):
             "first_release_date": date, "name": name}
 
 
-check("titre inedit non sorti => announced",
-      [e[0] for e in diff_game_events({}, [title(1)])],
-      ["announced"])
-check("libelle announced",
-      diff_game_events({}, [title(1, name="Silksong")])[0][1],
-      "Annoncé : Silksong")
-# Un jeu deja sorti qui apparait pour la premiere fois n'est pas une annonce :
-# c'est un frere de collection decouvert au fil de l'eau (ex. un episode de 2011).
-check("titre inedit deja sorti => aucun evenement",
-      diff_game_events({}, [title(2, status="released", date="2011-05-01")]),
-      [])
-# Idem pour un titre decouvert deja mort : annoncer « Annoncé : X » pour un
-# jeu annule, delisted ou offline serait faux sur le seul ecran du lot.
-check("titre inedit cancelled => aucun evenement",
-      diff_game_events({}, [title(3, status="cancelled")]),
-      [])
-check("titre inedit delisted => aucun evenement",
-      diff_game_events({}, [title(4, status="delisted", date="2014-02-01")]),
-      [])
-check("titre inedit offline => aucun evenement",
-      diff_game_events({}, [title(5, status="offline", date="2016-08-01")]),
-      [])
-# Les statuts vraiment a venir restent des annonces.
-check("titre inedit early_access => announced",
-      [e[0] for e in diff_game_events({}, [title(6, status="early_access")])],
-      ["announced"])
+# diff_game_events ne couvre plus que les TRANSITIONS : un titre inedit n'y
+# produit rien, qu'il soit a venir ou deja sorti. Ce qui n'est pas encore sorti
+# releve de upcoming_events(), qui n'a pas besoin d'etat anterieur pour le dire.
+check("titre inedit a venir => aucune transition",
+      diff_game_events({}, [title(1, date="2027-05-01")], TODAY), [])
+check("titre inedit deja sorti => aucune transition",
+      diff_game_events({}, [title(2, status="released", date="2011-05-01")], TODAY), [])
+
+# ── is_upcoming : la DATE fait foi, pas `status` ─────────────
+# IGDB laisse status a NULL sur presque tout son catalogue, donc map_status()
+# retombe sur « released » — y compris pour un jeu qui sort en 2027. S'y fier
+# rendait invisibles Marvel's Wolverine, Trails 2nd Chapter et God of War
+# Laufey, constate en production le 2026-08-13.
+check("date future + statut released => a venir",
+      is_upcoming(title(1, status="released", date="2027-05-01"), TODAY), True)
+check("date passee => pas a venir",
+      is_upcoming(title(2, status="released", date="2011-05-01"), TODAY), False)
+check("date du jour => pas a venir (deja sorti)",
+      is_upcoming(title(3, status="released", date=TODAY), TODAY), False)
+# Les impasses ne sont jamais « a venir », meme datees dans le futur.
+check("cancelled => jamais a venir",
+      is_upcoming(title(4, status="cancelled", date="2027-05-01"), TODAY), False)
+check("delisted => jamais a venir",
+      is_upcoming(title(5, status="delisted"), TODAY), False)
+check("offline => jamais a venir",
+      is_upcoming(title(6, status="offline"), TODAY), False)
+# Sans date, `hypes` separe l'annonce sans calendrier de la vieille fiche morte.
+check("sans date + hypes suffisants => a venir",
+      is_upcoming({**title(7), "hypes": 64}, TODAY), True)
+check("sans date + hypes faibles => pas a venir",
+      is_upcoming({**title(8), "hypes": 3}, TODAY), False)
+check("sans date + hypes absents => pas a venir",
+      is_upcoming(title(9), TODAY), False)
+
+# ── upcoming_events : etat, pas transition ──────────────────
+ups = upcoming_events([title(1, status="released", date="2027-05-01", name="Wolverine"),
+                       title(2, status="released", date="2011-05-01", name="Vieux"),
+                       title(3, status="cancelled", date="2027-01-01", name="Annule")], TODAY)
+check("upcoming_events ne retient que ce qui est a venir", [e[3] for e in ups], [1])
+check("upcoming_events type d'evenement", ups[0][0], "announced")
+check("upcoming_events libelle", ups[0][1], "À venir : Wolverine")
+check("upcoming_events porte la date", ups[0][2], "2027-05-01")
+check("upcoming_events sur liste vide", upcoming_events([], TODAY), [])
+
 check("date qui apparait => date_announced",
       [e[0] for e in diff_game_events({1: title(1)}, [title(1, date="2027-03-01")])],
       ["date_announced"])
@@ -133,10 +153,11 @@ check("report de date => aucun evenement",
       [])
 
 # ── verification des tuples complets (event_type, title, event_date, igdb_id) ──
-announced_event = diff_game_events({}, [title(10, name="Premia")])[0]
+# L'annonce vient desormais de upcoming_events, pas de diff_game_events.
+announced_event = upcoming_events([title(10, name="Premia", date="2027-04-02")], TODAY)[0]
 check("announced tuple type", announced_event[0], "announced")
-check("announced tuple title", announced_event[1], "Annoncé : Premia")
-check("announced tuple date", announced_event[2], None)
+check("announced tuple title", announced_event[1], "À venir : Premia")
+check("announced tuple date", announced_event[2], "2027-04-02")
 check("announced tuple igdb_id", announced_event[3], 10)
 
 date_announced_event = diff_game_events({20: title(20)}, [title(20, date="2027-06-15")])[0]

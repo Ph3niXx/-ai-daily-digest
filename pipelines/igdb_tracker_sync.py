@@ -38,7 +38,7 @@ except ImportError:
 
 from media_tracker_common import sb_env, sb_get, sb_upsert, sb_patch
 from igdb_client import get_token, IgdbClient, chunks, id_list, quoted_list
-from igdb_map import to_title_row, diff_game_events
+from igdb_map import to_title_row, diff_game_events, upcoming_events
 
 STEAM_SOURCE = 1          # external_game_sources : 1 = Steam (verifie en live 2026-08-13)
 SEED_MIN_MINUTES = 1      # tout jeu lance au moins une fois entre en bibliotheque
@@ -355,13 +355,21 @@ def run_sync(dry_run, import_wishlist_flag=False):
             skipped += 1
             continue
 
-        if not should_emit_events(fr["id"], bootstrapped_before):
+        # Ce qui n'est PAS ENCORE SORTI se dit toujours, meme au peuplement
+        # initial : c'est la seule chose que l'utilisateur attend, et c'est
+        # borne (7 titres sur 401 au 2026-08-13). Ce sont les TRANSITIONS
+        # (date qui tombe, sortie, annulation) qui exigent un etat anterieur,
+        # donc une licence deja parcourue.
+        today = datetime.now(timezone.utc).date().isoformat()
+        events = upcoming_events(fresh, today)
+        if should_emit_events(fr["id"], bootstrapped_before):
+            deja = {(e[0], e[3]) for e in events}
+            events += [e for e in diff_game_events(old, fresh, today)
+                       if (e[0], e[3]) not in deja]
+        else:
             sb_patch(url, headers, "game_franchises", f"id=eq.{fr['id']}",
                      {"bootstrapped_at": now_iso()})
-            print(f"  {fr['name']}: {len(fresh)} titres (peuplement initial, aucun evenement)")
-            continue
 
-        events = diff_game_events(old, fresh)
         if events:
             id_by_igdb = {r["igdb_id"]: r["id"] for r in saved}
             sb_upsert(url, headers, "game_releases", [{
