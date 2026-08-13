@@ -74,6 +74,45 @@ function GmActivityChart({ series, range }) {
   );
 }
 
+// Rail « À venir » — les suites annoncées des licences suivies. C'est la
+// raison d'être du tracker : le reste de l'onglet raconte le passé, cette
+// section est la seule qui parle de ce qui arrive.
+function GmUpcoming({ items, onAck, onUnwatch }) {
+  if (!items.length) {
+    return (
+      <div className="gm-empty">
+        Rien d'annoncé dans tes licences suivies pour l'instant. Le suivi tourne
+        tous les matins ; un jeu apparaîtra ici dès qu'il sera annoncé.
+      </div>
+    );
+  }
+  return (
+    <div className="gm-up-grid">
+      {items.map((it) => (
+        <article className="gm-up-card" key={it.id}>
+          {it.cover
+            ? <div className="gm-up-cover" style={{ backgroundImage: `url("${it.cover}")` }} />
+            : <div className="gm-up-cover is-empty" />}
+          <div className="gm-up-body">
+            <div className="gm-up-name">{it.name}</div>
+            {it.licence && <div className="gm-up-licence">{it.licence}</div>}
+            <div className="gm-up-when">
+              {it.when || "date inconnue"}
+              {it.precision === "year" || it.precision === "quarter"
+                ? <span className="gm-up-approx"> · approximatif</span> : null}
+            </div>
+            <div className="gm-up-actions">
+              <button className="gm-up-btn" onClick={() => onAck(it)} title="J'ai vu">✓ vu</button>
+              <button className="gm-up-btn is-dismiss" onClick={() => onUnwatch(it)}
+                      title="Ne plus suivre cette licence">✕ licence</button>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 // ── Heatmap ─────────────────────────────────────────
 function GmHeatmap({ grid }) {
   const DOW = ["L", "M", "M", "J", "V", "S", "D"];
@@ -111,6 +150,53 @@ function GmHeatmap({ grid }) {
 function PanelGaming({ onNavigate }) {
   const D = window.GAMING_PERSO_DATA;
   const [chartRange, setChartRange] = useGmState("90j");
+
+  const G = (D && D.games) || { titles: [], franchises: [], progress: [], releases: [] };
+  const [relLocal, setRelLocal] = React.useState(null);
+  const releases = relLocal || G.releases;
+  const titlesById = React.useMemo(
+    () => Object.fromEntries((G.titles || []).map((t) => [t.id, t])), [G.titles]);
+  const franchisesById = React.useMemo(
+    () => Object.fromEntries((G.franchises || []).map((f) => [f.id, f])), [G.franchises]);
+  const upcoming = React.useMemo(
+    () => window.gamesView.buildUpcoming(releases, titlesById, franchisesById),
+    [releases, titlesById, franchisesById]);
+
+  // window.sb.patchJSON renvoie la Response BRUTE et ne leve pas sur 4xx/5xx
+  // (cockpit/lib/supabase.js), contrairement a postJSON. Sans ce controle, un
+  // refus RLS passerait pour un succes et la carte disparaitrait sans que
+  // rien ne soit ecrit.
+  async function gmPatch(path, body) {
+    const r = await window.sb.patchJSON(window.SUPABASE_URL + path, body);
+    if (!r.ok) throw new Error(String(r.status));
+    return r;
+  }
+
+  async function ackRelease(it) {
+    const before = releases;
+    setRelLocal(before.map((r) => (r.id === it.id ? { ...r, acknowledged: true } : r)));
+    window.track && window.track("games_release_ack", { surface: "gaming" });
+    try {
+      await gmPatch("/rest/v1/game_releases?id=eq." + it.id, { acknowledged: true });
+    } catch (e) {
+      setRelLocal(before);
+      window.track && window.track("error_shown", { context: "games_ack", message: e.message });
+    }
+  }
+
+  async function unwatchFranchise(it) {
+    const before = releases;
+    setRelLocal(before.map((r) => (r.franchise_id === it.franchiseId ? { ...r, acknowledged: true } : r)));
+    window.track && window.track("games_unwatch_franchise", { surface: "gaming" });
+    try {
+      await gmPatch("/rest/v1/game_franchises?id=eq." + it.franchiseId, { watched: false });
+      await gmPatch("/rest/v1/game_releases?franchise_id=eq." + it.franchiseId + "&acknowledged=eq.false",
+                    { acknowledged: true });
+    } catch (e) {
+      setRelLocal(before);
+      window.track && window.track("error_shown", { context: "games_unwatch", message: e.message });
+    }
+  }
 
   const lastGame = (D.in_progress && D.in_progress[0]) || null;
   const plat = (id) => (D.profiles || []).find((p) => p.id === id);
@@ -217,6 +303,15 @@ function PanelGaming({ onNavigate }) {
           </div>
         ))}
       </div>
+
+      {/* ══ À VENIR ══ */}
+      <section className="gm-section">
+        <div className="gm-section-head">
+          <h2 className="gm-section-title">À venir · <em>dans tes licences suivies</em></h2>
+          <span className="gm-section-meta">{upcoming.length} annonce{upcoming.length > 1 ? "s" : ""}</span>
+        </div>
+        <GmUpcoming items={upcoming} onAck={ackRelease} onUnwatch={unwatchFranchise} />
+      </section>
 
       {/* ══ §1 EN COURS ══ */}
       <section className="gm-section">

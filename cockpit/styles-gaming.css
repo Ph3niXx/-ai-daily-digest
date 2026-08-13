@@ -1007,3 +1007,48 @@
 @media (hover: hover) {
   .gmb-brief-btn:hover { background: var(--bg2); }
 }
+
+/* ── Rail « À venir » (lot 2) ─────────────────────────────── */
+.gm-up-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.gm-up-card {
+  display: flex;
+  gap: 12px;
+  border: 1px solid var(--bd);
+  border-radius: 12px;
+  padding: 10px;
+  background: color-mix(in srgb, var(--brand) 4%, transparent);
+}
+.gm-up-cover {
+  width: 64px;
+  height: 86px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  background-size: cover;
+  background-position: center;
+  background-color: var(--bg2);
+}
+.gm-up-cover.is-empty { opacity: 0.5; }
+.gm-up-body { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.gm-up-name { font-weight: 600; line-height: 1.25; }
+.gm-up-licence { font-size: 12px; color: var(--tx2); }
+.gm-up-when { font-size: 12px; color: var(--tx2); margin-top: 2px; }
+.gm-up-approx { opacity: 0.7; }
+.gm-up-actions { display: flex; gap: 6px; margin-top: auto; padding-top: 8px; }
+.gm-up-btn {
+  border: 1px solid var(--bd);
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  min-height: 44px;   /* cible tactile, meme regle que la passe mobile mediatheque */
+  padding: 0 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.gm-up-btn.is-dismiss { opacity: 0.7; }
+@media (hover: hover) {
+  .gm-up-btn:hover { background: var(--bg2); }
+}
