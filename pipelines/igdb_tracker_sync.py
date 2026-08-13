@@ -134,6 +134,69 @@ def upsert_franchise(url, headers, name, collection_id, watched):
     return row
 
 
+# ── Import one-shot de gaming_wishlist ──────────────────────
+def import_wishlist(url, headers, client, dry_run):
+    """gaming_wishlist -> game_titles + game_progress(status='wishlist').
+
+    One-shot, mais idempotent : une ligne deja importee (meme igdb_id) est
+    reconnue par l'upsert et son game_progress n'est pas ecrase.
+    La table gaming_wishlist n'est PAS supprimee — on ne detruit pas des
+    donnees utilisateur sur la foi d'un script. Elle sera droppee a la main
+    une fois l'import verifie.
+    """
+    rows = sb_get(url, headers, "gaming_wishlist", "select=id,appid,title&order=title")
+    if not rows:
+        print("  wishlist vide — rien a importer")
+        return 0
+
+    resolved = {}
+    with_appid = [r["appid"] for r in rows if r.get("appid")]
+    if with_appid:
+        resolved = resolve_steam(client, set(with_appid))
+
+    imported = 0
+    for r in rows:
+        gid = resolved.get(r.get("appid"))
+        if gid is None:
+            # Pas d'appid, ou appid inconnu d'IGDB : recherche par nom.
+            name = r["title"].replace('"', "")
+            found = client.query("games", f'{GAME_FIELDS} search "{name}"; limit 1;')
+            if not found:
+                print(f"  WARN wishlist « {r['title']} » : introuvable sur IGDB — ignoree")
+                continue
+            game = found[0]
+        else:
+            games = fetch_games(client, [gid])
+            if not games:
+                print(f"  WARN wishlist « {r['title']} » : id IGDB {gid} muet — ignoree")
+                continue
+            game = games[0]
+
+        if dry_run:
+            print(f"    [dry-run] wishlist « {r['title']} » -> IGDB {game['id']} ({game.get('name')})")
+            continue
+
+        cid_col = game.get("collection")
+        fname = game.get("name") or r["title"]
+        if cid_col:
+            cols = fetch_collections(client, [cid_col])
+            fname = (cols.get(cid_col) or {}).get("name") or fname
+        fr = upsert_franchise(url, headers, fname, cid_col, watched=True)
+        saved = sb_upsert(url, headers, "game_titles",
+                          [{**to_title_row(game), "franchise_id": fr["id"],
+                            "steam_appid": r.get("appid")}], "igdb_id")
+        if not fr.get("bootstrapped_at"):
+            sb_patch(url, headers, "game_franchises", f"id=eq.{fr['id']}",
+                     {"bootstrapped_at": now_iso()})
+        # ignore_dupes : ne jamais ecraser un statut deja pose par l'utilisateur.
+        sb_upsert(url, headers, "game_progress",
+                  [{"title_id": saved[0]["id"], "status": "wishlist"}],
+                  "title_id", ignore_dupes=True)
+        imported += 1
+        print(f"  wishlist « {r['title']} » -> {game.get('name')}")
+    return imported
+
+
 # Le parametre s'appelle import_wishlist_flag et non import_wishlist : sinon
 # il masquerait la fonction import_wishlist() ajoutee a la Task 6.
 def run_sync(dry_run, import_wishlist_flag=False):
@@ -146,6 +209,11 @@ def run_sync(dry_run, import_wishlist_flag=False):
 
     url, headers = sb_env()
     client = IgdbClient(cid, get_token(cid, secret))
+
+    if import_wishlist_flag:
+        n = import_wishlist(url, headers, client, dry_run)
+        print(f"\nImport wishlist: {n} ligne(s).")
+        return 0
 
     known_franchises = sb_get(url, headers, "game_franchises",
                               "select=id,igdb_collection_id,name,watched,bootstrapped_at")

@@ -1317,11 +1317,6 @@
         } catch (e) { return 0; }
       });
     },
-    async gaming_wishlist(){
-      return once("gaming_wishlist", () =>
-        q("gaming_wishlist", "select=*&order=hype.desc.nullslast,release_date.asc.nullslast&limit=50").catch(() => [])
-      );
-    },
     async weekly_analysis(){ return once("weekly_analysis_all", () => loadWeeklyAnalysis(30)); },
     async jobs_all(){ return once("jobs_all", () => q("jobs", "select=*&order=score_total.desc.nullslast&limit=300")); },
     async sport(){ return once("sport_articles", () => q("sport_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
@@ -2514,7 +2509,7 @@
   // a backend (backlog, wishlist, heatmap, milestones non-temps) are
   // returned as empty arrays so the panel renders honestly instead of
   // displaying invented data.
-  function transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount, wishlist }){
+  function transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount }){
     const now = Date.now();
     const dayMs = 24 * 3600 * 1000;
     const statsArr = stats || [];
@@ -2795,40 +2790,12 @@
         };
       });
 
-    // ── Wishlist : depuis table gaming_wishlist (éditable côté Supabase)
-    const today = Date.now();
-    const wishlistRows = (wishlist || []).map(w => {
-      let daysOut = null;
-      let alreadyReleased = false;
-      if (w.release_date) {
-        // accepte ISO 'YYYY-MM-DD' ou 'YYYY-MM-??'
-        const m = String(w.release_date).match(/^(\d{4})-(\d{2})-(\d{2})/);
-        if (m) {
-          const t = new Date(`${m[1]}-${m[2]}-${m[3]}T00:00:00`).getTime();
-          daysOut = Math.round((t - today) / 86400000);
-          alreadyReleased = daysOut <= 0;
-        }
-      }
-      return {
-        title: w.title,
-        platform: w.platform || "PC",
-        release: w.release_date || "TBD",
-        days_out: daysOut,
-        already_released: alreadyReleased,
-        hype: w.hype || 7,
-        price_target: w.price_target,
-        note: w.note,
-        cover_url: w.appid ? steamHeaderUrl(w.appid) : null,
-      };
-    });
-
     return {
       profiles,
       totals,
       in_progress,
       backlog,
       abandoned,
-      wishlist: wishlistRows,
       daily_sessions,
       genres_30d,
       top_alltime,
@@ -2840,7 +2807,6 @@
         game_details_count: details.length,
         tft_rank: tftRow,
         tft_match_count: tftMatchCount,
-        wishlist_count: wishlistRows.length,
       },
     };
   }
@@ -4708,21 +4674,20 @@
         return { scrobbles, stats, top, loved, genres, insights, newArtists };
       }
       case "gaming": {
-        const [snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount, wishlist] = await Promise.all([
+        const [snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount] = await Promise.all([
           T2.steam_snapshot(),
           T2.steam_stats(),
           T2.steam_achievements(),
           T2.steam_game_details().catch(() => []),
           T2.tft_rank_latest().catch(() => []),
           T2.tft_match_count().catch(() => 0),
-          T2.gaming_wishlist().catch(() => []),
         ]);
         if (window.GAMING_PERSO_DATA && (snapshot || []).length) {
-          const shape = transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount, wishlist });
+          const shape = transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount });
           replaceShape(window.GAMING_PERSO_DATA, shape);
-          window.GAMING_PERSO_DATA._raw = { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount, wishlist };
+          window.GAMING_PERSO_DATA._raw = { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount };
         }
-        return { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount, wishlist };
+        return { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount };
       }
       case "stacks": {
         const from30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);

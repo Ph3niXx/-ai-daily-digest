@@ -6,7 +6,6 @@
 // §2 Backlog priorisé
 // §3 Activité (courbe 180j + heatmap 24×7)
 // §4 Genres
-// §5 Wishlist (lien veille gaming)
 // §6 Top all-time
 // §7 Achievements récents
 // §8 2026 milestones
@@ -462,60 +461,6 @@ function PanelGaming({ onNavigate }) {
         </div>
         </>
         )}
-      </section>
-
-      {/* ══ §5 WISHLIST ══ */}
-      <section className="gm-section">
-        <div className="gm-section-head">
-          <span className="gm-section-num">05</span>
-          <h2 className="gm-section-title">Wishlist · <em>ce que tu surveilles</em></h2>
-          <span className="gm-section-meta">{(D.wishlist || []).length} titres · croisé avec ta veille gaming</span>
-        </div>
-        {(D.wishlist || []).length === 0 ? (
-          <div className="gm-empty">Wishlist vide — ajoute des entrées dans la table Supabase <code>gaming_wishlist</code>.</div>
-        ) : (
-        <div className="gm-wl-grid">
-          {D.wishlist.map((w) => (
-            <div className={`gm-wl-card ${w.days_out !== null && w.days_out > 0 && w.days_out < 90 ? "is-out" : ""}`} key={w.title}>
-              {w.cover_url && (
-                <div className="gm-wl-cover" style={{ backgroundImage: `url("${w.cover_url}")` }}></div>
-              )}
-              <div className="gm-wl-body">
-                <div className="gm-wl-head">
-                  <div className="gm-wl-title">{w.title}</div>
-                  <div className="gm-wl-hype">{w.hype}/10</div>
-                </div>
-                <div>
-                  {w.already_released ? (
-                    <span className="gm-wl-days released">sorti</span>
-                  ) : w.days_out !== null && w.days_out > 0 ? (
-                    <span className={`gm-wl-days ${w.days_out < 90 ? "out" : ""}`}>
-                      dans {w.days_out}j
-                    </span>
-                  ) : (
-                    <span className="gm-wl-days">tbd</span>
-                  )}
-                </div>
-                <div className="gm-wl-release" style={{ marginTop: 8 }}>
-                  {w.platform} · <strong>{w.release}</strong>
-                  {w.price_target && <> · cible {w.price_target}€</>}
-                </div>
-                {w.note && <div className="gm-wl-note">{w.note}</div>}
-              </div>
-            </div>
-          ))}
-        </div>
-        )}
-        <div style={{ marginTop: 18 }}>
-          <div className="gm-veille-link">
-            <div className="gm-veille-link-text">
-              Bascule sur la <strong>veille gaming</strong> pour voir les nouveautés trackées par le pipeline.
-            </div>
-            <button className="gm-veille-link-btn" onClick={() => onNavigate && onNavigate("gaming_news")}>
-              Veille gaming →
-            </button>
-          </div>
-        </div>
       </section>
 
       {/* ══ §6 TOP ALL-TIME ══ */}
