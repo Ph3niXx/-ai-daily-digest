@@ -40,19 +40,36 @@ from media_tracker_common import sb_env, sb_get, sb_upsert, sb_patch
 from igdb_client import get_token, IgdbClient, chunks, id_list, quoted_list
 from igdb_map import to_title_row, diff_game_events
 
-STEAM_SOURCE = 1          # ExternalGameCategoryEnum.steam
+STEAM_SOURCE = 1          # external_game_sources : 1 = Steam (verifie en live 2026-08-13)
 SEED_MIN_MINUTES = 1      # tout jeu lance au moins une fois entre en bibliotheque
 WATCH_MIN_MINUTES = 600   # >= 10 h : la licence passe sous surveillance
 MAX_TITLES_PER_COLLECTION = 100
 MAX_TTB_PER_RUN = 50
 
 GAME_FIELDS = ("fields id,name,slug,summary,status,hypes,first_release_date,"
-               "cover.image_id,genres.name,platforms.name,collection,"
+               "cover.image_id,genres.name,platforms.name,collections,"
                "release_dates.date,release_dates.human,release_dates.date_format;")
 
 
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
+
+
+def primary_collection(game):
+    """L'identifiant de collection d'un jeu, ou None s'il n'en a aucune.
+
+    IGDB sert `collections` (tableau) et non plus `collection` (singulier),
+    qui remonte None depuis la depreciation constatee en live le 2026-08-13 —
+    meme famille que `category` -> `external_game_source`. Sans ce changement
+    chaque jeu devenait sa propre franchise et AUCUNE suite n'aurait jamais
+    ete detectee : la raison d'etre du tracker.
+
+    Un jeu peut theoriquement appartenir a plusieurs collections ; aucun de la
+    bibliotheque de l'utilisateur n'est dans ce cas (verifie sur echantillon),
+    on prend donc la premiere.
+    """
+    cols = game.get("collections") or []
+    return cols[0] if cols else None
 
 
 # ── Phase A : seed depuis Steam ─────────────────────────────
@@ -73,15 +90,17 @@ def steam_appids(url, headers):
 def resolve_steam(client, appids):
     """appid Steam -> id IGDB, via external_games. Retourne {appid: igdb_id}.
 
-    `category` est marque deprecated par IGDB au profit de
-    `external_game_source`, mais reste servi. Si une requete revient
-    systematiquement vide alors que les appids sont valides, basculer sur
-    `where external_game_source = 1` — le champ, pas la valeur, a change.
+    Filtre sur `external_game_source` et NON sur `category` : le premier
+    dry-run reel (2026-08-13) a traduit 0 appid sur 80 avec `category`, que
+    IGDB a fini de deprecier. Le champ a change, pas la valeur — l'endpoint
+    external_game_sources confirme que 1 designe toujours Steam. Le garde-fou
+    de la phase A (FATAL si aucune traduction) est ce qui a rendu la panne
+    visible ; sans lui le run serait reste vert avec une base vide.
     """
     out = {}
     for batch in chunks(sorted(appids), 100):
         rows = client.query("external_games",
-                            f"fields game,uid; where category = {STEAM_SOURCE} "
+                            f"fields game,uid; where external_game_source = {STEAM_SOURCE} "
                             f"& uid = {quoted_list(batch)}; limit 500;")
         for r in rows:
             uid, game = r.get("uid"), r.get("game")
@@ -187,7 +206,7 @@ def import_wishlist(url, headers, client, dry_run):
             print(f"    [dry-run] wishlist « {r['title']} » -> IGDB {game['id']} ({game.get('name')})")
             continue
 
-        cid_col = game.get("collection")
+        cid_col = primary_collection(game)
         fname = game.get("name") or r["title"]
         if cid_col:
             cols = fetch_collections(client, [cid_col])
@@ -253,12 +272,14 @@ def run_sync(dry_run, import_wishlist_flag=False):
         mapping = resolve_steam(client, unknown)
         if not mapping:
             # Aucun des appids n'a pu etre traduit : ce n'est pas « rien de
-            # nouveau », c'est external_games qui ne repond plus comme avant
-            # (cf. `category` deprecie au profit de `external_game_source`).
-            # Sans ce garde-fou le run reste vert et rien ne se peuple, jamais.
+            # nouveau », c'est external_games qui ne repond plus comme avant.
+            # Ce garde-fou a deja paye une fois — il a revele le 2026-08-13 que
+            # `category` etait mort, la ou un run vert aurait laisse la base
+            # vide sans que personne ne s'en apercoive.
             print(f"FATAL: aucun des {len(unknown)} appid(s) Steam n'a pu etre traduit "
-                  "en id IGDB. Voir resolve_steam() : `category` est peut-etre "
-                  "definitivement deprecie — basculer sur `external_game_source`.")
+                  "en id IGDB. Voir resolve_steam() : le filtre ou l'identifiant de "
+                  "source a probablement change cote IGDB — verifier avec "
+                  "`fields id,name;` sur l'endpoint external_game_sources.")
             return 1
         missing = sorted(unknown - set(mapping))
         if missing:
@@ -266,13 +287,13 @@ def run_sync(dry_run, import_wishlist_flag=False):
         games = fetch_games(client, set(mapping.values()))
         by_igdb = {g["id"]: g for g in games}
         collections = fetch_collections(
-            client, {g["collection"] for g in games if g.get("collection")})
+            client, {c for g in games if (c := primary_collection(g)) is not None})
 
         appid_by_igdb = {v: k for k, v in mapping.items()}
         for gid, game in by_igdb.items():
             appid = appid_by_igdb.get(gid)
             minutes = playtime.get(appid, 0)
-            cid_col = game.get("collection")
+            cid_col = primary_collection(game)
             fname = (collections.get(cid_col) or {}).get("name") or game.get("name") or f"#{gid}"
             if dry_run:
                 print(f"    [dry-run] seed {game.get('name')} -> licence {fname} "
@@ -304,7 +325,7 @@ def run_sync(dry_run, import_wishlist_flag=False):
     for fr in watched:
         try:
             games = client.query("games",
-                                 f"{GAME_FIELDS} where collection = {fr['igdb_collection_id']}; "
+                                 f"{GAME_FIELDS} where collections = ({fr['igdb_collection_id']}); "
                                  f"sort first_release_date desc; limit {MAX_TITLES_PER_COLLECTION};")
         except Exception as exc:
             print(f"  WARN {fr['name']}: fetch KO ({exc}) — licence sautee")
