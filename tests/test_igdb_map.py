@@ -76,6 +76,12 @@ check("jeu sans date => precision tbd", mrow["release_precision"], "tbd")
 check("jeu sans genre => liste vide", mrow["genres"], [])
 check("jeu sans cover => None", mrow["cover_url"], None)
 
+# Sans release_dates, la precision est "year" (on ne sait que l'annee).
+NO_RELEASE_DATES = {"id": 8, "name": "Sans dates", "first_release_date": 1798761600}
+ndrow = to_title_row(NO_RELEASE_DATES)
+check("first_release_date sans release_dates => year", ndrow["release_precision"], "year")
+check("first_release_date sans release_dates => date non None", ndrow["first_release_date"] is not None, True)
+
 # ── detection d'evenements ──────────────────────────────────
 def title(gid, status="rumored", date=None, name="Suite"):
     return {"igdb_id": gid, "igdb_status": status,
@@ -110,6 +116,32 @@ check("rien ne bouge => aucun evenement",
 check("report de date => aucun evenement",
       diff_game_events({1: title(1, date="2027-03-01")}, [title(1, date="2027-09-01")]),
       [])
+
+# ── verification des tuples complets (event_type, title, event_date, igdb_id) ──
+announced_event = diff_game_events({}, [title(10, name="Premia")])[0]
+check("announced tuple type", announced_event[0], "announced")
+check("announced tuple title", announced_event[1], "Annoncé : Premia")
+check("announced tuple date", announced_event[2], None)
+check("announced tuple igdb_id", announced_event[3], 10)
+
+date_announced_event = diff_game_events({20: title(20)}, [title(20, date="2027-06-15")])[0]
+check("date_announced tuple type", date_announced_event[0], "date_announced")
+check("date_announced tuple title", "Date annoncée :" in date_announced_event[1], True)
+check("date_announced tuple date", date_announced_event[2], "2027-06-15")
+check("date_announced tuple igdb_id", date_announced_event[3], 20)
+
+released_event = diff_game_events({30: title(30, date="2027-03-01")},
+                                   [title(30, status="released", date="2027-03-01")])[0]
+check("released tuple type", released_event[0], "released")
+check("released tuple title", released_event[1], "Sorti : Suite")
+check("released tuple date", released_event[2], "2027-03-01")
+check("released tuple igdb_id", released_event[3], 30)
+
+cancelled_event = diff_game_events({40: title(40)}, [title(40, status="cancelled")])[0]
+check("cancelled tuple type", cancelled_event[0], "cancelled")
+check("cancelled tuple title", cancelled_event[1], "Annulé : Suite")
+check("cancelled tuple date is None", cancelled_event[2], None)
+check("cancelled tuple igdb_id", cancelled_event[3], 40)
 
 print(f"\n{failures} test(s) en echec" if failures else "\nTous les tests passent")
 sys.exit(1 if failures else 0)

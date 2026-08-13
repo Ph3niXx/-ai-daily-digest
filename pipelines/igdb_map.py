@@ -71,7 +71,11 @@ def _earliest_release(game):
         first = dates[0]
         return _iso_date(first["date"]), first.get("human"), map_precision(first.get("date_format"))
     ts = game.get("first_release_date")
-    return _iso_date(ts), None, ("day" if ts else "tbd")
+    # first_release_date est le minimum des release_dates ; sans date_format
+    # correspondant, on ne connait que l'annee. Sous-affirmer (year) est sans
+    # danger, sur-affirmer (day) invente une information.
+    precision = "year" if ts else "tbd"
+    return _iso_date(ts), None, precision
 
 
 def to_title_row(game):
