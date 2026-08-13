@@ -91,6 +91,17 @@ IGDB v4 s'authentifie via OAuth `client_credentials` Twitch (IGDB appartient à 
 
 ⚠️ **Pas encore posés (2026-08-13)** : le lot 1 a livré la migration, le pipeline et le workflow, mais ces deux secrets n'ont jamais été ajoutés à GitHub Actions — le pipeline n'a donc jamais tourné en écriture. Sans eux, `igdb_tracker_sync.py` sort en `[skip]` avec le code 0 dès la première ligne (avant tout appel réseau) : le workflow reste vert, zéro écriture, comportement nominal documenté dans `docs/architecture/pipelines.yaml::igdb_tracker_sync.health`.
 
+**Deux endroits distincts depuis le lot 2 (2026-08-13)** : ces mêmes deux secrets vivent désormais à la fois dans GitHub Actions (pipeline `igdb_tracker_sync.py`, ci-dessus) **et** dans les secrets Supabase du projet (`mrmgptqpflzyavdfqwwv`), posés via `supabase secrets set` pour l'Edge Function `igdb-proxy` (recherche IGDB depuis le front — voir section dédiée ci-dessous). Une Edge Function ne lit pas les secrets GitHub Actions : la rotation de `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` doit donc se faire **aux deux endroits**, sous peine de casser silencieusement l'un des deux consommateurs.
+
+### Edge Function `igdb-proxy`
+
+Proxy de recherche IGDB pour l'onglet Gaming ([supabase/functions/igdb-proxy/index.ts](../supabase/functions/igdb-proxy/index.ts)) : IGDB refuse les requêtes navigateur (CORS) et exige un client secret, la recherche front ne peut donc pas l'appeler directement.
+
+- Secrets lus via `Deno.env.get("TWITCH_CLIENT_ID")` / `Deno.env.get("TWITCH_CLIENT_SECRET")` — jamais en dur dans le source (ce dépôt est public).
+- `verify_jwt: true` au déploiement — obligatoire, voir la leçon `jsearch-proxy` ci-dessous.
+- CORS borné à `https://ph3nixx.github.io` (pas `*`).
+- Token applicatif Twitch (`client_credentials`) mis en cache en mémoire (~60 j) pour ne pas brûler de quota à chaque requête.
+
 ## Jobs Radar — routine Claude Code distante (aucun secret GitHub)
 
 La routine Jobs Radar ([cowork-routines/jobs-radar.md](cowork-routines/jobs-radar.md), ADR-19) **ne consomme aucun secret GitHub Actions** — elle tourne en remote sur claude.ai, pas dans un workflow.
