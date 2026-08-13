@@ -281,6 +281,10 @@ function GmAddGame({ onAdded }) {
   const [rows, setRows] = React.useState([]);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState(null);
+  // ID du jeu en cours d'ajout — desactive son bouton pendant l'appel pour
+  // qu'un double-clic ne lance pas deux sequences d'ecriture concurrentes
+  // (deux franchises/titres crees pour le meme jeu).
+  const [addingId, setAddingId] = React.useState(null);
 
   async function run(e) {
     e.preventDefault();
@@ -293,6 +297,20 @@ function GmAddGame({ onAdded }) {
       setErr("La recherche n'a pas répondu. Réessaie.");
       window.track && window.track("error_shown", { context: "games_search", message: ex.message });
     } finally { setBusy(false); }
+  }
+
+  // onAdded (addConsoleGame) renvoie desormais { ok, message } au lieu
+  // d'avaler l'echec : un conflit UNIQUE (jeu deja seede par le pipeline)
+  // ou une ecriture partielle doivent rester visibles, pas silencieux.
+  async function add(g) {
+    if (addingId) return;
+    setAddingId(g.id); setErr(null);
+    try {
+      const res = await onAdded(g);
+      if (res && res.ok === false) setErr(res.message || "Ajout impossible.");
+    } finally {
+      setAddingId(null);
+    }
   }
 
   if (!open) {
@@ -318,7 +336,9 @@ function GmAddGame({ onAdded }) {
                 {g.collection_name ? ` · ${g.collection_name}` : ""}
               </div>
             </div>
-            <button className="gm-sheet-btn" onClick={() => onAdded(g)}>Ajouter</button>
+            <button className="gm-sheet-btn" disabled={addingId === g.id} onClick={() => add(g)}>
+              {addingId === g.id ? "…" : "Ajouter"}
+            </button>
           </div>
         ))}
       </div>
@@ -427,7 +447,14 @@ function PanelGaming({ onNavigate }) {
   // IGDB est inconnue, puis son titre, puis son statut. bootstrapped_at
   // reste NULL — seule la phase B du pipeline, qui parcourt reellement la
   // collection, a le droit de le poser.
+  //
+  // Ne doit plus jamais avaler un echec en silence : un conflit sur
+  // game_titles.igdb_id (UNIQUE — jeu deja seede par le pipeline) ou sur
+  // game_franchises.igdb_collection_id (UNIQUE) doit remonter a l'utilisateur,
+  // pas seulement a la telemetrie. Renvoie { ok, message } — GmAddGame
+  // affiche message dans son etat err existant.
   async function addConsoleGame(g) {
+    let createdTitleId = null;
     try {
       let fr = (G.franchises || []).find(
         (f) => g.collection_id != null && f.igdb_collection_id === g.collection_id);
@@ -442,13 +469,36 @@ function PanelGaming({ onNavigate }) {
         { franchise_id: fr.id, igdb_id: g.id, name: g.name, cover_url: g.cover_url,
           genres: g.genres, platforms: g.platforms,
           first_release_date: g.first_release_date, release_human: g.release_human });
+      createdTitleId = t[0].id;
       await window.sb.postJSON(window.SUPABASE_URL + "/rest/v1/game_progress",
                                { title_id: t[0].id, status: "wishlist" });
       window.track && window.track("games_add", { igdb_id: g.id });
       window.cockpitDataLoader.invalidateCache && window.cockpitDataLoader.invalidateCache();
       window.location.reload();
+      return { ok: true };
     } catch (e) {
+      // Le titre existe mais son statut n'a pas pu etre ecrit : sans ligne de
+      // progression et sans steam_appid, buildLibrary l'exclut — il serait
+      // invisible pour toujours tout en occupant son igdb_id, qui est UNIQUE.
+      // On defait donc ce qu'on vient de creer plutot que de laisser une
+      // impasse.
+      if (createdTitleId) {
+        try {
+          await window.sb.deleteRequest(
+            window.SUPABASE_URL + "/rest/v1/game_titles?id=eq." + createdTitleId);
+        } catch (_) { /* best effort */ }
+      }
+      // Invalide le cache AVANT de renvoyer l'echec : une franchise a pu etre
+      // creee avant l'echec (ex. conflit sur le titre), et l'etat local
+      // (G.franchises, capture au montage du panel) ne la contient pas — sans
+      // cette invalidation, une nouvelle tentative ne la trouverait pas,
+      // retenterait sa creation, et heurterait le UNIQUE sur
+      // igdb_collection_id. Une tentative suivante doit reconstruire son
+      // etat depuis les donnees reelles, pas depuis ce qui a ete charge avant
+      // l'echec.
+      window.cockpitDataLoader.invalidateCache && window.cockpitDataLoader.invalidateCache();
       window.track && window.track("error_shown", { context: "games_add", message: e.message });
+      return { ok: false, message: "Ajout impossible — ce jeu est peut-être déjà dans ta bibliothèque." };
     }
   }
 
