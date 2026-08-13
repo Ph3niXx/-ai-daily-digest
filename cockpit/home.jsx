@@ -240,6 +240,80 @@ function MdtBriefCard({ releases = [], onNavigate }) {
   );
 }
 
+// Encart Jeux du Brief. C'est le SEUL point de contact du lot 1 : la boucle
+// entiere (voir -> decider -> ecrire) tient ici, sans ouvrir d'onglet.
+// Deux actions, toutes deux ecrivent : acquitter l'evenement, ou cesser de
+// suivre la licence. Rien ne s'accumule : un evenement acquitte ne revient pas.
+function GamesBriefCard({ releases = [], onNavigate }) {
+  const [hidden, setHidden] = React.useState({});
+  const visible = releases.filter((r) => !hidden[r.id]);
+  if (!visible.length) return null;
+
+  const LABEL = {
+    announced: "annoncé",
+    date_announced: "daté",
+    released: "sorti",
+    cancelled: "annulé",
+  };
+
+  // window.sb.patchJSON renvoie la Response BRUTE et ne leve jamais sur un
+  // 4xx/5xx (cockpit/lib/supabase.js:35-42, contrairement a postJSON). Sans
+  // ce controle explicite de r.ok, un refus RLS passerait pour un succes et
+  // la ligne disparaitrait de l'ecran sans avoir ete acquittee en base.
+  async function patchOrThrow(path, body) {
+    const r = await window.sb.patchJSON(window.SUPABASE_URL + path, body);
+    if (!r.ok) throw new Error(String(r.status));
+    return r;
+  }
+
+  async function ack(r) {
+    setHidden((h) => ({ ...h, [r.id]: true }));   // optimiste
+    window.track && window.track("games_release_ack", { event_type: r.event_type });
+    try {
+      await patchOrThrow("/rest/v1/game_releases?id=eq." + r.id, { acknowledged: true });
+    } catch (e) {
+      setHidden((h) => ({ ...h, [r.id]: false })); // rollback
+      window.track && window.track("error_shown", { context: "games_ack", message: e.message });
+    }
+  }
+
+  async function unwatch(r) {
+    setHidden((h) => ({ ...h, [r.id]: true }));
+    window.track && window.track("games_unwatch_franchise", { franchise: r.franchise_id });
+    try {
+      await patchOrThrow("/rest/v1/game_franchises?id=eq." + r.franchise_id, { watched: false });
+      await patchOrThrow("/rest/v1/game_releases?id=eq." + r.id, { acknowledged: true });
+    } catch (e) {
+      setHidden((h) => ({ ...h, [r.id]: false }));
+      window.track && window.track("error_shown", { context: "games_unwatch", message: e.message });
+    }
+  }
+
+  return (
+    <section className="gmb-brief" aria-label="Sorties jeux">
+      <div className="gmb-brief-head">
+        🎮 Jeux — {visible.length} nouveauté{visible.length > 1 ? "s" : ""}
+      </div>
+      <ul className="gmb-brief-list">
+        {visible.slice(0, 3).map((r) => (
+          <li key={r.id} className="gmb-brief-item">
+            <span className="gmb-brief-text">
+              {r.title}
+              <span className="gmb-brief-tag">{LABEL[r.event_type] || r.event_type}</span>
+            </span>
+            <span className="gmb-brief-actions">
+              <button className="gmb-brief-btn" onClick={() => ack(r)}
+                      title="J'ai vu">✓</button>
+              <button className="gmb-brief-btn is-dismiss" onClick={() => unwatch(r)}
+                      title="Ne plus suivre cette licence">✕ licence</button>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
   const { macro, top, signals, stats, date, user, radar, week } = data;
   const morningItems = data.morning_card || [];
@@ -412,6 +486,11 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
     try { window.track && window.track("zero_state_shown", { ideas_count: shownIdeas.length }); } catch {}
   }, [isZeroState]);
 
+  React.useEffect(() => {
+    const n = (data.game_releases || []).length;
+    if (n) window.track && window.track("games_brief_shown", { count: n });
+  }, [data.game_releases]);
+
   return (
     <div className="home" data-theme-vibe={theme.id}>
       {/* PAGE HEADER */}
@@ -452,6 +531,8 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
       )}
 
       <MdtBriefCard releases={data.media_releases || []} onNavigate={onNavigate} />
+
+      <GamesBriefCard releases={data.game_releases || []} onNavigate={onNavigate} />
 
       {viewMode === "morning" && morningItems.length > 0 ? (
         <MorningCard items={morningItems} onNavigate={onNavigate} />

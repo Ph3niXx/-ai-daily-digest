@@ -1170,7 +1170,7 @@
 
   // ── Tier 1 boot — runs BEFORE <App/> mounts ──────────────
   async function bootTier1(){
-    const [articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis, mediaReleases, pipelineHealth, dailyPicks, articleFeedback] = await Promise.all([
+    const [articlesToday, brief, signals, radarRows, profileRows, recent, weeklyAnalysis, mediaReleases, gameReleases, pipelineHealth, dailyPicks, articleFeedback] = await Promise.all([
       once("articles_today", loadArticlesToday).catch(() => []),
       once("daily_brief", loadDailyBrief).catch(() => null),
       once("signals", loadSignals).catch(() => []),
@@ -1181,6 +1181,10 @@
       once("media_releases_fresh", () => {
         const from = new Date(Date.now() - 7 * 86400000).toISOString();
         return q("media_releases", `acknowledged=eq.false&detected_at=gte.${from}&order=detected_at.desc&limit=5`);
+      }).catch(() => []),
+      once("game_releases_fresh", () => {
+        const from = new Date(Date.now() - 30 * 86400000).toISOString();
+        return q("game_releases", `acknowledged=eq.false&detected_at=gte.${from}&order=detected_at.desc&limit=5`);
       }).catch(() => []),
       // Santé des pipelines — table minuscule (~13 lignes), lue en T1 parce que
       // le bandeau doit pouvoir s'afficher sur n'importe quel onglet dès le mount.
@@ -1230,6 +1234,7 @@
       recos: [],       // Tier 2
       challenges: [],  // Tier 2
       media_releases: mediaReleases,  // encart Médiathèque du Brief (T1 léger)
+      game_releases: gameReleases,    // encart Jeux du Brief (T1 leger)
       pipeline_health: pipelineHealth || [],  // uniquement les pipelines dégradés
       article_feedback: articleFeedback || [],  // votes déjà émis, pour l'état des boutons
     };
