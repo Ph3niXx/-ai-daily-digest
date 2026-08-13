@@ -180,6 +180,85 @@ function GmHeatmap({ grid }) {
   );
 }
 
+// Fiche jeu — le seul endroit où l'utilisateur écrit. Quatre statuts en un
+// tap ; la note et la plateforme n'apparaissent qu'une fois un statut posé,
+// parce que `game_progress.status` est NOT NULL et contraint à ces quatre
+// valeurs : il n'existe pas de ligne « sans statut ».
+function GmSheet({ card, franchise, onClose, onStatus, onRating, onPlatform, onWatch, platforms }) {
+  const V = window.gamesView;
+  if (!card) return null;
+  const st = V.statusOf(card);
+  const rating = V.ratingOf(card);
+  const ttb = V.ttbLabel(card.t.time_to_beat_minutes);
+  return (
+    <div className="gm-sheet-backdrop" onClick={onClose}>
+      <div className="gm-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={card.t.name}>
+        <button className="gm-sheet-close" onClick={onClose} aria-label="Fermer">✕</button>
+        <div className="gm-sheet-head">
+          {card.t.cover_url && <div className="gm-sheet-cover" style={{ backgroundImage: `url("${card.t.cover_url}")` }} />}
+          <div>
+            <h3 className="gm-sheet-title">{card.t.name}</h3>
+            {franchise && <div className="gm-sheet-licence">{franchise.name}</div>}
+            <div className="gm-sheet-facts">
+              <span>{V.hoursLabel(card.minutes)}</span>
+              {ttb && <span> · {ttb}</span>}
+              {card.t.release_human && <span> · {card.t.release_human}</span>}
+            </div>
+            {(card.t.genres || []).length > 0 &&
+              <div className="gm-sheet-genres">{card.t.genres.join(" · ")}</div>}
+          </div>
+        </div>
+
+        <div className="gm-sheet-block">
+          <div className="gm-sheet-label">Où j'en suis</div>
+          <div className="gm-sheet-row">
+            {["wishlist", "playing", "finished", "dropped"].map((s) => (
+              <button key={s} className={`gm-sheet-btn ${st === s ? "is-on" : ""}`}
+                      onClick={() => onStatus(card, s)}>
+                {V.STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {st !== "unqualified" && (
+          <>
+            <div className="gm-sheet-block">
+              <div className="gm-sheet-label">Ma note</div>
+              <input className="gm-sheet-rating" type="number" min="0" max="100"
+                     placeholder="0–100" defaultValue={rating == null ? "" : rating}
+                     onBlur={(e) => {
+                       const v = e.target.value.trim();
+                       onRating(card, v === "" ? null : Math.max(0, Math.min(100, Number(v))));
+                     }} />
+            </div>
+            <div className="gm-sheet-block">
+              <div className="gm-sheet-label">Sur quelle plateforme</div>
+              <div className="gm-sheet-row">
+                {platforms.map((p) => (
+                  <button key={p}
+                          className={`gm-sheet-btn ${card.prog && card.prog.platform === p ? "is-on" : ""}`}
+                          onClick={() => onPlatform(card, p)}>{p}</button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {franchise && (
+          <div className="gm-sheet-block">
+            <label className="gm-sheet-watch">
+              <input type="checkbox" defaultChecked={!!franchise.watched}
+                     onChange={(e) => onWatch(franchise.id, e.target.checked)} />
+              M'avertir des prochaines sorties de <strong>{franchise.name}</strong>
+            </label>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Panel ───────────────────────────────────────────
 function PanelGaming({ onNavigate }) {
   const D = window.GAMING_PERSO_DATA;
@@ -215,6 +294,47 @@ function PanelGaming({ onNavigate }) {
 
   function toggleStatus(s) {
     setLibStatuses((cur) => cur.includes(s) ? cur.filter((x) => x !== s) : cur.concat([s]));
+  }
+
+  const PLATFORMS = ["PC", "PlayStation", "Xbox", "Switch", "Autre"];
+
+  // game_progress appartient a l'utilisateur : le front est le seul a y
+  // ecrire. Upsert manuel — une ligne peut ne pas exister encore (86 jeux
+  // seedes par le pipeline n'en ont aucune).
+  async function writeProgress(card, patch) {
+    const before = progressRows;
+    const existing = before.find((p) => p.title_id === card.t.id);
+    const next = existing
+      ? before.map((p) => (p.title_id === card.t.id ? { ...p, ...patch } : p))
+      : before.concat([{ title_id: card.t.id, status: "unqualified", ...patch }]);
+    setProgLocal(next);
+    try {
+      if (existing) {
+        await gmPatch("/rest/v1/game_progress?title_id=eq." + card.t.id,
+                      { ...patch, updated_at: new Date().toISOString() });
+      } else {
+        await window.sb.postJSON(window.SUPABASE_URL + "/rest/v1/game_progress",
+                                 { title_id: card.t.id, ...patch });
+      }
+      // Les track() partent APRES l'ecriture reussie, jamais avant (meme
+      // convention que ackRelease/unwatchFranchise ci-dessus) : games_status_set
+      // est la sonde de survie du lot 2, un compteur qui monte sur une
+      // ecriture refusee fausserait la mesure.
+      if ("status" in patch) window.track && window.track("games_status_set", { status: patch.status });
+      if ("rating" in patch) window.track && window.track("games_rate", {});
+    } catch (e) {
+      setProgLocal(before);
+      window.track && window.track("error_shown", { context: "games_progress", message: e.message });
+    }
+  }
+
+  async function toggleWatch(franchiseId, watched) {
+    try {
+      await gmPatch("/rest/v1/game_franchises?id=eq." + franchiseId, { watched });
+      window.track && window.track("games_watch_toggle", { watched });
+    } catch (e) {
+      window.track && window.track("error_shown", { context: "games_watch", message: e.message });
+    }
   }
 
   // window.sb.patchJSON renvoie la Response BRUTE et ne leve pas sur 4xx/5xx
@@ -635,6 +755,15 @@ function PanelGaming({ onNavigate }) {
           ))}
         </div>
       </section>
+
+      <GmSheet card={sheetCard}
+               franchise={sheetCard ? franchisesById[sheetCard.franchiseId] : null}
+               platforms={PLATFORMS}
+               onClose={() => setSheetCard(null)}
+               onStatus={(c, s) => writeProgress(c, { status: s })}
+               onRating={(c, r) => writeProgress(c, { rating: r })}
+               onPlatform={(c, p) => writeProgress(c, { platform: p })}
+               onWatch={toggleWatch} />
     </div>
   );
 }
