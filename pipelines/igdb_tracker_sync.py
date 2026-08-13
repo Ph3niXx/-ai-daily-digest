@@ -15,8 +15,8 @@ sb_patch) mais PAS diff_events, qui parle episodes et statuts de diffusion.
 Spec : docs/superpowers/specs/2026-08-12-gaming-tracker-igdb-design.md
 
 Usage:
-    TWITCH_CLIENT_ID=xxx TWITCH_CLIENT_SECRET=yyy \
-    SUPABASE_URL=... SUPABASE_SERVICE_KEY=... \
+    TWITCH_CLIENT_ID=xxx TWITCH_CLIENT_SECRET=yyy \\
+    SUPABASE_URL=... SUPABASE_SERVICE_KEY=... \\
         python pipelines/igdb_tracker_sync.py [--dry-run] [--import-wishlist]
 
 Sans les secrets Twitch : message [skip] et sortie 0.
