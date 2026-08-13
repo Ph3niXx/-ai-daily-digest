@@ -328,10 +328,18 @@ function PanelGaming({ onNavigate }) {
   const G = (D && D.games) || { titles: [], franchises: [], progress: [], releases: [] };
   const [relLocal, setRelLocal] = React.useState(null);
   const releases = relLocal || G.releases;
+  // Meme motif que relLocal/progLocal : l'ajout d'un jeu console pousse ici les
+  // lignes que la base vient de rendre, pour que la carte apparaisse dans
+  // l'instant. Sans ca il fallait recharger la page entiere — on perdait le
+  // defilement, les filtres poses et la recherche en cours pour une ligne.
+  const [titlesLocal, setTitlesLocal] = React.useState(null);
+  const [franchisesLocal, setFranchisesLocal] = React.useState(null);
+  const titles = titlesLocal || G.titles;
+  const franchises = franchisesLocal || G.franchises;
   const titlesById = React.useMemo(
-    () => Object.fromEntries((G.titles || []).map((t) => [t.id, t])), [G.titles]);
+    () => Object.fromEntries((titles || []).map((t) => [t.id, t])), [titles]);
   const franchisesById = React.useMemo(
-    () => Object.fromEntries((G.franchises || []).map((f) => [f.id, f])), [G.franchises]);
+    () => Object.fromEntries((franchises || []).map((f) => [f.id, f])), [franchises]);
   const upcoming = React.useMemo(
     () => window.gamesView.buildUpcoming(releases, titlesById, franchisesById),
     [releases, titlesById, franchisesById]);
@@ -344,8 +352,8 @@ function PanelGaming({ onNavigate }) {
   const progressRows = progLocal || G.progress;
 
   const library = React.useMemo(
-    () => window.gamesView.buildLibrary(G.titles, progressRows, (D && D._raw && D._raw.snapshot) || []),
-    [G.titles, progressRows, D]);
+    () => window.gamesView.buildLibrary(titles, progressRows, (D && D._raw && D._raw.snapshot) || []),
+    [titles, progressRows, D]);
 
   // Mesure d'exposition, emise une fois par montage du panel. C'est le
   // denominateur de games_status_set, sonde de survie du lot : sans lui,
@@ -495,13 +503,17 @@ function PanelGaming({ onNavigate }) {
   async function addConsoleGame(g) {
     let createdTitleId = null;
     try {
-      let fr = (G.franchises || []).find(
+      let fr = (franchises || []).find(
         (f) => g.collection_id != null && f.igdb_collection_id === g.collection_id);
       if (!fr) {
         const created = await window.sb.postJSON(
           window.SUPABASE_URL + "/rest/v1/game_franchises",
           { igdb_collection_id: g.collection_id, name: g.collection_name || g.name, watched: true });
         fr = created[0];
+        // Pousse des sa creation, pas a la fin : si la suite echoue, une
+        // nouvelle tentative doit retrouver cette franchise plutot que d'en
+        // recreer une et heurter le UNIQUE sur igdb_collection_id.
+        setFranchisesLocal((franchises || []).concat([fr]));
       }
       const t = await window.sb.postJSON(
         window.SUPABASE_URL + "/rest/v1/game_titles",
@@ -512,8 +524,13 @@ function PanelGaming({ onNavigate }) {
       await window.sb.postJSON(window.SUPABASE_URL + "/rest/v1/game_progress",
                                { title_id: t[0].id, status: "wishlist" });
       window.track && window.track("games_add", { igdb_id: g.id });
-      window.cockpitDataLoader.invalidateCache && window.cockpitDataLoader.invalidateCache();
-      window.location.reload();
+      // Insertion en place plutot qu'un rechargement de page : la base vient de
+      // rendre les lignes creees (Prefer: return=representation), on les pousse
+      // dans l'etat local et la carte apparait dans l'instant. gmInvalidateTracker
+      // garantit qu'au prochain retour sur l'onglet la verite reviendra du serveur.
+      setTitlesLocal((titles || []).concat([t[0]]));
+      setProgLocal((progressRows || []).concat([{ title_id: t[0].id, status: "wishlist" }]));
+      gmInvalidateTracker();
       return { ok: true };
     } catch (e) {
       // Le titre existe mais son statut n'a pas pu etre ecrit : sans ligne de
@@ -528,14 +545,11 @@ function PanelGaming({ onNavigate }) {
         } catch (_) { /* best effort */ }
       }
       // Invalide le cache AVANT de renvoyer l'echec : une franchise a pu etre
-      // creee avant l'echec (ex. conflit sur le titre), et l'etat local
-      // (G.franchises, capture au montage du panel) ne la contient pas — sans
-      // cette invalidation, une nouvelle tentative ne la trouverait pas,
-      // retenterait sa creation, et heurterait le UNIQUE sur
-      // igdb_collection_id. Une tentative suivante doit reconstruire son
-      // etat depuis les donnees reelles, pas depuis ce qui a ete charge avant
-      // l'echec.
-      window.cockpitDataLoader.invalidateCache && window.cockpitDataLoader.invalidateCache();
+      // creee avant l'echec : elle a ete poussee dans franchisesLocal des sa
+      // creation, donc une nouvelle tentative dans cette session la retrouve.
+      // L'invalidation couvre le cas ou l'utilisateur quitte l'onglet entre
+      // les deux : la verite revient alors du serveur.
+      gmInvalidateTracker();
       window.track && window.track("error_shown", { context: "games_add", message: e.message });
       return { ok: false, message: "Ajout impossible — ce jeu est peut-être déjà dans ta bibliothèque." };
     }
