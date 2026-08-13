@@ -262,6 +262,70 @@ function GmSheet({ card, franchise, onClose, onStatus, onRating, onPlatform, onW
   );
 }
 
+// Recherche IGDB via l'Edge Function : le navigateur ne peut pas appeler
+// IGDB directement (CORS + client secret). Le JWT de la session part dans
+// l'en-tete, la fonction est deployee en verify_jwt.
+async function gmSearchIgdb(q) {
+  const r = await fetch(
+    window.SUPABASE_URL + "/functions/v1/igdb-proxy?q=" + encodeURIComponent(q),
+    { headers: window.sb.headers });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
+
+// Ouvre la bibliothèque aux jeux console (PlayStation/Xbox/Switch) : seul
+// Steam alimente le tracker automatiquement, ce composant couvre le reste.
+function GmAddGame({ onAdded }) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const [rows, setRows] = React.useState([]);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+
+  async function run(e) {
+    e.preventDefault();
+    if (q.trim().length < 2) return;
+    setBusy(true); setErr(null);
+    try {
+      setRows(await gmSearchIgdb(q.trim()));
+      window.track && window.track("games_search", {});
+    } catch (ex) {
+      setErr("La recherche n'a pas répondu. Réessaie.");
+      window.track && window.track("error_shown", { context: "games_search", message: ex.message });
+    } finally { setBusy(false); }
+  }
+
+  if (!open) {
+    return <button className="gm-add-open" onClick={() => setOpen(true)}>+ Ajouter un jeu console</button>;
+  }
+  return (
+    <div className="gm-add">
+      <form className="gm-add-form" onSubmit={run}>
+        <input className="gm-lib-search" type="search" autoFocus placeholder="Titre du jeu…"
+               value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="gm-sheet-btn" type="submit" disabled={busy}>{busy ? "…" : "Chercher"}</button>
+        <button className="gm-sheet-btn" type="button" onClick={() => { setOpen(false); setRows([]); }}>Fermer</button>
+      </form>
+      {err && <div className="gm-empty">{err}</div>}
+      <div className="gm-add-rows">
+        {rows.map((g) => (
+          <div className="gm-add-row" key={g.id}>
+            {g.cover_url && <div className="gm-lib-cover" style={{ backgroundImage: `url("${g.cover_url}")` }} />}
+            <div className="gm-add-body">
+              <div className="gm-lib-name">{g.name}</div>
+              <div className="gm-lib-hours">
+                {g.release_human || "date inconnue"}
+                {g.collection_name ? ` · ${g.collection_name}` : ""}
+              </div>
+            </div>
+            <button className="gm-sheet-btn" onClick={() => onAdded(g)}>Ajouter</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Panel ───────────────────────────────────────────
 function PanelGaming({ onNavigate }) {
   const D = window.GAMING_PERSO_DATA;
@@ -357,6 +421,35 @@ function PanelGaming({ onNavigate }) {
     const r = await window.sb.patchJSON(window.SUPABASE_URL + path, body);
     if (!r.ok) throw new Error(String(r.status));
     return r;
+  }
+
+  // Un jeu console ajoute a la main : on cree sa franchise si sa collection
+  // IGDB est inconnue, puis son titre, puis son statut. bootstrapped_at
+  // reste NULL — seule la phase B du pipeline, qui parcourt reellement la
+  // collection, a le droit de le poser.
+  async function addConsoleGame(g) {
+    try {
+      let fr = (G.franchises || []).find(
+        (f) => g.collection_id != null && f.igdb_collection_id === g.collection_id);
+      if (!fr) {
+        const created = await window.sb.postJSON(
+          window.SUPABASE_URL + "/rest/v1/game_franchises",
+          { igdb_collection_id: g.collection_id, name: g.collection_name || g.name, watched: true });
+        fr = created[0];
+      }
+      const t = await window.sb.postJSON(
+        window.SUPABASE_URL + "/rest/v1/game_titles",
+        { franchise_id: fr.id, igdb_id: g.id, name: g.name, cover_url: g.cover_url,
+          genres: g.genres, platforms: g.platforms,
+          first_release_date: g.first_release_date, release_human: g.release_human });
+      await window.sb.postJSON(window.SUPABASE_URL + "/rest/v1/game_progress",
+                               { title_id: t[0].id, status: "wishlist" });
+      window.track && window.track("games_add", { igdb_id: g.id });
+      window.cockpitDataLoader.invalidateCache && window.cockpitDataLoader.invalidateCache();
+      window.location.reload();
+    } catch (e) {
+      window.track && window.track("error_shown", { context: "games_add", message: e.message });
+    }
   }
 
   // Les track() partent APRES le PATCH reussi, jamais avant (meme convention
@@ -539,6 +632,7 @@ function PanelGaming({ onNavigate }) {
             <option value="name">Nom</option>
             <option value="rating">Ma note</option>
           </select>
+          <GmAddGame onAdded={addConsoleGame} />
         </div>
         <GmLibrary cards={libraryView} onOpen={(c) => setSheetTitleId(c.t.id)} />
       </section>

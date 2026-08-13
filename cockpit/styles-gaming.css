@@ -1146,3 +1146,17 @@
   .gm-sheet-backdrop { padding: 0; align-items: stretch; }
   .gm-sheet { width: 100%; max-height: 100vh; border-radius: 0; }
 }
+
+/* ── Ajout d'un jeu console (lot 2) ───────────────────────── */
+.gm-add-open {
+  border: 1px dashed var(--bd); background: transparent; color: var(--tx2);
+  border-radius: 10px; min-height: 44px; padding: 0 14px; cursor: pointer; font-size: 13px;
+}
+.gm-add { flex: 1 1 100%; }
+.gm-add-form { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.gm-add-rows { display: flex; flex-direction: column; gap: 8px; }
+.gm-add-row {
+  display: flex; gap: 10px; align-items: center;
+  border: 1px solid var(--bd); border-radius: 10px; padding: 8px;
+}
+.gm-add-body { flex: 1; min-width: 0; }

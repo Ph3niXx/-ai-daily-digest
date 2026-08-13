@@ -63,6 +63,8 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `games_status_set` | `{status}` | `cockpit/panel-gaming.jsx::PanelGaming::writeProgress()`, après écriture réussie (PATCH ou POST) sur `game_progress` — l'utilisateur pose ou change le statut d'un jeu depuis la fiche (`GmSheet`). **Sonde de survie du lot 2** : la fiche jeu est le seul endroit du lot où l'utilisateur écrit ; trois semaines sans un seul `games_status_set`, une fois la phase de qualification initiale de la bibliothèque passée, signifient que la bibliothèque n'a pas trouvé son usage |
 | `games_rate` | `{}` | `cockpit/panel-gaming.jsx::PanelGaming::writeProgress()`, après écriture réussie sur `game_progress` — l'utilisateur note un jeu (0–100) depuis la fiche, ou efface sa note |
 | `games_watch_toggle` | `{watched}` | `cockpit/panel-gaming.jsx::PanelGaming::toggleWatch()`, après PATCH réussi sur `game_franchises` — l'utilisateur active ou coupe le suivi d'une licence depuis la fiche jeu |
+| `games_search` | `{}` | `cockpit/panel-gaming.jsx::GmAddGame::run()`, après réponse réussie de l'Edge Function `igdb-proxy` (`gmSearchIgdb()`) — recherche IGDB pour ajouter un jeu console (PS/Xbox/Switch) à la bibliothèque, seul Steam étant tracké automatiquement |
+| `games_add` | `{igdb_id}` | `cockpit/panel-gaming.jsx::PanelGaming::addConsoleGame()`, après écriture réussie de `game_titles` + `game_progress` (`status: "wishlist"`), et de `game_franchises` si la collection IGDB était encore inconnue — l'utilisateur ajoute un jeu console trouvé via `GmAddGame`. `bootstrapped_at` n'est jamais posé par cette écriture, seule la phase B du pipeline IGDB en a le droit |
 
 ## Règle de maintenance
 
