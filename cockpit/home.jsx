@@ -273,7 +273,7 @@ function GamesBriefCard({ releases = [], onNavigate }) {
     setHidden((h) => ({ ...h, [r.id]: true }));   // optimiste
     try {
       await patchOrThrow("/rest/v1/game_releases?id=eq." + r.id, { acknowledged: true });
-      window.track && window.track("games_release_ack", { event_type: r.event_type });
+      window.track && window.track("games_release_ack", { event_type: r.event_type, surface: "brief" });
     } catch (e) {
       setHidden((h) => ({ ...h, [r.id]: false })); // rollback
       window.track && window.track("error_shown", { context: "games_ack", message: e.message });
@@ -285,7 +285,7 @@ function GamesBriefCard({ releases = [], onNavigate }) {
     try {
       await patchOrThrow("/rest/v1/game_franchises?id=eq." + r.franchise_id, { watched: false });
       await patchOrThrow("/rest/v1/game_releases?id=eq." + r.id, { acknowledged: true });
-      window.track && window.track("games_unwatch_franchise", { franchise: r.franchise_id });
+      window.track && window.track("games_unwatch_franchise", { franchise: r.franchise_id, surface: "brief" });
     } catch (e) {
       setHidden((h) => ({ ...h, [r.id]: false }));
       window.track && window.track("error_shown", { context: "games_unwatch", message: e.message });

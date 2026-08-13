@@ -181,7 +181,9 @@ function PanelGaming({ onNavigate }) {
     setRelLocal(before.map((r) => (r.id === it.id ? { ...r, acknowledged: true } : r)));
     try {
       await gmPatch("/rest/v1/game_releases?id=eq." + it.id, { acknowledged: true });
-      window.track && window.track("games_release_ack", { event_type: "announced", surface: "gaming" });
+      const src = releases.find((r) => r.id === it.id);
+      window.track && window.track("games_release_ack",
+        { event_type: (src && src.event_type) || null, surface: "gaming" });
     } catch (e) {
       setRelLocal(before);
       window.track && window.track("error_shown", { context: "games_ack", message: e.message });
