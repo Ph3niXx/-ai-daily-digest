@@ -270,16 +270,25 @@ def run_sync(dry_run, import_wishlist_flag=False):
     seeded = 0
     if unknown:
         mapping = resolve_steam(client, unknown)
-        if not mapping:
-            # Aucun des appids n'a pu etre traduit : ce n'est pas « rien de
-            # nouveau », c'est external_games qui ne repond plus comme avant.
+        # Zero traduction ne veut pas dire la meme chose selon l'etat de la base.
+        # Si des titres portent deja un steam_appid, la traduction FONCTIONNE :
+        # ces appids-la sont simplement absents d'IGDB (outils, demos, jeux
+        # retires) et le resteront — ils repasseront ici a chaque run. Crier
+        # FATAL dans ce cas condamnerait le pipeline a un rouge quotidien et
+        # bloquerait les phases B/C/D pour toujours. Constate en vrai au run 2
+        # du 2026-08-13, avec 2 appids inconnus sur 80.
+        deja_resolu = any(t.get("steam_appid") for t in known_titles)
+        if not mapping and not deja_resolu:
+            # La, en revanche, rien n'a jamais ete traduit : ce n'est pas « rien
+            # de nouveau », c'est external_games qui ne repond plus comme avant.
             # Ce garde-fou a deja paye une fois — il a revele le 2026-08-13 que
             # `category` etait mort, la ou un run vert aurait laisse la base
             # vide sans que personne ne s'en apercoive.
             print(f"FATAL: aucun des {len(unknown)} appid(s) Steam n'a pu etre traduit "
-                  "en id IGDB. Voir resolve_steam() : le filtre ou l'identifiant de "
-                  "source a probablement change cote IGDB — verifier avec "
-                  "`fields id,name;` sur l'endpoint external_game_sources.")
+                  "en id IGDB, et la base n'en contient aucun deja resolu. Voir "
+                  "resolve_steam() : le filtre ou l'identifiant de source a "
+                  "probablement change cote IGDB — verifier avec `fields id,name;` "
+                  "sur l'endpoint external_game_sources.")
             return 1
         missing = sorted(unknown - set(mapping))
         if missing:
