@@ -1322,6 +1322,27 @@
         } catch (e) { return 0; }
       });
     },
+    // Tracker jeux (lot 2). game_titles porte 451 lignes dont ~357 sont des
+    // titres freres de collection : le filtrage en bibliotheque se fait dans
+    // games-view.js::buildLibrary(), pas ici — le panel a besoin de TOUS les
+    // titres pour resoudre les evenements du rail « A venir ».
+    async game_titles(){
+      return once("game_titles", () => q("game_titles", "select=*&limit=5000"));
+    },
+    async game_franchises(){
+      return once("game_franchises", () => q("game_franchises", "select=*&limit=2000"));
+    },
+    async game_progress(){
+      return once("game_progress", () => q("game_progress", "select=*&limit=2000"));
+    },
+    async game_releases(){
+      // Filtre sur l'acquittement et NON sur une fenetre temporelle :
+      // detected_at est fige a l'insertion (UNIQUE(title_id, event_type)
+      // interdit toute re-detection), donc une fenetre glissante ne peut que
+      // faire disparaitre un evenement que l'utilisateur n'a pas encore traite.
+      return once("game_releases", () =>
+        q("game_releases", "acknowledged=eq.false&order=detected_at.desc&limit=200"));
+    },
     async weekly_analysis(){ return once("weekly_analysis_all", () => loadWeeklyAnalysis(30)); },
     async jobs_all(){ return once("jobs_all", () => q("jobs", "select=*&order=score_total.desc.nullslast&limit=300")); },
     async sport(){ return once("sport_articles", () => q("sport_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
@@ -2510,10 +2531,9 @@
   }
 
   // Build GAMING_PERSO_DATA shape from Steam + TFT tables.
-  // Produces the FULL shape that panel-gaming.jsx reads. Sections without
-  // a backend (backlog, wishlist, heatmap, milestones non-temps) are
-  // returned as empty arrays so the panel renders honestly instead of
-  // displaying invented data.
+  // Produces the shape that panel-gaming.jsx reads. Backlog/abandonnés/top
+  // all-time n'existent plus comme sections (remplacées par la bibliothèque
+  // à statuts, lot 2) : ne pas les recalculer ici, personne ne les lit.
   function transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount }){
     const now = Date.now();
     const dayMs = 24 * 3600 * 1000;
@@ -2648,21 +2668,6 @@
       });
     }
 
-    // ── Top all-time depuis snapshot trié par playtime_forever
-    const top_alltime = snap
-      .filter(g => (g.playtime_forever_minutes || 0) > 0)
-      .slice(0, 10)
-      .map((g, i) => ({
-        rank: i + 1,
-        appid: g.appid,
-        title: g.name || "—",
-        platform: "steam",
-        hours: Math.round((g.playtime_forever_minutes || 0) / 60),
-        sessions: 0,
-        since: "—",
-        cover_url: steamHeaderUrl(g.appid),
-      }));
-
     // ── Daily sessions 90 jours pour la courbe d'activité
     const daily_sessions = [];
     for (let i = 89; i >= 0; i--) {
@@ -2751,59 +2756,12 @@
       completion_rate,
     };
 
-    // ── Backlog : jeux owned avec playtime = 0, top 8
-    const backlog = snap
-      .filter(g => (g.playtime_forever_minutes || 0) === 0)
-      .slice(0, 8)
-      .map(g => {
-        const d = detailsByAppid.get(g.appid);
-        const headerUrl = steamHeaderUrl(g.appid);
-        return {
-          appid: g.appid,
-          title: g.name || "—",
-          platform: "PC",
-          platform_id: "steam",
-          genre: (d && d.genres && d.genres[0]) || "Steam",
-          cover: headerUrl ? `center/cover no-repeat url("${headerUrl}"), #1b2838` : "#1b2838",
-          cover_url: headerUrl,
-          cover_accent: "#66c0f4",
-          hltb: 0,
-          acquired: "—",
-          acquired_how: "Steam · jamais lancé",
-          hype: 5,
-          reason: "Dans ta bibliothèque, jamais ouvert.",
-          priority: "shame",
-          shame_years: null,
-        };
-      });
-
-    // ── Jeux abandonnés : > 60min cumulées mais 0min sur 14j
-    // (commencés sérieusement puis lâchés — bons candidats à finir ou désinstaller)
-    const abandoned = snap
-      .filter(g => (g.playtime_forever_minutes || 0) >= 60 && (g.playtime_2weeks_minutes || 0) === 0)
-      .sort((a, b) => (b.playtime_forever_minutes || 0) - (a.playtime_forever_minutes || 0))
-      .slice(0, 12)
-      .map(g => {
-        const d = detailsByAppid.get(g.appid);
-        const hoursPlayed = Math.round((g.playtime_forever_minutes || 0) / 60);
-        return {
-          appid: g.appid,
-          title: g.name || "—",
-          hours_played: hoursPlayed,
-          genre: (d && d.genres && d.genres[0]) || "—",
-          header: steamHeaderUrl(g.appid),
-        };
-      });
-
     return {
       profiles,
       totals,
       in_progress,
-      backlog,
-      abandoned,
       daily_sessions,
       genres_30d,
-      top_alltime,
       recent_achievements,
       milestones,
       _meta: {
@@ -4679,20 +4637,32 @@
         return { scrobbles, stats, top, loved, genres, insights, newArtists };
       }
       case "gaming": {
-        const [snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount] = await Promise.all([
+        const [snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount,
+               gTitles, gFranchises, gProgress, gReleases] = await Promise.all([
           T2.steam_snapshot(),
           T2.steam_stats(),
           T2.steam_achievements(),
           T2.steam_game_details().catch(() => []),
           T2.tft_rank_latest().catch(() => []),
           T2.tft_match_count().catch(() => 0),
+          T2.game_titles().catch(() => []),
+          T2.game_franchises().catch(() => []),
+          T2.game_progress().catch(() => []),
+          T2.game_releases().catch(() => []),
         ]);
-        if (window.GAMING_PERSO_DATA && (snapshot || []).length) {
-          const shape = transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount });
-          replaceShape(window.GAMING_PERSO_DATA, shape);
+        const games = { titles: gTitles, franchises: gFranchises,
+                        progress: gProgress, releases: gReleases };
+        if (window.GAMING_PERSO_DATA) {
+          // Le tracker s'affiche meme sans snapshot Steam : un utilisateur
+          // qui ne joue que sur console a une bibliotheque valide.
+          if ((snapshot || []).length) {
+            const shape = transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount });
+            replaceShape(window.GAMING_PERSO_DATA, shape);
+          }
+          window.GAMING_PERSO_DATA.games = games;
           window.GAMING_PERSO_DATA._raw = { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount };
         }
-        return { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount };
+        return { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount, games };
       }
       case "stacks": {
         const from30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);

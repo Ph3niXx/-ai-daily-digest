@@ -273,19 +273,28 @@ function GamesBriefCard({ releases = [], onNavigate }) {
     setHidden((h) => ({ ...h, [r.id]: true }));   // optimiste
     try {
       await patchOrThrow("/rest/v1/game_releases?id=eq." + r.id, { acknowledged: true });
-      window.track && window.track("games_release_ack", { event_type: r.event_type });
+      window.track && window.track("games_release_ack", { event_type: r.event_type, surface: "brief" });
     } catch (e) {
       setHidden((h) => ({ ...h, [r.id]: false })); // rollback
       window.track && window.track("error_shown", { context: "games_ack", message: e.message });
     }
   }
 
+  // Acquitte d'abord les evenements de la licence, PUIS la passe en non
+  // suivie — jamais l'inverse. Dans cet ordre, une defaillance partielle
+  // (premiere ecriture OK, seconde en echec) laisse des evenements acquittes
+  // sans plus d'effet qu'un clic "vu", et une licence toujours suivie que
+  // l'utilisateur peut re-cliquer. Dans l'ordre inverse, une defaillance
+  // partielle laisserait la licence non suivie en base alors que ses
+  // evenements, jamais acquittes, continueraient de reapparaitre dans le
+  // rail — un etat coince dont l'utilisateur ne peut ni sortir ni comprendre
+  // l'origine.
   async function unwatch(r) {
     setHidden((h) => ({ ...h, [r.id]: true }));
     try {
-      await patchOrThrow("/rest/v1/game_franchises?id=eq." + r.franchise_id, { watched: false });
       await patchOrThrow("/rest/v1/game_releases?id=eq." + r.id, { acknowledged: true });
-      window.track && window.track("games_unwatch_franchise", { franchise: r.franchise_id });
+      await patchOrThrow("/rest/v1/game_franchises?id=eq." + r.franchise_id, { watched: false });
+      window.track && window.track("games_unwatch_franchise", { franchise: r.franchise_id, surface: "brief" });
     } catch (e) {
       setHidden((h) => ({ ...h, [r.id]: false }));
       window.track && window.track("error_shown", { context: "games_unwatch", message: e.message });

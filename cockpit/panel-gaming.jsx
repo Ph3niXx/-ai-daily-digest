@@ -3,15 +3,53 @@
 // ─────────────────────────────────────────────
 // Hero : last session + 4 plateformes
 // §1 En cours — cards avec progression HLTB
-// §2 Backlog priorisé
-// §3 Activité (courbe 180j + heatmap 24×7)
+// Ma bibliothèque — statuts déclarés (remplace backlog/abandonnés/top, lot 2)
+// §3 Activité (courbe 90j)
 // §4 Genres
-// §6 Top all-time
 // §7 Achievements récents
 // §8 2026 milestones
 // ═══════════════════════════════════════════════════════════════
 
 const { useState: useGmState, useMemo: useGmMemo } = React;
+
+const GM_STATUS_ORDER = ["playing", "wishlist", "finished", "dropped", "unqualified"];
+
+// Palette §4 Genres — mêmes teintes que GENRE_PALETTE côté data-loader.js
+// (transformGaming), réappliquée ici au calcul local genres14j.
+const GM_GENRE_PALETTE = ["#3a1e2e", "#2a1e38", "#2a3d2e", "#3a2a1a", "#1a2a3a", "#2a1e2e", "#555"];
+
+// La bibliotheque n'affiche JAMAIS de compteur de « jeux a qualifier » :
+// 86 jeux sans statut est un etat normal, pas une dette. Un arriere affiche
+// produit culpabilite puis evitement — c'est ce qui a tue l'outil precedent.
+function GmLibrary({ cards, onOpen }) {
+  const V = window.gamesView;
+  if (!cards.length) {
+    return <div className="gm-empty">Aucun jeu ne correspond à ce filtre.</div>;
+  }
+  return (
+    <div className="gm-lib-grid">
+      {cards.map((c) => {
+        const st = V.statusOf(c);
+        const rating = V.ratingOf(c);
+        return (
+          <button className={`gm-lib-card is-${st}`} key={c.t.id} onClick={() => onOpen(c)}>
+            {c.t.cover_url
+              ? <div className="gm-lib-cover" style={{ backgroundImage: `url("${c.t.cover_url}")` }} />
+              : <div className="gm-lib-cover is-empty" />}
+            <div className="gm-lib-body">
+              <div className="gm-lib-name">{c.t.name}</div>
+              <div className="gm-lib-meta">
+                <span className={`gm-lib-chip is-${st}`}>{V.STATUS_LABELS[st]}</span>
+                <span className="gm-lib-hours">{V.hoursLabel(c.minutes)}</span>
+                {rating != null && <span className="gm-lib-rating">{rating}</span>}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ── Chart activity ──────────────────────────────────
 function GmActivityChart({ series, range }) {
@@ -74,33 +112,205 @@ function GmActivityChart({ series, range }) {
   );
 }
 
-// ── Heatmap ─────────────────────────────────────────
-function GmHeatmap({ grid }) {
-  const DOW = ["L", "M", "M", "J", "V", "S", "D"];
-  const reordered = [1, 2, 3, 4, 5, 6, 0].map((i) => grid[i]);
-  const max = Math.max(...grid.flat());
-  const color = (v) => {
-    if (v < 0.5) return "var(--bd)";
-    const t = Math.min(1, v / max);
-    const alpha = 0.15 + t * 0.85;
-    return `color-mix(in srgb, var(--brand) ${Math.round(alpha * 100)}%, transparent)`;
-  };
-  return (
-    <div>
-      <div className="gm-heatmap-grid">
-        {reordered.map((row, r) => (
-          <React.Fragment key={r}>
-            <div className="gm-heatmap-row-label">{DOW[r]}</div>
-            {row.map((v, h) => (
-              <div key={h} className="gm-heatmap-cell" style={{ background: color(v) }} title={`${DOW[r]} ${h}h · ${v.toFixed(1)}h moy.`} />
-            ))}
-          </React.Fragment>
-        ))}
+// Rail « À venir » — les suites annoncées des licences suivies. C'est la
+// raison d'être du tracker : le reste de l'onglet raconte le passé, cette
+// section est la seule qui parle de ce qui arrive.
+function GmUpcoming({ items, onAck, onUnwatch }) {
+  if (!items.length) {
+    return (
+      <div className="gm-empty">
+        Rien d'annoncé dans tes licences suivies pour l'instant. Le suivi tourne
+        tous les matins ; un jeu apparaîtra ici dès qu'il sera annoncé.
       </div>
-      <div className="gm-heatmap-hours">
-        <span></span>
-        {Array.from({ length: 24 }, (_, h) => (
-          <span key={h}>{h % 3 === 0 ? h : ""}</span>
+    );
+  }
+  return (
+    <div className="gm-up-grid">
+      {items.map((it) => (
+        <article className="gm-up-card" key={it.id}>
+          {it.cover
+            ? <div className="gm-up-cover" style={{ backgroundImage: `url("${it.cover}")` }} />
+            : <div className="gm-up-cover is-empty" />}
+          <div className="gm-up-body">
+            <div className="gm-up-name">{it.name}</div>
+            {it.licence && <div className="gm-up-licence">{it.licence}</div>}
+            <div className="gm-up-when">
+              {it.when || "date inconnue"}
+              {it.precision === "year" || it.precision === "quarter"
+                ? <span className="gm-up-approx"> · approximatif</span> : null}
+            </div>
+            <div className="gm-up-actions">
+              <button className="gm-up-btn" onClick={() => onAck(it)} title="J'ai vu">✓ vu</button>
+              <button className="gm-up-btn is-dismiss" onClick={() => onUnwatch(it)}
+                      title="Ne plus suivre cette licence">✕ licence</button>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+// Fiche jeu — le seul endroit où l'utilisateur écrit. Quatre statuts en un
+// tap ; la note et la plateforme n'apparaissent qu'une fois un statut posé,
+// parce que `game_progress.status` est NOT NULL et contraint à ces quatre
+// valeurs : il n'existe pas de ligne « sans statut ».
+function GmSheet({ card, franchise, onClose, onStatus, onRating, onPlatform, onWatch, platforms }) {
+  const V = window.gamesView;
+  if (!card) return null;
+  const st = V.statusOf(card);
+  const rating = V.ratingOf(card);
+  const ttb = V.ttbLabel(card.t.time_to_beat_minutes);
+  return (
+    <div className="gm-sheet-backdrop" onClick={onClose}>
+      <div className="gm-sheet" onClick={(e) => e.stopPropagation()} role="dialog" aria-label={card.t.name}>
+        <button className="gm-sheet-close" onClick={onClose} aria-label="Fermer">✕</button>
+        <div className="gm-sheet-head">
+          {card.t.cover_url && <div className="gm-sheet-cover" style={{ backgroundImage: `url("${card.t.cover_url}")` }} />}
+          <div>
+            <h3 className="gm-sheet-title">{card.t.name}</h3>
+            {franchise && <div className="gm-sheet-licence">{franchise.name}</div>}
+            <div className="gm-sheet-facts">
+              <span>{V.hoursLabel(card.minutes)}</span>
+              {ttb && <span> · {ttb}</span>}
+              {card.t.release_human && <span> · {card.t.release_human}</span>}
+            </div>
+            {(card.t.genres || []).length > 0 &&
+              <div className="gm-sheet-genres">{card.t.genres.join(" · ")}</div>}
+          </div>
+        </div>
+
+        <div className="gm-sheet-block">
+          <div className="gm-sheet-label">Où j'en suis</div>
+          <div className="gm-sheet-row">
+            {["wishlist", "playing", "finished", "dropped"].map((s) => (
+              <button key={s} className={`gm-sheet-btn ${st === s ? "is-on" : ""}`}
+                      onClick={() => onStatus(card, s)}>
+                {V.STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {st !== "unqualified" && (
+          <>
+            <div className="gm-sheet-block">
+              <div className="gm-sheet-label">Ma note</div>
+              <input className="gm-sheet-rating" type="number" min="0" max="100"
+                     placeholder="0–100" defaultValue={rating == null ? "" : rating}
+                     onBlur={(e) => {
+                       const v = e.target.value.trim();
+                       if (v === "") { onRating(card, null); return; }
+                       const n = Number(v);
+                       if (!Number.isFinite(n)) return;   // saisie invalide : on n'efface pas
+                       onRating(card, Math.max(0, Math.min(100, n)));
+                     }} />
+            </div>
+            <div className="gm-sheet-block">
+              <div className="gm-sheet-label">Sur quelle plateforme</div>
+              <div className="gm-sheet-row">
+                {platforms.map((p) => (
+                  <button key={p}
+                          className={`gm-sheet-btn ${card.prog && card.prog.platform === p ? "is-on" : ""}`}
+                          onClick={() => onPlatform(card, p)}>{p}</button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+
+        {franchise && (
+          <div className="gm-sheet-block">
+            <label className="gm-sheet-watch">
+              <input type="checkbox" defaultChecked={!!franchise.watched}
+                     onChange={(e) => onWatch(franchise.id, e.target.checked)} />
+              M'avertir des prochaines sorties de <strong>{franchise.name}</strong>
+            </label>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Recherche IGDB via l'Edge Function : le navigateur ne peut pas appeler
+// IGDB directement (CORS + client secret). Le JWT de la session part dans
+// l'en-tete, la fonction est deployee en verify_jwt.
+async function gmSearchIgdb(q) {
+  const r = await fetch(
+    window.SUPABASE_URL + "/functions/v1/igdb-proxy?q=" + encodeURIComponent(q),
+    { headers: window.sb.headers });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
+
+// Ouvre la bibliothèque aux jeux console (PlayStation/Xbox/Switch) : seul
+// Steam alimente le tracker automatiquement, ce composant couvre le reste.
+function GmAddGame({ onAdded }) {
+  const [open, setOpen] = React.useState(false);
+  const [q, setQ] = React.useState("");
+  const [rows, setRows] = React.useState([]);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState(null);
+  // ID du jeu en cours d'ajout — desactive son bouton pendant l'appel pour
+  // qu'un double-clic ne lance pas deux sequences d'ecriture concurrentes
+  // (deux franchises/titres crees pour le meme jeu).
+  const [addingId, setAddingId] = React.useState(null);
+
+  async function run(e) {
+    e.preventDefault();
+    if (q.trim().length < 2) return;
+    setBusy(true); setErr(null);
+    try {
+      setRows(await gmSearchIgdb(q.trim()));
+      window.track && window.track("games_search", {});
+    } catch (ex) {
+      setErr("La recherche n'a pas répondu. Réessaie.");
+      window.track && window.track("error_shown", { context: "games_search", message: ex.message });
+    } finally { setBusy(false); }
+  }
+
+  // onAdded (addConsoleGame) renvoie desormais { ok, message } au lieu
+  // d'avaler l'echec : un conflit UNIQUE (jeu deja seede par le pipeline)
+  // ou une ecriture partielle doivent rester visibles, pas silencieux.
+  async function add(g) {
+    if (addingId) return;
+    setAddingId(g.id); setErr(null);
+    try {
+      const res = await onAdded(g);
+      if (res && res.ok === false) setErr(res.message || "Ajout impossible.");
+    } finally {
+      setAddingId(null);
+    }
+  }
+
+  if (!open) {
+    return <button className="gm-add-open" onClick={() => setOpen(true)}>+ Ajouter un jeu console</button>;
+  }
+  return (
+    <div className="gm-add">
+      <form className="gm-add-form" onSubmit={run}>
+        <input className="gm-lib-search" type="search" autoFocus placeholder="Titre du jeu…"
+               value={q} onChange={(e) => setQ(e.target.value)} />
+        <button className="gm-sheet-btn" type="submit" disabled={busy}>{busy ? "…" : "Chercher"}</button>
+        <button className="gm-sheet-btn" type="button" onClick={() => { setOpen(false); setRows([]); }}>Fermer</button>
+      </form>
+      {err && <div className="gm-empty">{err}</div>}
+      <div className="gm-add-rows">
+        {rows.map((g) => (
+          <div className="gm-add-row" key={g.id}>
+            {g.cover_url && <div className="gm-lib-cover" style={{ backgroundImage: `url("${g.cover_url}")` }} />}
+            <div className="gm-add-body">
+              <div className="gm-lib-name">{g.name}</div>
+              <div className="gm-lib-hours">
+                {g.release_human || "date inconnue"}
+                {g.collection_name ? ` · ${g.collection_name}` : ""}
+              </div>
+            </div>
+            <button className="gm-sheet-btn" disabled={addingId === g.id} onClick={() => add(g)}>
+              {addingId === g.id ? "…" : "Ajouter"}
+            </button>
+          </div>
         ))}
       </div>
     </div>
@@ -112,10 +322,272 @@ function PanelGaming({ onNavigate }) {
   const D = window.GAMING_PERSO_DATA;
   const [chartRange, setChartRange] = useGmState("90j");
 
+  const G = (D && D.games) || { titles: [], franchises: [], progress: [], releases: [] };
+  const [relLocal, setRelLocal] = React.useState(null);
+  const releases = relLocal || G.releases;
+  const titlesById = React.useMemo(
+    () => Object.fromEntries((G.titles || []).map((t) => [t.id, t])), [G.titles]);
+  const franchisesById = React.useMemo(
+    () => Object.fromEntries((G.franchises || []).map((f) => [f.id, f])), [G.franchises]);
+  const upcoming = React.useMemo(
+    () => window.gamesView.buildUpcoming(releases, titlesById, franchisesById),
+    [releases, titlesById, franchisesById]);
+
+  const [libQuery, setLibQuery] = React.useState("");
+  const [libStatuses, setLibStatuses] = React.useState([]);
+  const [libSort, setLibSort] = React.useState("hours");
+  const [progLocal, setProgLocal] = React.useState(null);
+  const progressRows = progLocal || G.progress;
+
+  const library = React.useMemo(
+    () => window.gamesView.buildLibrary(G.titles, progressRows, (D && D._raw && D._raw.snapshot) || []),
+    [G.titles, progressRows, D]);
+
+  // Mesure d'exposition, emise une fois par montage du panel. C'est le
+  // denominateur de games_status_set, sonde de survie du lot : sans lui,
+  // « zero statut pose » ne distingue pas « il ouvre l'onglet et n'ecrit
+  // rien » de « il n'ouvre jamais l'onglet ». Meme motif que jp_band_shown
+  // pour la bande de vocabulaire japonais (docs/telemetry.md). Tableau de
+  // dependances vide et intentionnel : on mesure l'ouverture de l'onglet,
+  // pas chaque recalcul de library.
+  React.useEffect(() => {
+    window.track && window.track("games_library_shown", { count: library.length });
+  }, []);
+
+  // IGDB renseigne les genres de tous les titres, la ou steam_game_details
+  // plafonne a 5 lignes sur 102 — c'est ce qui affichait « 100 % Autre ».
+  const genres14j = React.useMemo(() => {
+    const tally = new Map();
+    for (const c of library) {
+      if (!c.minutes2w) continue;
+      const gs = (c.t.genres || []).length ? c.t.genres : ["Autre"];
+      for (const g of gs) tally.set(g, (tally.get(g) || 0) + c.minutes2w / gs.length);
+    }
+    const total = [...tally.values()].reduce((a, b) => a + b, 0);
+    return [...tally.entries()]
+      .map(([name, min]) => ({ name, minutes: Math.round(min),
+                               pct: total ? Math.round((min / total) * 100) : 0 }))
+      .sort((a, b) => b.minutes - a.minutes);
+  }, [library]);
+
+  // On stocke l'ID et non l'objet : les cartes sont reconstruites a chaque
+  // ecriture (library est un useMemo sur progressRows), donc un objet capture
+  // au clic serait perime des le premier statut pose — et le bloc note/
+  // plateforme, conditionne au statut, ne se debloquerait jamais sans fermer
+  // puis rouvrir la fiche.
+  const [sheetTitleId, setSheetTitleId] = React.useState(null);
+  const sheetCard = React.useMemo(
+    () => (sheetTitleId ? library.find((c) => c.t.id === sheetTitleId) || null : null),
+    [sheetTitleId, library]);
+  const libraryView = React.useMemo(() => {
+    const V = window.gamesView;
+    return V.sortLibrary(
+      V.filterByStatus(library, libStatuses).filter((c) => V.matchesQuery(c, libQuery)),
+      libSort);
+  }, [library, libStatuses, libQuery, libSort]);
+
+  function toggleStatus(s) {
+    setLibStatuses((cur) => cur.includes(s) ? cur.filter((x) => x !== s) : cur.concat([s]));
+  }
+
+  const PLATFORMS = ["PC", "PlayStation", "Xbox", "Switch", "Autre"];
+
+  // game_progress appartient a l'utilisateur : le front est le seul a y
+  // ecrire. Upsert manuel — une ligne peut ne pas exister encore (86 jeux
+  // seedes par le pipeline n'en ont aucune).
+  async function writeProgress(card, patch) {
+    const before = progressRows;
+    const existing = before.find((p) => p.title_id === card.t.id);
+    const next = existing
+      ? before.map((p) => (p.title_id === card.t.id ? { ...p, ...patch } : p))
+      : before.concat([{ title_id: card.t.id, status: "unqualified", ...patch }]);
+    setProgLocal(next);
+    try {
+      if (existing) {
+        await gmPatch("/rest/v1/game_progress?title_id=eq." + card.t.id,
+                      { ...patch, updated_at: new Date().toISOString() });
+      } else {
+        await window.sb.postJSON(window.SUPABASE_URL + "/rest/v1/game_progress",
+                                 { title_id: card.t.id, ...patch });
+      }
+      // Les track() partent APRES l'ecriture reussie, jamais avant (meme
+      // convention que ackRelease/unwatchFranchise ci-dessus) : games_status_set
+      // est la sonde de survie du lot 2, un compteur qui monte sur une
+      // ecriture refusee fausserait la mesure.
+      if ("status" in patch) window.track && window.track("games_status_set", { status: patch.status });
+      if ("rating" in patch) window.track && window.track("games_rate", {});
+      gmInvalidateTracker();
+    } catch (e) {
+      setProgLocal(before);
+      window.cockpitToast && window.cockpitToast("Impossible d'enregistrer — réessaie.", { kind: "error" });
+      window.track && window.track("error_shown", { context: "games_progress", message: e.message });
+    }
+  }
+
+  async function toggleWatch(franchiseId, watched) {
+    try {
+      await gmPatch("/rest/v1/game_franchises?id=eq." + franchiseId, { watched });
+      window.track && window.track("games_watch_toggle", { watched });
+      gmInvalidateTracker();
+    } catch (e) {
+      window.cockpitToast && window.cockpitToast("Suivi de licence non enregistré — réessaie.", { kind: "error" });
+      window.track && window.track("error_shown", { context: "games_watch", message: e.message });
+    }
+  }
+
+  // window.sb.patchJSON renvoie la Response BRUTE et ne leve pas sur 4xx/5xx
+  // (cockpit/lib/supabase.js), contrairement a postJSON. Sans ce controle, un
+  // refus RLS passerait pour un succes et la carte disparaitrait sans que
+  // rien ne soit ecrit.
+  async function gmPatch(path, body) {
+    const r = await window.sb.patchJSON(window.SUPABASE_URL + path, body);
+    if (!r.ok) throw new Error(String(r.status));
+    return r;
+  }
+
+  // A appeler apres CHAQUE ecriture reussie du tracker.
+  //
+  // Le chargeur Tier 2 memoise la promesse de chaque table (once() dans
+  // data-loader.js) : sans invalidation, G.progress et G.releases restent
+  // indefiniment les tableaux charges a la toute premiere ouverture de
+  // l'onglet. Or revenir sur l'onglet rappelle loadPanel("gaming"), ce qui
+  // incremente dataVersion, change panelKey et REMONTE ce composant
+  // (app.jsx) : progLocal et relLocal repartent a null, et les cartes
+  // reaffichent l'etat d'avant l'ecriture. L'utilisateur qualifie dix jeux,
+  // va au Brief, revient, et retrouve dix « Non qualifié » — l'onglet a
+  // l'air d'oublier ce qu'on lui ecrit alors que la base, elle, a tout
+  // enregistre. Invalider ici fait repartir le prochain loadPanel des
+  // donnees reelles.
+  //
+  // invalidateCache(prefix) supprime toutes les cles commencant par le
+  // prefixe (data-loader.js). « game_ » couvre les quatre tables du tracker
+  // (game_titles, game_franchises, game_progress, game_releases) et, en
+  // prime, game_releases_fresh — la requete Tier 1 de l'encart Jeux du
+  // Brief. Sans effet dans la session courante (bootTier1 ne tourne qu'au
+  // chargement de la page), et cohérent au rechargement suivant.
+  //
+  // addConsoleGame n'appelle PAS cette fonction : il invalide deja tout le
+  // cache (invalidateCache() sans argument), qui est un sur-ensemble.
+  function gmInvalidateTracker() {
+    const dl = window.cockpitDataLoader;
+    if (dl && dl.invalidateCache) dl.invalidateCache("game_");
+  }
+
+  // Un jeu console ajoute a la main : on cree sa franchise si sa collection
+  // IGDB est inconnue, puis son titre, puis son statut. bootstrapped_at
+  // reste NULL — seule la phase B du pipeline, qui parcourt reellement la
+  // collection, a le droit de le poser.
+  //
+  // Ne doit plus jamais avaler un echec en silence : un conflit sur
+  // game_titles.igdb_id (UNIQUE — jeu deja seede par le pipeline) ou sur
+  // game_franchises.igdb_collection_id (UNIQUE) doit remonter a l'utilisateur,
+  // pas seulement a la telemetrie. Renvoie { ok, message } — GmAddGame
+  // affiche message dans son etat err existant.
+  async function addConsoleGame(g) {
+    let createdTitleId = null;
+    try {
+      let fr = (G.franchises || []).find(
+        (f) => g.collection_id != null && f.igdb_collection_id === g.collection_id);
+      if (!fr) {
+        const created = await window.sb.postJSON(
+          window.SUPABASE_URL + "/rest/v1/game_franchises",
+          { igdb_collection_id: g.collection_id, name: g.collection_name || g.name, watched: true });
+        fr = created[0];
+      }
+      const t = await window.sb.postJSON(
+        window.SUPABASE_URL + "/rest/v1/game_titles",
+        { franchise_id: fr.id, igdb_id: g.id, name: g.name, cover_url: g.cover_url,
+          genres: g.genres, platforms: g.platforms,
+          first_release_date: g.first_release_date, release_human: g.release_human });
+      createdTitleId = t[0].id;
+      await window.sb.postJSON(window.SUPABASE_URL + "/rest/v1/game_progress",
+                               { title_id: t[0].id, status: "wishlist" });
+      window.track && window.track("games_add", { igdb_id: g.id });
+      window.cockpitDataLoader.invalidateCache && window.cockpitDataLoader.invalidateCache();
+      window.location.reload();
+      return { ok: true };
+    } catch (e) {
+      // Le titre existe mais son statut n'a pas pu etre ecrit : sans ligne de
+      // progression et sans steam_appid, buildLibrary l'exclut — il serait
+      // invisible pour toujours tout en occupant son igdb_id, qui est UNIQUE.
+      // On defait donc ce qu'on vient de creer plutot que de laisser une
+      // impasse.
+      if (createdTitleId) {
+        try {
+          await window.sb.deleteRequest(
+            window.SUPABASE_URL + "/rest/v1/game_titles?id=eq." + createdTitleId);
+        } catch (_) { /* best effort */ }
+      }
+      // Invalide le cache AVANT de renvoyer l'echec : une franchise a pu etre
+      // creee avant l'echec (ex. conflit sur le titre), et l'etat local
+      // (G.franchises, capture au montage du panel) ne la contient pas — sans
+      // cette invalidation, une nouvelle tentative ne la trouverait pas,
+      // retenterait sa creation, et heurterait le UNIQUE sur
+      // igdb_collection_id. Une tentative suivante doit reconstruire son
+      // etat depuis les donnees reelles, pas depuis ce qui a ete charge avant
+      // l'echec.
+      window.cockpitDataLoader.invalidateCache && window.cockpitDataLoader.invalidateCache();
+      window.track && window.track("error_shown", { context: "games_add", message: e.message });
+      return { ok: false, message: "Ajout impossible — ce jeu est peut-être déjà dans ta bibliothèque." };
+    }
+  }
+
+  // Les track() partent APRES le PATCH reussi, jamais avant (meme convention
+  // que cockpit/home.jsx::GamesBriefCard) : ces compteurs sont la sonde de
+  // survie du lot (docs/telemetry.md), un compteur qui monte sur une
+  // ecriture refusee fausse la decision.
+  async function ackRelease(it) {
+    const before = releases;
+    setRelLocal(before.map((r) => (r.id === it.id ? { ...r, acknowledged: true } : r)));
+    try {
+      await gmPatch("/rest/v1/game_releases?id=eq." + it.id, { acknowledged: true });
+      const src = releases.find((r) => r.id === it.id);
+      window.track && window.track("games_release_ack",
+        { event_type: (src && src.event_type) || null, surface: "gaming" });
+      gmInvalidateTracker();
+    } catch (e) {
+      setRelLocal(before);
+      window.cockpitToast && window.cockpitToast("Impossible d'acquitter — réessaie.", { kind: "error" });
+      window.track && window.track("error_shown", { context: "games_ack", message: e.message });
+    }
+  }
+
+  // Acquitte d'abord les evenements de la licence, PUIS la passe en non
+  // suivie — jamais l'inverse. Dans cet ordre, une defaillance partielle
+  // (premiere ecriture OK, seconde en echec) laisse des evenements acquittes
+  // sans plus d'effet qu'un clic "vu", et une licence toujours suivie que
+  // l'utilisateur peut re-cliquer. Dans l'ordre inverse, une defaillance
+  // partielle laisserait la licence non suivie en base alors que ses
+  // evenements, jamais acquittes, continueraient de reapparaitre dans le
+  // rail — un etat coince dont l'utilisateur ne peut ni sortir ni comprendre
+  // l'origine.
+  async function unwatchFranchise(it) {
+    const before = releases;
+    setRelLocal(before.map((r) => (r.franchise_id === it.franchiseId ? { ...r, acknowledged: true } : r)));
+    try {
+      await gmPatch("/rest/v1/game_releases?franchise_id=eq." + it.franchiseId + "&acknowledged=eq.false",
+                    { acknowledged: true });
+      await gmPatch("/rest/v1/game_franchises?id=eq." + it.franchiseId, { watched: false });
+      window.track && window.track("games_unwatch_franchise", { franchise: it.franchiseId, surface: "gaming" });
+      gmInvalidateTracker();
+    } catch (e) {
+      setRelLocal(before);
+      window.cockpitToast && window.cockpitToast("Impossible de retirer la licence — réessaie.", { kind: "error" });
+      window.track && window.track("error_shown", { context: "games_unwatch", message: e.message });
+    }
+  }
+
   const lastGame = (D.in_progress && D.in_progress[0]) || null;
   const plat = (id) => (D.profiles || []).find((p) => p.id === id);
   const riot = plat("riot");
-  const topGenre = (D.genres_30d && D.genres_30d[0]) || null;
+  // Le hero lit genres14j — la meme source que la §4 Genres (bibliotheque x
+  // genres IGDB de game_titles) — et non D.genres_30d, calcule depuis
+  // steam_game_details, enrichie a 5 lignes sur 102. Avec cette derniere, la
+  // premiere ligne lue de l'onglet annoncait « Genre dominant 14 j :
+  // Occasionnel (100 %) » trois ecrans au-dessus d'une §4 qui disait « Rien
+  // joué ces 14 derniers jours. ». La branche « pas d'activite Steam
+  // mesurable » ci-dessous dit desormais la meme chose que la §4.
+  const topGenre = genres14j[0] || null;
   const heroEyebrowParts = [];
   const livePlatforms = (D.profiles || []).filter(p => !p._placeholder).map(p => p.platform.toLowerCase());
   if (livePlatforms.length) heroEyebrowParts.push(livePlatforms.join(" + "));
@@ -135,7 +607,7 @@ function PanelGaming({ onNavigate }) {
           </h1>
           <p className="gm-hero-sub">
             {topGenre
-              ? <>Genre dominant 14j : <strong>{topGenre.label}</strong> ({(topGenre.share * 100).toFixed(0)}%). </>
+              ? <>Genre dominant 14j : <strong>{topGenre.name}</strong> ({topGenre.pct}%). </>
               : <>Pas d'activité Steam mesurable sur les 14 derniers jours. </>
             }
             {riot && riot.rank && riot.rank !== "—"
@@ -218,6 +690,44 @@ function PanelGaming({ onNavigate }) {
         ))}
       </div>
 
+      {/* ══ À VENIR ══ */}
+      <section className="gm-section">
+        <div className="gm-section-head">
+          <h2 className="gm-section-title">À venir · <em>dans tes licences suivies</em></h2>
+          <span className="gm-section-meta">{upcoming.length} annonce{upcoming.length > 1 ? "s" : ""}</span>
+        </div>
+        <GmUpcoming items={upcoming} onAck={ackRelease} onUnwatch={unwatchFranchise} />
+      </section>
+
+      {/* ══ MA BIBLIOTHÈQUE ══ */}
+      <section className="gm-section">
+        <div className="gm-section-head">
+          <h2 className="gm-section-title">Ma bibliothèque</h2>
+          <span className="gm-section-meta">{libraryView.length} jeu{libraryView.length > 1 ? "x" : ""}</span>
+        </div>
+        <div className="gm-lib-toolbar">
+          <input className="gm-lib-search" type="search" placeholder="Chercher un jeu…"
+                 value={libQuery} onChange={(e) => setLibQuery(e.target.value)} />
+          <div className="gm-lib-chips">
+            {GM_STATUS_ORDER.map((s) => (
+              <button key={s}
+                      className={`gm-lib-filter ${libStatuses.includes(s) ? "is-on" : ""}`}
+                      onClick={() => toggleStatus(s)}>
+                {window.gamesView.STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+          <select className="gm-lib-sort" value={libSort} onChange={(e) => setLibSort(e.target.value)}>
+            <option value="hours">Heures jouées</option>
+            <option value="recent">Joué récemment</option>
+            <option value="name">Nom</option>
+            <option value="rating">Ma note</option>
+          </select>
+          <GmAddGame onAdded={addConsoleGame} />
+        </div>
+        <GmLibrary cards={libraryView} onOpen={(c) => setSheetTitleId(c.t.id)} />
+      </section>
+
       {/* ══ §1 EN COURS ══ */}
       <section className="gm-section">
         <div className="gm-section-head">
@@ -279,87 +789,6 @@ function PanelGaming({ onNavigate }) {
         )}
       </section>
 
-      {/* ══ §2 BACKLOG ══ */}
-      <section className="gm-section">
-        <div className="gm-section-head">
-          <span className="gm-section-num">02</span>
-          <h2 className="gm-section-title">Backlog · <em>jeux jamais lancés</em></h2>
-          <span className="gm-section-meta">{(D.backlog || []).length} affichés · {D.totals?.backlog_count || 0} au total</span>
-        </div>
-        {(D.backlog || []).length === 0 ? (
-          <div className="gm-empty">Bibliothèque entièrement explorée.</div>
-        ) : (
-        <div className="gm-bl-list">
-          <div className="gm-bl-row is-head">
-            <div>prio</div>
-            <div></div>
-            <div>jeu · pourquoi</div>
-            <div>plateforme</div>
-            <div style={{textAlign:"right"}}>HLTB</div>
-            <div style={{textAlign:"center"}}>hype</div>
-            <div></div>
-          </div>
-          {D.backlog.map((b) => (
-            <div className={`gm-bl-row ${b.priority === "shame" ? "is-shame" : ""}`} key={b.title}>
-              <div>
-                <span className={`gm-bl-prio ${b.priority}`}>
-                  {b.priority === "shame" ? (b.shame_years ? `honte ${b.shame_years}y` : "honte") : b.priority}
-                </span>
-              </div>
-              <div>
-                <div className="gm-bl-cover" style={{ background: b.cover }}></div>
-              </div>
-              <div className="gm-bl-info">
-                <div className="gm-bl-title">{b.title}</div>
-                <div className="gm-bl-reason">{b.reason}</div>
-              </div>
-              <div>
-                <div className="gm-bl-plat">{b.platform}</div>
-                <div className="gm-bl-plat-sub">{b.acquired} · {b.acquired_how}</div>
-              </div>
-              <div>
-                <div className="gm-bl-hltb">{b.hltb ? `${b.hltb}h` : "—"}</div>
-                <div className="gm-bl-hltb-sub">main story</div>
-              </div>
-              <div>
-                <div className="gm-bl-hype">{b.hype}</div>
-                <div className="gm-bl-hype-sub">/10</div>
-              </div>
-              <div></div>
-            </div>
-          ))}
-        </div>
-        )}
-      </section>
-
-      {/* ══ §2bis JEUX ABANDONNÉS ══ */}
-      {(D.abandoned || []).length > 0 && (
-        <section className="gm-section">
-          <div className="gm-section-head">
-            <span className="gm-section-num">02b</span>
-            <h2 className="gm-section-title">Abandonnés · <em>commencés puis lâchés</em></h2>
-            <span className="gm-section-meta">{D.abandoned.length} jeux · 1h+ jouées, rien sur 14j</span>
-          </div>
-          <div className="gm-abandoned-grid">
-            {D.abandoned.map((g) => (
-              <div className="gm-abandoned-card" key={g.appid}>
-                {g.header ? (
-                  <div className="gm-abandoned-cover" style={{ backgroundImage: `url("${g.header}")` }}></div>
-                ) : (
-                  <div className="gm-abandoned-cover gm-abandoned-cover-blank"></div>
-                )}
-                <div className="gm-abandoned-body">
-                  <div className="gm-abandoned-title">{g.title}</div>
-                  <div className="gm-abandoned-meta">
-                    <strong>{g.hours_played}h</strong> jouées · {g.genre}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
       {/* ══ §3 ACTIVITÉ ══ */}
       <section className="gm-section">
         <div className="gm-section-head">
@@ -389,25 +818,6 @@ function PanelGaming({ onNavigate }) {
             ? <GmActivityChart series={D.daily_sessions} range={chartRange} />
             : <div className="gm-empty">Pas de stats quotidiennes — pipeline trop récent.</div>}
         </div>
-        {D.heatmap && Array.isArray(D.heatmap) ? (
-          <div className="mz-heatmap">
-            <div className="mz-heatmap-head">
-              <div className="mz-heatmap-title">Heure × jour · moyenne 30j</div>
-              <div className="mz-heatmap-legend">
-                moins
-                <div className="mz-heatmap-scale">
-                  <span style={{ background: "var(--bd)" }}></span>
-                  <span style={{ background: "color-mix(in srgb, var(--brand) 25%, transparent)" }}></span>
-                  <span style={{ background: "color-mix(in srgb, var(--brand) 50%, transparent)" }}></span>
-                  <span style={{ background: "color-mix(in srgb, var(--brand) 75%, transparent)" }}></span>
-                  <span style={{ background: "var(--brand)" }}></span>
-                </div>
-                plus
-              </div>
-            </div>
-            <GmHeatmap grid={D.heatmap} />
-          </div>
-        ) : null}
       </section>
 
       {/* ══ §4 GENRES ══ */}
@@ -415,32 +825,32 @@ function PanelGaming({ onNavigate }) {
         <div className="gm-section-head">
           <span className="gm-section-num">04</span>
           <h2 className="gm-section-title">Genres · <em>répartition 14j</em></h2>
-          <span className="gm-section-meta">basé sur playtime_2weeks Steam · {(D.genres_30d || []).reduce((a, g) => a + (g.hours || 0), 0)}h</span>
+          <span className="gm-section-meta">basé sur playtime_2weeks Steam · {Math.round(genres14j.reduce((a, g) => a + g.minutes, 0) / 60)}h</span>
         </div>
-        {(D.genres_30d || []).length === 0 ? (
-          <div className="gm-empty">Pas assez de données enrichies (steam_game_details quasi vide).</div>
+        {genres14j.length === 0 ? (
+          <div className="gm-empty">Rien joué ces 14 derniers jours.</div>
         ) : (
         <>
         <div className="gm-genre-bar">
-          {D.genres_30d.map((g) => (
+          {genres14j.map((g, i) => (
             <div
-              key={g.label}
+              key={g.name}
               className="gm-genre-bar-seg"
-              style={{ flex: g.share, background: g.color }}
-              title={`${g.label} · ${(g.share * 100).toFixed(0)}% · ${g.hours}h`}
+              style={{ flex: g.pct, background: GM_GENRE_PALETTE[i % GM_GENRE_PALETTE.length] }}
+              title={`${g.name} · ${g.pct}% · ${Math.round(g.minutes / 60)}h`}
             >
-              {g.share > 0.06 ? `${(g.share * 100).toFixed(0)}%` : ""}
+              {g.pct > 6 ? `${g.pct}%` : ""}
             </div>
           ))}
         </div>
         <div className="gm-genre-split">
           <div className="gm-genre-table">
-            {D.genres_30d.map((g) => (
-              <div className="gm-genre-row" key={g.label}>
-                <div className="gm-genre-dot" style={{ background: g.color }}></div>
-                <div className="gm-genre-label">{g.label}</div>
-                <div className="gm-genre-share">{(g.share * 100).toFixed(0)}%</div>
-                <div className="gm-genre-hrs">{g.hours}h</div>
+            {genres14j.map((g, i) => (
+              <div className="gm-genre-row" key={g.name}>
+                <div className="gm-genre-dot" style={{ background: GM_GENRE_PALETTE[i % GM_GENRE_PALETTE.length] }}></div>
+                <div className="gm-genre-label">{g.name}</div>
+                <div className="gm-genre-share">{g.pct}%</div>
+                <div className="gm-genre-hrs">{Math.round(g.minutes / 60)}h</div>
               </div>
             ))}
           </div>
@@ -454,64 +864,13 @@ function PanelGaming({ onNavigate }) {
               textWrap: "pretty"
             }}>
               Répartition calculée depuis le temps de jeu Steam des 14 derniers jours,
-              croisé avec le genre principal récupéré via la Store API.
-              Les jeux non enrichis tombent dans "Autre".
+              pondérée par les genres IGDB de chaque titre de ta bibliothèque. Un jeu
+              multi-genres partage ses minutes entre eux ; à défaut de genre connu, il
+              tombe dans « Autre ».
             </p>
           </div>
         </div>
         </>
-        )}
-      </section>
-
-      {/* ══ §6 TOP ALL-TIME ══ */}
-      <section className="gm-section">
-        <div className="gm-section-head">
-          <span className="gm-section-num">06</span>
-          <h2 className="gm-section-title">Top all-time · <em>par heures</em></h2>
-          <span className="gm-section-meta">Steam · {(D.top_alltime || []).length} jeux</span>
-        </div>
-        {(D.top_alltime || []).length === 0 ? (
-          <div className="gm-empty">Pas de snapshot Steam disponible.</div>
-        ) : (
-        <div>
-          <div className="gm-top-row is-head">
-            <div>#</div>
-            <div>jeu</div>
-            <div>plateforme · depuis</div>
-            <div style={{textAlign:"right"}}>heures</div>
-            <div style={{textAlign:"right"}}>sessions</div>
-            <div></div>
-          </div>
-          {D.top_alltime.map((g) => {
-            const p = plat(g.platform);
-            const maxH = D.top_alltime[0].hours || 1;
-            return (
-              <div className="gm-top-row" key={g.rank}>
-                <div className="gm-top-rank">{String(g.rank).padStart(2, "0")}</div>
-                <div className="gm-top-title-cell">
-                  {g.cover_url ? (
-                    <div className="gm-top-thumb" style={{ backgroundImage: `url("${g.cover_url}")` }}></div>
-                  ) : (
-                    <div className="gm-top-thumb gm-top-thumb-blank"></div>
-                  )}
-                  <span className="gm-top-title">{g.title}</span>
-                </div>
-                <div>
-                  <div className="gm-top-platform">
-                    <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 1, background: p ? p.accent : "#888", marginRight: 6, verticalAlign: "middle" }}></span>
-                    {p ? p.platform : g.platform} · {g.since}
-                  </div>
-                  <div className="gm-top-bar"><div className="gm-top-bar-fill" style={{ width: `${(g.hours / maxH) * 100}%` }}></div></div>
-                </div>
-                <div>
-                  <div className="gm-top-hours">{(g.hours || 0).toLocaleString("fr-FR")}<span className="gm-top-hours-unit">h</span></div>
-                </div>
-                <div className="gm-top-sessions">{g.sessions ? g.sessions.toLocaleString("fr-FR") : "—"}</div>
-                <div></div>
-              </div>
-            );
-          })}
-        </div>
         )}
       </section>
 
@@ -575,6 +934,15 @@ function PanelGaming({ onNavigate }) {
           ))}
         </div>
       </section>
+
+      <GmSheet card={sheetCard}
+               franchise={sheetCard ? franchisesById[sheetCard.franchiseId] : null}
+               platforms={PLATFORMS}
+               onClose={() => setSheetTitleId(null)}
+               onStatus={(c, s) => writeProgress(c, { status: s })}
+               onRating={(c, r) => writeProgress(c, { rating: r })}
+               onPlatform={(c, p) => writeProgress(c, { platform: p })}
+               onWatch={toggleWatch} />
     </div>
   );
 }

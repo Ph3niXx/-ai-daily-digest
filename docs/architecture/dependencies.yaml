@@ -191,14 +191,28 @@ panels:
       - gaming_stats_daily
       - tft_rank_history
       - tft_matches
-    writes: []
+      - game_titles
+      - game_franchises
+      - game_progress
+      - game_releases
+    writes: [game_progress, game_franchises, game_titles, game_releases]
+    # game_titles en write : addConsoleGame() POST une ligne game_titles
+    # quand l'utilisateur ajoute un jeu console via la recherche IGDB —
+    # écriture manuelle depuis le panel, jamais depuis le pipeline (qui,
+    # lui, seed game_titles en écriture batch, cf. flows/perso-jeux.yaml).
     # gaming_wishlist retirée de reads/writes : la §5 (lecture seule) a été
     # dépubliée du panel le 2026-08-13, absorbée dans game_progress via
     # igdb_tracker_sync::import_wishlist() (Task 6). La table reste en base
     # (8 lignes), simplement plus lue par ce panel — voir ADR-34 et
     # docs/specs/tab-gaming.md.
-    # Lot 2 (conditionné à la sonde de survie, cf. flows/perso-jeux.yaml) :
-    # lira game_franchises, game_titles, game_progress, game_releases.
+    # Lot 2 (bibliothèque à statuts + rail À venir) implémenté depuis les
+    # commits 53460ea..7eff8d1 : lit game_titles/game_franchises/
+    # game_progress/game_releases (fiche jeu, ajout jeu console, rail À
+    # venir) ; écrit game_progress (statut/note/plateforme), game_franchises
+    # (watched), game_titles (ajout jeu console), game_releases
+    # (acknowledged). Cette entrée reads/writes
+    # était restée non mise à jour depuis lot 1 jusqu'au 2026-08-13 (Task 8
+    # du lot 2) — corrigée à cette occasion, voir docs/specs/tab-gaming.md.
 
   - id: mediatheque
     file: cockpit/panel-mediatheque.jsx
