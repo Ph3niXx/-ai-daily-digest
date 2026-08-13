@@ -343,6 +343,17 @@ function PanelGaming({ onNavigate }) {
     () => window.gamesView.buildLibrary(G.titles, progressRows, (D && D._raw && D._raw.snapshot) || []),
     [G.titles, progressRows, D]);
 
+  // Mesure d'exposition, emise une fois par montage du panel. C'est le
+  // denominateur de games_status_set, sonde de survie du lot : sans lui,
+  // « zero statut pose » ne distingue pas « il ouvre l'onglet et n'ecrit
+  // rien » de « il n'ouvre jamais l'onglet ». Meme motif que jp_band_shown
+  // pour la bande de vocabulaire japonais (docs/telemetry.md). Tableau de
+  // dependances vide et intentionnel : on mesure l'ouverture de l'onglet,
+  // pas chaque recalcul de library.
+  React.useEffect(() => {
+    window.track && window.track("games_library_shown", { count: library.length });
+  }, []);
+
   // IGDB renseigne les genres de tous les titres, la ou steam_game_details
   // plafonne a 5 lignes sur 102 — c'est ce qui affichait « 100 % Autre ».
   const genres14j = React.useMemo(() => {
@@ -405,8 +416,10 @@ function PanelGaming({ onNavigate }) {
       // ecriture refusee fausserait la mesure.
       if ("status" in patch) window.track && window.track("games_status_set", { status: patch.status });
       if ("rating" in patch) window.track && window.track("games_rate", {});
+      gmInvalidateTracker();
     } catch (e) {
       setProgLocal(before);
+      window.cockpitToast && window.cockpitToast("Impossible d'enregistrer — réessaie.", { kind: "error" });
       window.track && window.track("error_shown", { context: "games_progress", message: e.message });
     }
   }
@@ -415,7 +428,9 @@ function PanelGaming({ onNavigate }) {
     try {
       await gmPatch("/rest/v1/game_franchises?id=eq." + franchiseId, { watched });
       window.track && window.track("games_watch_toggle", { watched });
+      gmInvalidateTracker();
     } catch (e) {
+      window.cockpitToast && window.cockpitToast("Suivi de licence non enregistré — réessaie.", { kind: "error" });
       window.track && window.track("error_shown", { context: "games_watch", message: e.message });
     }
   }
@@ -428,6 +443,34 @@ function PanelGaming({ onNavigate }) {
     const r = await window.sb.patchJSON(window.SUPABASE_URL + path, body);
     if (!r.ok) throw new Error(String(r.status));
     return r;
+  }
+
+  // A appeler apres CHAQUE ecriture reussie du tracker.
+  //
+  // Le chargeur Tier 2 memoise la promesse de chaque table (once() dans
+  // data-loader.js) : sans invalidation, G.progress et G.releases restent
+  // indefiniment les tableaux charges a la toute premiere ouverture de
+  // l'onglet. Or revenir sur l'onglet rappelle loadPanel("gaming"), ce qui
+  // incremente dataVersion, change panelKey et REMONTE ce composant
+  // (app.jsx) : progLocal et relLocal repartent a null, et les cartes
+  // reaffichent l'etat d'avant l'ecriture. L'utilisateur qualifie dix jeux,
+  // va au Brief, revient, et retrouve dix « Non qualifié » — l'onglet a
+  // l'air d'oublier ce qu'on lui ecrit alors que la base, elle, a tout
+  // enregistre. Invalider ici fait repartir le prochain loadPanel des
+  // donnees reelles.
+  //
+  // invalidateCache(prefix) supprime toutes les cles commencant par le
+  // prefixe (data-loader.js). « game_ » couvre les quatre tables du tracker
+  // (game_titles, game_franchises, game_progress, game_releases) et, en
+  // prime, game_releases_fresh — la requete Tier 1 de l'encart Jeux du
+  // Brief. Sans effet dans la session courante (bootTier1 ne tourne qu'au
+  // chargement de la page), et cohérent au rechargement suivant.
+  //
+  // addConsoleGame n'appelle PAS cette fonction : il invalide deja tout le
+  // cache (invalidateCache() sans argument), qui est un sur-ensemble.
+  function gmInvalidateTracker() {
+    const dl = window.cockpitDataLoader;
+    if (dl && dl.invalidateCache) dl.invalidateCache("game_");
   }
 
   // Un jeu console ajoute a la main : on cree sa franchise si sa collection
@@ -501,8 +544,10 @@ function PanelGaming({ onNavigate }) {
       const src = releases.find((r) => r.id === it.id);
       window.track && window.track("games_release_ack",
         { event_type: (src && src.event_type) || null, surface: "gaming" });
+      gmInvalidateTracker();
     } catch (e) {
       setRelLocal(before);
+      window.cockpitToast && window.cockpitToast("Impossible d'acquitter — réessaie.", { kind: "error" });
       window.track && window.track("error_shown", { context: "games_ack", message: e.message });
     }
   }
@@ -524,8 +569,10 @@ function PanelGaming({ onNavigate }) {
                     { acknowledged: true });
       await gmPatch("/rest/v1/game_franchises?id=eq." + it.franchiseId, { watched: false });
       window.track && window.track("games_unwatch_franchise", { franchise: it.franchiseId, surface: "gaming" });
+      gmInvalidateTracker();
     } catch (e) {
       setRelLocal(before);
+      window.cockpitToast && window.cockpitToast("Impossible de retirer la licence — réessaie.", { kind: "error" });
       window.track && window.track("error_shown", { context: "games_unwatch", message: e.message });
     }
   }
@@ -533,7 +580,14 @@ function PanelGaming({ onNavigate }) {
   const lastGame = (D.in_progress && D.in_progress[0]) || null;
   const plat = (id) => (D.profiles || []).find((p) => p.id === id);
   const riot = plat("riot");
-  const topGenre = (D.genres_30d && D.genres_30d[0]) || null;
+  // Le hero lit genres14j — la meme source que la §4 Genres (bibliotheque x
+  // genres IGDB de game_titles) — et non D.genres_30d, calcule depuis
+  // steam_game_details, enrichie a 5 lignes sur 102. Avec cette derniere, la
+  // premiere ligne lue de l'onglet annoncait « Genre dominant 14 j :
+  // Occasionnel (100 %) » trois ecrans au-dessus d'une §4 qui disait « Rien
+  // joué ces 14 derniers jours. ». La branche « pas d'activite Steam
+  // mesurable » ci-dessous dit desormais la meme chose que la §4.
+  const topGenre = genres14j[0] || null;
   const heroEyebrowParts = [];
   const livePlatforms = (D.profiles || []).filter(p => !p._placeholder).map(p => p.platform.toLowerCase());
   if (livePlatforms.length) heroEyebrowParts.push(livePlatforms.join(" + "));
@@ -553,7 +607,7 @@ function PanelGaming({ onNavigate }) {
           </h1>
           <p className="gm-hero-sub">
             {topGenre
-              ? <>Genre dominant 14j : <strong>{topGenre.label}</strong> ({(topGenre.share * 100).toFixed(0)}%). </>
+              ? <>Genre dominant 14j : <strong>{topGenre.name}</strong> ({topGenre.pct}%). </>
               : <>Pas d'activité Steam mesurable sur les 14 derniers jours. </>
             }
             {riot && riot.rank && riot.rank !== "—"
