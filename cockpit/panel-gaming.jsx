@@ -229,7 +229,10 @@ function GmSheet({ card, franchise, onClose, onStatus, onRating, onPlatform, onW
                      placeholder="0–100" defaultValue={rating == null ? "" : rating}
                      onBlur={(e) => {
                        const v = e.target.value.trim();
-                       onRating(card, v === "" ? null : Math.max(0, Math.min(100, Number(v))));
+                       if (v === "") { onRating(card, null); return; }
+                       const n = Number(v);
+                       if (!Number.isFinite(n)) return;   // saisie invalide : on n'efface pas
+                       onRating(card, Math.max(0, Math.min(100, n)));
                      }} />
             </div>
             <div className="gm-sheet-block">
@@ -280,11 +283,20 @@ function PanelGaming({ onNavigate }) {
   const [libSort, setLibSort] = React.useState("hours");
   const [progLocal, setProgLocal] = React.useState(null);
   const progressRows = progLocal || G.progress;
-  const [sheetCard, setSheetCard] = React.useState(null);
 
   const library = React.useMemo(
     () => window.gamesView.buildLibrary(G.titles, progressRows, (D && D._raw && D._raw.snapshot) || []),
     [G.titles, progressRows, D]);
+
+  // On stocke l'ID et non l'objet : les cartes sont reconstruites a chaque
+  // ecriture (library est un useMemo sur progressRows), donc un objet capture
+  // au clic serait perime des le premier statut pose — et le bloc note/
+  // plateforme, conditionne au statut, ne se debloquerait jamais sans fermer
+  // puis rouvrir la fiche.
+  const [sheetTitleId, setSheetTitleId] = React.useState(null);
+  const sheetCard = React.useMemo(
+    () => (sheetTitleId ? library.find((c) => c.t.id === sheetTitleId) || null : null),
+    [sheetTitleId, library]);
   const libraryView = React.useMemo(() => {
     const V = window.gamesView;
     return V.sortLibrary(
@@ -528,7 +540,7 @@ function PanelGaming({ onNavigate }) {
             <option value="rating">Ma note</option>
           </select>
         </div>
-        <GmLibrary cards={libraryView} onOpen={setSheetCard} />
+        <GmLibrary cards={libraryView} onOpen={(c) => setSheetTitleId(c.t.id)} />
       </section>
 
       {/* ══ §1 EN COURS ══ */}
@@ -759,7 +771,7 @@ function PanelGaming({ onNavigate }) {
       <GmSheet card={sheetCard}
                franchise={sheetCard ? franchisesById[sheetCard.franchiseId] : null}
                platforms={PLATFORMS}
-               onClose={() => setSheetCard(null)}
+               onClose={() => setSheetTitleId(null)}
                onStatus={(c, s) => writeProgress(c, { status: s })}
                onRating={(c, r) => writeProgress(c, { rating: r })}
                onPlatform={(c, p) => writeProgress(c, { platform: p })}
