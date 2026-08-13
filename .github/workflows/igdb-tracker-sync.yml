@@ -1,0 +1,38 @@
+name: Jeux — tracker IGDB
+
+on:
+  schedule:
+    # Quotidien a 8h30 UTC — apres anime (7h30), TMDB (7h45) et jp-vocab (8h00),
+    # et bien apres steam-sync (5h30) dont ce pipeline lit le snapshot.
+    - cron: '30 8 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Dry-run (aucune écriture)"
+        type: boolean
+        default: false
+
+jobs:
+  igdb-tracker-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r pipelines/requirements-igdb.txt
+
+      # Sans les secrets Twitch le script sort en [skip] avec le code 0 :
+      # le workflow reste vert tant qu'ils ne sont pas poses.
+      - name: Run IGDB tracker sync
+        env:
+          TWITCH_CLIENT_ID: ${{ secrets.TWITCH_CLIENT_ID }}
+          TWITCH_CLIENT_SECRET: ${{ secrets.TWITCH_CLIENT_SECRET }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python pipelines/igdb_tracker_sync.py ${{ inputs.dry_run && '--dry-run' || '' }}
