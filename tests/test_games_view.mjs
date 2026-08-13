@@ -109,5 +109,34 @@ check("duree inconnue", V.ttbLabel(null), null);
 check("suggere un jeu joue recemment et non declare en cours",
       V.suggestPlaying(lib).map(c => c.t.id), ["t4"]);
 
+// ── plateforme : ou TU possedes le jeu, pas ou il existe ─────
+// Piege ecarte volontairement : game_titles.platforms (IGDB) liste les
+// plateformes ou le jeu EXISTE. Filtrer dessus afficherait sous « Switch »
+// 19 jeux possedes sur Steam qui sortent aussi sur Switch — une reponse a
+// une question que personne ne pose. La declaration de l'utilisateur fait
+// foi, l'appartenance Steam sert de repli.
+const pcSteam   = { t: { id: "p1", steam_appid: 620, platforms: ["PC (Microsoft Windows)", "Nintendo Switch"] }, prog: null };
+const switchDec = { t: { id: "p2", steam_appid: null, platforms: ["Nintendo Switch"] }, prog: { platform: "Switch" } };
+const steamMaisJoueSwitch = { t: { id: "p3", steam_appid: 42, platforms: [] }, prog: { platform: "Switch" } };
+const inconnu   = { t: { id: "p4", steam_appid: null, platforms: ["PlayStation 5"] }, prog: { status: "wishlist" } };
+
+check("appartenance Steam => PC", V.platformOf(pcSteam), "PC");
+check("plateforme declaree respectee", V.platformOf(switchDec), "Switch");
+// L'utilisateur peut posseder sur Steam et jouer sur Switch : sa declaration gagne.
+check("declaration prime sur l'appartenance Steam", V.platformOf(steamMaisJoueSwitch), "Switch");
+check("ni appartenance ni declaration => inconnu", V.platformOf(inconnu), null);
+// Un jeu qui EXISTE sur PS5 mais que rien ne rattache a PS5 n'y est pas classe.
+check("les plateformes IGDB ne classent jamais", V.platformOf(inconnu) === "PlayStation", false);
+
+const parPlateforme = [pcSteam, switchDec, steamMaisJoueSwitch, inconnu];
+check("filtre sur une plateforme",
+      V.filterByPlatform(parPlateforme, ["Switch"]).map(c => c.t.id), ["p2", "p3"]);
+check("filtre sur plusieurs plateformes",
+      V.filterByPlatform(parPlateforme, ["PC", "Switch"]).map(c => c.t.id), ["p1", "p2", "p3"]);
+check("filtre vide = tout", V.filterByPlatform(parPlateforme, []).length, 4);
+check("les non classes ne sortent sous aucune plateforme",
+      V.filterByPlatform(parPlateforme, ["PC", "PlayStation", "Xbox", "Switch"]).map(c => c.t.id),
+      ["p1", "p2", "p3"]);
+
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);

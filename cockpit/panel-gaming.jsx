@@ -13,6 +13,9 @@
 const { useState: useGmState, useMemo: useGmMemo } = React;
 
 const GM_STATUS_ORDER = ["playing", "wishlist", "finished", "dropped", "unqualified"];
+// Meme vocabulaire que le selecteur de la fiche jeu (PLATFORMS), sans
+// « Autre » : filtrer sur un fourre-tout n'aide personne a retrouver un jeu.
+const GM_PLATFORM_ORDER = ["PC", "PlayStation", "Xbox", "Switch"];
 
 // Palette §4 Genres — mêmes teintes que GENRE_PALETTE côté data-loader.js
 // (transformGaming), réappliquée ici au calcul local genres14j.
@@ -335,6 +338,7 @@ function PanelGaming({ onNavigate }) {
 
   const [libQuery, setLibQuery] = React.useState("");
   const [libStatuses, setLibStatuses] = React.useState([]);
+  const [libPlatforms, setLibPlatforms] = React.useState([]);
   const [libSort, setLibSort] = React.useState("hours");
   const [progLocal, setProgLocal] = React.useState(null);
   const progressRows = progLocal || G.progress;
@@ -382,9 +386,14 @@ function PanelGaming({ onNavigate }) {
   const libraryView = React.useMemo(() => {
     const V = window.gamesView;
     return V.sortLibrary(
-      V.filterByStatus(library, libStatuses).filter((c) => V.matchesQuery(c, libQuery)),
+      V.filterByPlatform(V.filterByStatus(library, libStatuses), libPlatforms)
+       .filter((c) => V.matchesQuery(c, libQuery)),
       libSort);
-  }, [library, libStatuses, libQuery, libSort]);
+  }, [library, libStatuses, libPlatforms, libQuery, libSort]);
+
+  function togglePlatform(p) {
+    setLibPlatforms((cur) => cur.includes(p) ? cur.filter((x) => x !== p) : cur.concat([p]));
+  }
 
   function toggleStatus(s) {
     setLibStatuses((cur) => cur.includes(s) ? cur.filter((x) => x !== s) : cur.concat([s]));
@@ -714,6 +723,17 @@ function PanelGaming({ onNavigate }) {
                       className={`gm-lib-filter ${libStatuses.includes(s) ? "is-on" : ""}`}
                       onClick={() => toggleStatus(s)}>
                 {window.gamesView.STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+          {/* Plateforme = ou le jeu est POSSEDE (declaration en fiche, ou
+              appartenance Steam a defaut), jamais ou il sort. */}
+          <div className="gm-lib-chips">
+            {GM_PLATFORM_ORDER.map((p) => (
+              <button key={p}
+                      className={`gm-lib-filter ${libPlatforms.includes(p) ? "is-on" : ""}`}
+                      onClick={() => togglePlatform(p)}>
+                {p}
               </button>
             ))}
           </div>

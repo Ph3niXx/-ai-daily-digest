@@ -77,6 +77,27 @@
     return normalize(card && card.t && card.t.name).includes(n);
   }
 
+  // Ou l'utilisateur POSSEDE le jeu, jamais ou le jeu existe.
+  // `game_titles.platforms` (IGDB) liste les plateformes de SORTIE : s'en
+  // servir classerait sous « Switch » les 19 jeux possedes sur Steam qui
+  // sortent aussi sur Switch — une reponse a une question que personne ne
+  // pose. La declaration de l'utilisateur en fiche fait foi ; l'appartenance
+  // Steam sert de repli, ce qui classe 86 jeux sans aucune saisie.
+  function platformOf(card) {
+    const declared = card && card.prog && card.prog.platform;
+    if (declared) return declared;
+    if (card && card.t && card.t.steam_appid != null) return "PC";
+    return null;
+  }
+
+  // Un jeu non classe ne ressort sous aucune plateforme : mieux vaut absent
+  // que range au mauvais endroit.
+  function filterByPlatform(cards, platforms) {
+    if (!platforms || !platforms.length) return (cards || []).slice();
+    const set = new Set(platforms);
+    return (cards || []).filter((c) => set.has(platformOf(c)));
+  }
+
   function filterByStatus(cards, statuses) {
     if (!statuses || !statuses.length) return (cards || []).slice();
     const set = new Set(statuses);
@@ -135,6 +156,7 @@
   const api = {
     STATUS_LABELS, buildLibrary, statusOf, ratingOf, sortLibrary,
     normalize, matchesQuery, filterByStatus, buildUpcoming,
+    platformOf, filterByPlatform,
     hoursLabel, ttbLabel, suggestPlaying,
   };
   if (typeof window !== "undefined") window.gamesView = Object.assign(window.gamesView || {}, api);
