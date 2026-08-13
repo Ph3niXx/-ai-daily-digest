@@ -1336,9 +1336,12 @@
       return once("game_progress", () => q("game_progress", "select=*&limit=2000"));
     },
     async game_releases(){
-      const from = new Date(Date.now() - 180 * 86400000).toISOString();
+      // Filtre sur l'acquittement et NON sur une fenetre temporelle :
+      // detected_at est fige a l'insertion (UNIQUE(title_id, event_type)
+      // interdit toute re-detection), donc une fenetre glissante ne peut que
+      // faire disparaitre un evenement que l'utilisateur n'a pas encore traite.
       return once("game_releases", () =>
-        q("game_releases", `detected_at=gte.${from}&order=detected_at.desc&limit=200`));
+        q("game_releases", "acknowledged=eq.false&order=detected_at.desc&limit=200"));
     },
     async weekly_analysis(){ return once("weekly_analysis_all", () => loadWeeklyAnalysis(30)); },
     async jobs_all(){ return once("jobs_all", () => q("jobs", "select=*&order=score_total.desc.nullslast&limit=300")); },
