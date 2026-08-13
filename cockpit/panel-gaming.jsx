@@ -3,15 +3,49 @@
 // ─────────────────────────────────────────────
 // Hero : last session + 4 plateformes
 // §1 En cours — cards avec progression HLTB
-// §2 Backlog priorisé
+// Ma bibliothèque — statuts déclarés (remplace backlog/abandonnés/top, lot 2)
 // §3 Activité (courbe 180j + heatmap 24×7)
 // §4 Genres
-// §6 Top all-time
 // §7 Achievements récents
 // §8 2026 milestones
 // ═══════════════════════════════════════════════════════════════
 
 const { useState: useGmState, useMemo: useGmMemo } = React;
+
+const GM_STATUS_ORDER = ["playing", "wishlist", "finished", "dropped", "unqualified"];
+
+// La bibliotheque n'affiche JAMAIS de compteur de « jeux a qualifier » :
+// 86 jeux sans statut est un etat normal, pas une dette. Un arriere affiche
+// produit culpabilite puis evitement — c'est ce qui a tue l'outil precedent.
+function GmLibrary({ cards, onOpen }) {
+  const V = window.gamesView;
+  if (!cards.length) {
+    return <div className="gm-empty">Aucun jeu ne correspond à ce filtre.</div>;
+  }
+  return (
+    <div className="gm-lib-grid">
+      {cards.map((c) => {
+        const st = V.statusOf(c);
+        const rating = V.ratingOf(c);
+        return (
+          <button className={`gm-lib-card is-${st}`} key={c.t.id} onClick={() => onOpen(c)}>
+            {c.t.cover_url
+              ? <div className="gm-lib-cover" style={{ backgroundImage: `url("${c.t.cover_url}")` }} />
+              : <div className="gm-lib-cover is-empty" />}
+            <div className="gm-lib-body">
+              <div className="gm-lib-name">{c.t.name}</div>
+              <div className="gm-lib-meta">
+                <span className={`gm-lib-chip is-${st}`}>{V.STATUS_LABELS[st]}</span>
+                <span className="gm-lib-hours">{V.hoursLabel(c.minutes)}</span>
+                {rating != null && <span className="gm-lib-rating">{rating}</span>}
+              </div>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 // ── Chart activity ──────────────────────────────────
 function GmActivityChart({ series, range }) {
@@ -161,6 +195,27 @@ function PanelGaming({ onNavigate }) {
   const upcoming = React.useMemo(
     () => window.gamesView.buildUpcoming(releases, titlesById, franchisesById),
     [releases, titlesById, franchisesById]);
+
+  const [libQuery, setLibQuery] = React.useState("");
+  const [libStatuses, setLibStatuses] = React.useState([]);
+  const [libSort, setLibSort] = React.useState("hours");
+  const [progLocal, setProgLocal] = React.useState(null);
+  const progressRows = progLocal || G.progress;
+  const [sheetCard, setSheetCard] = React.useState(null);
+
+  const library = React.useMemo(
+    () => window.gamesView.buildLibrary(G.titles, progressRows, (D && D._raw && D._raw.snapshot) || []),
+    [G.titles, progressRows, D]);
+  const libraryView = React.useMemo(() => {
+    const V = window.gamesView;
+    return V.sortLibrary(
+      V.filterByStatus(library, libStatuses).filter((c) => V.matchesQuery(c, libQuery)),
+      libSort);
+  }, [library, libStatuses, libQuery, libSort]);
+
+  function toggleStatus(s) {
+    setLibStatuses((cur) => cur.includes(s) ? cur.filter((x) => x !== s) : cur.concat([s]));
+  }
 
   // window.sb.patchJSON renvoie la Response BRUTE et ne leve pas sur 4xx/5xx
   // (cockpit/lib/supabase.js), contrairement a postJSON. Sans ce controle, un
@@ -328,6 +383,34 @@ function PanelGaming({ onNavigate }) {
         <GmUpcoming items={upcoming} onAck={ackRelease} onUnwatch={unwatchFranchise} />
       </section>
 
+      {/* ══ MA BIBLIOTHÈQUE ══ */}
+      <section className="gm-section">
+        <div className="gm-section-head">
+          <h2 className="gm-section-title">Ma bibliothèque</h2>
+          <span className="gm-section-meta">{libraryView.length} jeu{libraryView.length > 1 ? "x" : ""}</span>
+        </div>
+        <div className="gm-lib-toolbar">
+          <input className="gm-lib-search" type="search" placeholder="Chercher un jeu…"
+                 value={libQuery} onChange={(e) => setLibQuery(e.target.value)} />
+          <div className="gm-lib-chips">
+            {GM_STATUS_ORDER.map((s) => (
+              <button key={s}
+                      className={`gm-lib-filter ${libStatuses.includes(s) ? "is-on" : ""}`}
+                      onClick={() => toggleStatus(s)}>
+                {window.gamesView.STATUS_LABELS[s]}
+              </button>
+            ))}
+          </div>
+          <select className="gm-lib-sort" value={libSort} onChange={(e) => setLibSort(e.target.value)}>
+            <option value="hours">Heures jouées</option>
+            <option value="recent">Joué récemment</option>
+            <option value="name">Nom</option>
+            <option value="rating">Ma note</option>
+          </select>
+        </div>
+        <GmLibrary cards={libraryView} onOpen={setSheetCard} />
+      </section>
+
       {/* ══ §1 EN COURS ══ */}
       <section className="gm-section">
         <div className="gm-section-head">
@@ -388,87 +471,6 @@ function PanelGaming({ onNavigate }) {
         </div>
         )}
       </section>
-
-      {/* ══ §2 BACKLOG ══ */}
-      <section className="gm-section">
-        <div className="gm-section-head">
-          <span className="gm-section-num">02</span>
-          <h2 className="gm-section-title">Backlog · <em>jeux jamais lancés</em></h2>
-          <span className="gm-section-meta">{(D.backlog || []).length} affichés · {D.totals?.backlog_count || 0} au total</span>
-        </div>
-        {(D.backlog || []).length === 0 ? (
-          <div className="gm-empty">Bibliothèque entièrement explorée.</div>
-        ) : (
-        <div className="gm-bl-list">
-          <div className="gm-bl-row is-head">
-            <div>prio</div>
-            <div></div>
-            <div>jeu · pourquoi</div>
-            <div>plateforme</div>
-            <div style={{textAlign:"right"}}>HLTB</div>
-            <div style={{textAlign:"center"}}>hype</div>
-            <div></div>
-          </div>
-          {D.backlog.map((b) => (
-            <div className={`gm-bl-row ${b.priority === "shame" ? "is-shame" : ""}`} key={b.title}>
-              <div>
-                <span className={`gm-bl-prio ${b.priority}`}>
-                  {b.priority === "shame" ? (b.shame_years ? `honte ${b.shame_years}y` : "honte") : b.priority}
-                </span>
-              </div>
-              <div>
-                <div className="gm-bl-cover" style={{ background: b.cover }}></div>
-              </div>
-              <div className="gm-bl-info">
-                <div className="gm-bl-title">{b.title}</div>
-                <div className="gm-bl-reason">{b.reason}</div>
-              </div>
-              <div>
-                <div className="gm-bl-plat">{b.platform}</div>
-                <div className="gm-bl-plat-sub">{b.acquired} · {b.acquired_how}</div>
-              </div>
-              <div>
-                <div className="gm-bl-hltb">{b.hltb ? `${b.hltb}h` : "—"}</div>
-                <div className="gm-bl-hltb-sub">main story</div>
-              </div>
-              <div>
-                <div className="gm-bl-hype">{b.hype}</div>
-                <div className="gm-bl-hype-sub">/10</div>
-              </div>
-              <div></div>
-            </div>
-          ))}
-        </div>
-        )}
-      </section>
-
-      {/* ══ §2bis JEUX ABANDONNÉS ══ */}
-      {(D.abandoned || []).length > 0 && (
-        <section className="gm-section">
-          <div className="gm-section-head">
-            <span className="gm-section-num">02b</span>
-            <h2 className="gm-section-title">Abandonnés · <em>commencés puis lâchés</em></h2>
-            <span className="gm-section-meta">{D.abandoned.length} jeux · 1h+ jouées, rien sur 14j</span>
-          </div>
-          <div className="gm-abandoned-grid">
-            {D.abandoned.map((g) => (
-              <div className="gm-abandoned-card" key={g.appid}>
-                {g.header ? (
-                  <div className="gm-abandoned-cover" style={{ backgroundImage: `url("${g.header}")` }}></div>
-                ) : (
-                  <div className="gm-abandoned-cover gm-abandoned-cover-blank"></div>
-                )}
-                <div className="gm-abandoned-body">
-                  <div className="gm-abandoned-title">{g.title}</div>
-                  <div className="gm-abandoned-meta">
-                    <strong>{g.hours_played}h</strong> jouées · {g.genre}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* ══ §3 ACTIVITÉ ══ */}
       <section className="gm-section">
@@ -570,58 +572,6 @@ function PanelGaming({ onNavigate }) {
           </div>
         </div>
         </>
-        )}
-      </section>
-
-      {/* ══ §6 TOP ALL-TIME ══ */}
-      <section className="gm-section">
-        <div className="gm-section-head">
-          <span className="gm-section-num">06</span>
-          <h2 className="gm-section-title">Top all-time · <em>par heures</em></h2>
-          <span className="gm-section-meta">Steam · {(D.top_alltime || []).length} jeux</span>
-        </div>
-        {(D.top_alltime || []).length === 0 ? (
-          <div className="gm-empty">Pas de snapshot Steam disponible.</div>
-        ) : (
-        <div>
-          <div className="gm-top-row is-head">
-            <div>#</div>
-            <div>jeu</div>
-            <div>plateforme · depuis</div>
-            <div style={{textAlign:"right"}}>heures</div>
-            <div style={{textAlign:"right"}}>sessions</div>
-            <div></div>
-          </div>
-          {D.top_alltime.map((g) => {
-            const p = plat(g.platform);
-            const maxH = D.top_alltime[0].hours || 1;
-            return (
-              <div className="gm-top-row" key={g.rank}>
-                <div className="gm-top-rank">{String(g.rank).padStart(2, "0")}</div>
-                <div className="gm-top-title-cell">
-                  {g.cover_url ? (
-                    <div className="gm-top-thumb" style={{ backgroundImage: `url("${g.cover_url}")` }}></div>
-                  ) : (
-                    <div className="gm-top-thumb gm-top-thumb-blank"></div>
-                  )}
-                  <span className="gm-top-title">{g.title}</span>
-                </div>
-                <div>
-                  <div className="gm-top-platform">
-                    <span style={{ display: "inline-block", width: 6, height: 6, borderRadius: 1, background: p ? p.accent : "#888", marginRight: 6, verticalAlign: "middle" }}></span>
-                    {p ? p.platform : g.platform} · {g.since}
-                  </div>
-                  <div className="gm-top-bar"><div className="gm-top-bar-fill" style={{ width: `${(g.hours / maxH) * 100}%` }}></div></div>
-                </div>
-                <div>
-                  <div className="gm-top-hours">{(g.hours || 0).toLocaleString("fr-FR")}<span className="gm-top-hours-unit">h</span></div>
-                </div>
-                <div className="gm-top-sessions">{g.sessions ? g.sessions.toLocaleString("fr-FR") : "—"}</div>
-                <div></div>
-              </div>
-            );
-          })}
-        </div>
         )}
       </section>
 
