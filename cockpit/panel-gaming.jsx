@@ -172,26 +172,39 @@ function PanelGaming({ onNavigate }) {
     return r;
   }
 
+  // Les track() partent APRES le PATCH reussi, jamais avant (meme convention
+  // que cockpit/home.jsx::GamesBriefCard) : ces compteurs sont la sonde de
+  // survie du lot (docs/telemetry.md), un compteur qui monte sur une
+  // ecriture refusee fausse la decision.
   async function ackRelease(it) {
     const before = releases;
     setRelLocal(before.map((r) => (r.id === it.id ? { ...r, acknowledged: true } : r)));
-    window.track && window.track("games_release_ack", { surface: "gaming" });
     try {
       await gmPatch("/rest/v1/game_releases?id=eq." + it.id, { acknowledged: true });
+      window.track && window.track("games_release_ack", { event_type: "announced", surface: "gaming" });
     } catch (e) {
       setRelLocal(before);
       window.track && window.track("error_shown", { context: "games_ack", message: e.message });
     }
   }
 
+  // Acquitte d'abord les evenements de la licence, PUIS la passe en non
+  // suivie — jamais l'inverse. Dans cet ordre, une defaillance partielle
+  // (premiere ecriture OK, seconde en echec) laisse des evenements acquittes
+  // sans plus d'effet qu'un clic "vu", et une licence toujours suivie que
+  // l'utilisateur peut re-cliquer. Dans l'ordre inverse, une defaillance
+  // partielle laisserait la licence non suivie en base alors que ses
+  // evenements, jamais acquittes, continueraient de reapparaitre dans le
+  // rail — un etat coince dont l'utilisateur ne peut ni sortir ni comprendre
+  // l'origine.
   async function unwatchFranchise(it) {
     const before = releases;
     setRelLocal(before.map((r) => (r.franchise_id === it.franchiseId ? { ...r, acknowledged: true } : r)));
-    window.track && window.track("games_unwatch_franchise", { surface: "gaming" });
     try {
-      await gmPatch("/rest/v1/game_franchises?id=eq." + it.franchiseId, { watched: false });
       await gmPatch("/rest/v1/game_releases?franchise_id=eq." + it.franchiseId + "&acknowledged=eq.false",
                     { acknowledged: true });
+      await gmPatch("/rest/v1/game_franchises?id=eq." + it.franchiseId, { watched: false });
+      window.track && window.track("games_unwatch_franchise", { franchise: it.franchiseId, surface: "gaming" });
     } catch (e) {
       setRelLocal(before);
       window.track && window.track("error_shown", { context: "games_unwatch", message: e.message });
