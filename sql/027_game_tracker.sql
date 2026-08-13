@@ -17,10 +17,11 @@ CREATE TABLE IF NOT EXISTS game_franchises (
   -- false par defaut : la phase A ne met a true que les licences des jeux
   -- joues >= 600 min, pour ne pas noyer « A venir ».
   watched boolean NOT NULL DEFAULT false,
-  -- Horodate la premiere ecriture des titres de cette franchise. Tant qu'elle
-  -- est null, la phase C n'emet AUCUN evenement pour cette franchise : sinon
-  -- le premier run inonderait le Brief de centaines de « Annonce » pour des
-  -- jeux sortis il y a dix ans.
+  -- Horodate le premier PARCOURS COMPLET de la collection, pose par la seule
+  -- phase B (ni le seed Steam, ni l'import wishlist, qui n'ecrivent qu'un
+  -- titre). Tant qu'elle est null, la phase C n'emet AUCUN evenement pour
+  -- cette franchise : sinon le premier parcours inonderait le Brief de
+  -- centaines de « Annonce » pour des jeux sortis il y a dix ans.
   bootstrapped_at timestamptz,
   added_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()

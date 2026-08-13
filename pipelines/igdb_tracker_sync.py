@@ -137,6 +137,14 @@ def upsert_franchise(url, headers, name, collection_id, watched):
     return row
 
 
+# ── Garde anti-inondation (pure, verrouillee par tests/test_igdb_tracker.py) ──
+def should_emit_events(franchise_id, bootstrapped_before):
+    """Une franchise dont la collection n'a jamais ete parcourue n'emet aucun
+    evenement : tous ses titres seraient « inedits » et l'inondation serait
+    garantie. `bootstrapped_before` est fige AVANT la phase A, expres."""
+    return franchise_id in bootstrapped_before
+
+
 # ── Import one-shot de gaming_wishlist ──────────────────────
 def import_wishlist(url, headers, client, dry_run):
     """gaming_wishlist -> game_titles + game_progress(status='wishlist').
@@ -188,9 +196,11 @@ def import_wishlist(url, headers, client, dry_run):
         saved = sb_upsert(url, headers, "game_titles",
                           [{**to_title_row(game), "franchise_id": fr["id"],
                             "steam_appid": r.get("appid")}], "igdb_id")
-        if not fr.get("bootstrapped_at"):
-            sb_patch(url, headers, "game_franchises", f"id=eq.{fr['id']}",
-                     {"bootstrapped_at": now_iso()})
+        # PAS de bootstrapped_at ici : l'import n'ecrit qu'UN titre et ne
+        # parcourt jamais la collection. Le tamponner ferait croire au run
+        # suivant que la collection est deja connue, et la phase B diffe-
+        # rait 100 titres contre 1 — une inondation d'« Annonce » garantie.
+        # Seule la phase B, qui parcourt reellement la collection, tamponne.
         # ignore_dupes : ne jamais ecraser un statut deja pose par l'utilisateur.
         sb_upsert(url, headers, "game_progress",
                   [{"title_id": saved[0]["id"], "status": "wishlist"}],
@@ -241,6 +251,15 @@ def run_sync(dry_run, import_wishlist_flag=False):
     seeded = 0
     if unknown:
         mapping = resolve_steam(client, unknown)
+        if not mapping:
+            # Aucun des appids n'a pu etre traduit : ce n'est pas « rien de
+            # nouveau », c'est external_games qui ne repond plus comme avant
+            # (cf. `category` deprecie au profit de `external_game_source`).
+            # Sans ce garde-fou le run reste vert et rien ne se peuple, jamais.
+            print(f"FATAL: aucun des {len(unknown)} appid(s) Steam n'a pu etre traduit "
+                  "en id IGDB. Voir resolve_steam() : `category` est peut-etre "
+                  "definitivement deprecie — basculer sur `external_game_source`.")
+            return 1
         missing = sorted(unknown - set(mapping))
         if missing:
             print(f"  {len(missing)} appid(s) Steam inconnus d'IGDB, ignores : {missing[:10]}")
@@ -263,9 +282,10 @@ def run_sync(dry_run, import_wishlist_flag=False):
                                   minutes >= WATCH_MIN_MINUTES)
             row = {**to_title_row(game), "franchise_id": fr["id"], "steam_appid": appid}
             sb_upsert(url, headers, "game_titles", [row], "igdb_id")
-            if not fr.get("bootstrapped_at"):
-                sb_patch(url, headers, "game_franchises", f"id=eq.{fr['id']}",
-                         {"bootstrapped_at": now_iso()})
+            # PAS de bootstrapped_at ici : le seed n'ecrit que le jeu Steam
+            # lui-meme, pas sa collection. Une licence tamponnee ici mais
+            # jamais parcourue (non surveillee au seed, sautee en phase B)
+            # serait diffee au run suivant contre son unique titre seede.
             seeded += 1
         print(f"  Phase A: {seeded} jeu(x) Steam ajoute(s)")
     else:
@@ -280,6 +300,7 @@ def run_sync(dry_run, import_wishlist_flag=False):
                      "watched=eq.true&igdb_collection_id=not.is.null"
                      "&select=id,igdb_collection_id,name,bootstrapped_at")
     total_events = 0
+    skipped = 0
     for fr in watched:
         try:
             games = client.query("games",
@@ -287,6 +308,7 @@ def run_sync(dry_run, import_wishlist_flag=False):
                                  f"sort first_release_date desc; limit {MAX_TITLES_PER_COLLECTION};")
         except Exception as exc:
             print(f"  WARN {fr['name']}: fetch KO ({exc}) — licence sautee")
+            skipped += 1
             continue
         if len(games) >= MAX_TITLES_PER_COLLECTION:
             print(f"  WARN {fr['name']}: collection plafonnee a "
@@ -300,9 +322,10 @@ def run_sync(dry_run, import_wishlist_flag=False):
             saved = sb_upsert(url, headers, "game_titles", fresh, "igdb_id")
         except Exception as exc:
             print(f"  WARN {fr['name']}: ecriture KO ({exc}) — licence sautee")
+            skipped += 1
             continue
 
-        if fr["id"] not in bootstrapped_before:
+        if not should_emit_events(fr["id"], bootstrapped_before):
             sb_patch(url, headers, "game_franchises", f"id=eq.{fr['id']}",
                      {"bootstrapped_at": now_iso()})
             print(f"  {fr['name']}: {len(fresh)} titres (peuplement initial, aucun evenement)")
@@ -322,22 +345,35 @@ def run_sync(dry_run, import_wishlist_flag=False):
         total_events += len(events)
         print(f"  {fr['name']}: {len(fresh)} titres, {len(events)} evenement(s)")
 
+    # Un WARN par licence dans un log que personne ne lit n'est pas une alerte :
+    # si AUCUNE licence surveillee n'a pu etre rafraichie, le run a echoue.
+    if watched and skipped == len(watched):
+        print(f"FATAL: les {len(watched)} licence(s) surveillee(s) ont toutes echoue "
+              "— aucune collection rafraichie (voir les WARN ci-dessus).")
+        return 1
+
     # ── Phase D : duree de jeu ──────────────────────────────
-    sans_ttb = sb_get(url, headers, "game_titles",
-                      f"time_to_beat_minutes=is.null&select=id,igdb_id&limit={MAX_TTB_PER_RUN}")
-    if sans_ttb:
-        by_igdb = {t["igdb_id"]: t["id"] for t in sans_ttb}
-        rows = client.query("game_time_to_beats",
-                            f"fields game_id,normally; where game_id = {id_list(list(by_igdb))}; "
-                            f"limit 500;")
-        patched = 0
-        for r in rows:
-            tid = by_igdb.get(r.get("game_id"))
-            if tid and r.get("normally"):
-                sb_patch(url, headers, "game_titles", f"id=eq.{tid}",
-                         {"time_to_beat_minutes": int(r["normally"] // 60)})
-                patched += 1
-        print(f"  Phase D: {patched} duree(s) renseignee(s)")
+    # Enrichissement facultatif : une panne ici (endpoint renomme, champ
+    # disparu) ne doit pas faire rougir un run dont A/B/C ont deja ecrit.
+    # Un rouge quotidien apprend a ignorer les rouges.
+    try:
+        sans_ttb = sb_get(url, headers, "game_titles",
+                          f"time_to_beat_minutes=is.null&select=id,igdb_id&limit={MAX_TTB_PER_RUN}")
+        if sans_ttb:
+            by_igdb = {t["igdb_id"]: t["id"] for t in sans_ttb}
+            rows = client.query("game_time_to_beats",
+                                f"fields game_id,normally; where game_id = {id_list(list(by_igdb))}; "
+                                f"limit 500;")
+            patched = 0
+            for r in rows:
+                tid = by_igdb.get(r.get("game_id"))
+                if tid and r.get("normally"):
+                    sb_patch(url, headers, "game_titles", f"id=eq.{tid}",
+                             {"time_to_beat_minutes": int(r["normally"] // 60)})
+                    patched += 1
+            print(f"  Phase D: {patched} duree(s) renseignee(s)")
+    except Exception as exc:
+        print(f"  WARN Phase D: duree de jeu KO ({exc}) — enrichissement saute")
 
     print(f"\nDone. {seeded} jeux seedes, {total_events} evenements, "
           f"{client.calls} appels IGDB.")

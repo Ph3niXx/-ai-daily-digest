@@ -115,8 +115,10 @@ def diff_game_events(old_by_igdb_id, fresh_rows):
         if old is None:
             # Un jeu deja sorti qui apparait pour la premiere fois n'est pas
             # une annonce : c'est un frere de collection decouvert au fil de
-            # l'eau. Seul ce qui n'est pas encore sorti merite une alerte.
-            if row.get("igdb_status") != "released":
+            # l'eau. Seul ce qui n'est pas encore sorti merite une alerte —
+            # et un titre decouvert deja cancelled, delisted ou offline n'est
+            # pas non plus une annonce : « Annonce : X » y serait faux.
+            if row.get("igdb_status") not in ("released", "cancelled", "delisted", "offline"):
                 events.append(("announced", f"Annoncé : {label}", date, gid))
             continue
 

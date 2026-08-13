@@ -266,11 +266,14 @@ function GamesBriefCard({ releases = [], onNavigate }) {
     return r;
   }
 
+  // Les track() partent APRES le PATCH reussi, jamais avant : ces compteurs
+  // sont le go/no-go du lot 2, un compteur qui monte sur une ecriture refusee
+  // fausse la decision (convention du fichier : voir veille_feedback).
   async function ack(r) {
     setHidden((h) => ({ ...h, [r.id]: true }));   // optimiste
-    window.track && window.track("games_release_ack", { event_type: r.event_type });
     try {
       await patchOrThrow("/rest/v1/game_releases?id=eq." + r.id, { acknowledged: true });
+      window.track && window.track("games_release_ack", { event_type: r.event_type });
     } catch (e) {
       setHidden((h) => ({ ...h, [r.id]: false })); // rollback
       window.track && window.track("error_shown", { context: "games_ack", message: e.message });
@@ -279,10 +282,10 @@ function GamesBriefCard({ releases = [], onNavigate }) {
 
   async function unwatch(r) {
     setHidden((h) => ({ ...h, [r.id]: true }));
-    window.track && window.track("games_unwatch_franchise", { franchise: r.franchise_id });
     try {
       await patchOrThrow("/rest/v1/game_franchises?id=eq." + r.franchise_id, { watched: false });
       await patchOrThrow("/rest/v1/game_releases?id=eq." + r.id, { acknowledged: true });
+      window.track && window.track("games_unwatch_franchise", { franchise: r.franchise_id });
     } catch (e) {
       setHidden((h) => ({ ...h, [r.id]: false }));
       window.track && window.track("error_shown", { context: "games_unwatch", message: e.message });

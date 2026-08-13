@@ -99,6 +99,21 @@ check("libelle announced",
 check("titre inedit deja sorti => aucun evenement",
       diff_game_events({}, [title(2, status="released", date="2011-05-01")]),
       [])
+# Idem pour un titre decouvert deja mort : annoncer « Annoncé : X » pour un
+# jeu annule, delisted ou offline serait faux sur le seul ecran du lot.
+check("titre inedit cancelled => aucun evenement",
+      diff_game_events({}, [title(3, status="cancelled")]),
+      [])
+check("titre inedit delisted => aucun evenement",
+      diff_game_events({}, [title(4, status="delisted", date="2014-02-01")]),
+      [])
+check("titre inedit offline => aucun evenement",
+      diff_game_events({}, [title(5, status="offline", date="2016-08-01")]),
+      [])
+# Les statuts vraiment a venir restent des annonces.
+check("titre inedit early_access => announced",
+      [e[0] for e in diff_game_events({}, [title(6, status="early_access")])],
+      ["announced"])
 check("date qui apparait => date_announced",
       [e[0] for e in diff_game_events({1: title(1)}, [title(1, date="2027-03-01")])],
       ["date_announced"])
