@@ -80,6 +80,17 @@ Clé gratuite à demander sur https://developer.themoviedb.org/ (compte + formul
 
 Sans le secret, `tmdb_tracker_sync.py` sort en `[skip]` avec le code 0 — le workflow reste vert. Sans la clé en base, la recherche n'interroge qu'AniList et le signale en pied de liste.
 
+## Twitch / IGDB (pipeline `pipelines/igdb_tracker_sync.py`)
+
+IGDB v4 s'authentifie via OAuth `client_credentials` Twitch (IGDB appartient à Twitch/Amazon). Créer une application sur https://dev.twitch.tv/console/apps (compte Twitch requis) pour obtenir le couple client ID / client secret.
+
+| Secret | Usage |
+|---|---|
+| `TWITCH_CLIENT_ID` | Twitch Developer Console — `pipelines/igdb_tracker_sync.py` (OAuth `client_credentials` vers IGDB v4) |
+| `TWITCH_CLIENT_SECRET` | Twitch Developer Console — idem |
+
+⚠️ **Pas encore posés (2026-08-13)** : le lot 1 a livré la migration, le pipeline et le workflow, mais ces deux secrets n'ont jamais été ajoutés à GitHub Actions — le pipeline n'a donc jamais tourné en écriture. Sans eux, `igdb_tracker_sync.py` sort en `[skip]` avec le code 0 dès la première ligne (avant tout appel réseau) : le workflow reste vert, zéro écriture, comportement nominal documenté dans `docs/architecture/pipelines.yaml::igdb_tracker_sync.health`.
+
 ## Jobs Radar — routine Claude Code distante (aucun secret GitHub)
 
 La routine Jobs Radar ([cowork-routines/jobs-radar.md](cowork-routines/jobs-radar.md), ADR-19) **ne consomme aucun secret GitHub Actions** — elle tourne en remote sur claude.ai, pas dans un workflow.

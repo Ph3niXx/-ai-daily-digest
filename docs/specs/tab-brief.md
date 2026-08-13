@@ -10,19 +10,21 @@ C'est le premier écran à l'ouverture du cockpit (route `"brief"`, panel par d�
 
 ## Parcours utilisateur
 1. À l'ouverture du cockpit, la page Brief du jour s'affiche par défaut — les données du matin sont déjà chargées avant que l'interface apparaisse.
-2. L'utilisateur lit le paragraphe de synthèse en tête de page pour se situer sur l'actualité IA du jour. Lorsqu'il revient en moins de 18 h et que de nouvelles publications sont arrivées depuis, le titre principal bascule directement en "X nouveautés depuis Yh" et liste les premiers articles non vus (source, titre tronqué, score de pertinence) ; un bouton "Lire les X nouveautés" amène droit au Top du jour, et la synthèse éditoriale complète reste accessible derrière un bouton repliable "Voir le brief macro complet".
-3. Option : clic sur **Lecture audio** pour faire lire la synthèse à voix haute en français, mains-libres en début de journée.
-4. Clic sur "Lire les 3 incontournables" pour basculer vers le Top du jour, ou clic direct sur une carte du top pour ouvrir l'article en onglet externe (marqué lu automatiquement).
-5. Scan des quatre signaux faibles (nouveau / en hausse / stable / en baisse) pour voir ce qui bouge dans la veille.
-6. Coup d'œil au radar compétences et à l'encart "Ton prochain gap à combler" qui propose un challenge associé en un clic.
-7. Lecture finale du bilan de la semaine : heatmap 7 jours des articles lus par jour et compteurs (articles lus, gardés, streak).
-8. Bouton "Tout marquer lu" pour valider les trois incontournables comme lus d'un coup ; un bandeau discret en bas d'écran confirme l'action et propose un "Annuler" pendant six secondes au cas où le clic était involontaire.
-9. Option : pour un article intéressant mais pas pour ce matin, clic sur le bouton horloge "Reporter" → la carte se grise et l'article ressort en tête du top trois jours plus tard.
-10. Quand l'utilisateur revient cinq fois par jour et que le format macro lui prend trop de place, un petit bouton "Compact" en haut à droite du hero le réduit immédiatement à un format dense. Sa préférence est conservée d'une visite à l'autre — un clic sur "Plein" suffit à retrouver le format découverte.
+2. Si des licences suivies ont du nouveau — annonce, date connue, sortie ou annulation —, un encart discret tout en haut de page (au-dessus même de la synthèse du jour, dans les deux vues) le résume : jusqu'à trois événements, chacun avec sa pastille de type. Un clic sur la coche le marque comme vu ; un bouton dédié arrête le suivi de la licence concernée pour ne plus recevoir d'alerte sur ses suites. Sans nouveauté, rien ne s'affiche — c'est le cas aujourd'hui, en attendant la mise en route du premier suivi.
+3. L'utilisateur lit le paragraphe de synthèse en tête de page pour se situer sur l'actualité IA du jour. Lorsqu'il revient en moins de 18 h et que de nouvelles publications sont arrivées depuis, le titre principal bascule directement en "X nouveautés depuis Yh" et liste les premiers articles non vus (source, titre tronqué, score de pertinence) ; un bouton "Lire les X nouveautés" amène droit au Top du jour, et la synthèse éditoriale complète reste accessible derrière un bouton repliable "Voir le brief macro complet".
+4. Option : clic sur **Lecture audio** pour faire lire la synthèse à voix haute en français, mains-libres en début de journée.
+5. Clic sur "Lire les 3 incontournables" pour basculer vers le Top du jour, ou clic direct sur une carte du top pour ouvrir l'article en onglet externe (marqué lu automatiquement).
+6. Scan des quatre signaux faibles (nouveau / en hausse / stable / en baisse) pour voir ce qui bouge dans la veille.
+7. Coup d'œil au radar compétences et à l'encart "Ton prochain gap à combler" qui propose un challenge associé en un clic.
+8. Lecture finale du bilan de la semaine : heatmap 7 jours des articles lus par jour et compteurs (articles lus, gardés, streak).
+9. Bouton "Tout marquer lu" pour valider les trois incontournables comme lus d'un coup ; un bandeau discret en bas d'écran confirme l'action et propose un "Annuler" pendant six secondes au cas où le clic était involontaire.
+10. Option : pour un article intéressant mais pas pour ce matin, clic sur le bouton horloge "Reporter" → la carte se grise et l'article ressort en tête du top trois jours plus tard.
+11. Quand l'utilisateur revient cinq fois par jour et que le format macro lui prend trop de place, un petit bouton "Compact" en haut à droite du hero le réduit immédiatement à un format dense. Sa préférence est conservée d'une visite à l'autre — un clic sur "Plein" suffit à retrouver le format découverte.
 
 ## Fonctionnalités
 - **Vote sur la sélection du jour** : chaque article retenu porte le motif pour lequel il a été choisi, et deux boutons pouce haut / pouce bas. Le pouce bas demande *pourquoi* — déjà vu, pas mon sujet, trop superficiel, rien d'actionnable — parce qu'un rejet sans motif n'apprend presque rien. Ces verdicts réécrivent les règles de sélection des jours suivants.
 - **Vue Morning Card** : un toggle "Morning Card / Brief complet" persiste le mode choisi. En Morning Card, la page n'affiche que trois choses numérotées (article du jour, signal qui monte, prochain gap à combler) avec un seul CTA chacune — format minute pour les matins serrés. Bascule libre vers le Brief complet à tout moment.
+- **Sorties jeux vidéo** : au-dessus de la synthèse du jour, dans les deux vues (Morning Card et Brief complet), un encart signale les nouveautés des licences suivies — jusqu'à trois événements affichés à la fois, chacun avec une pastille qui précise s'il s'agit d'une annonce, d'une date connue, d'une sortie ou d'une annulation. Un événement reste visible un mois après sa détection, une annonce de jeu restant pertinente plus longtemps qu'une sortie d'épisode. Un bouton coche marque l'événement comme vu ; un second arrête le suivi de la licence concernée, qui cesse alors d'alerter sur ses prochaines suites. Sans nouveauté, l'encart ne s'affiche pas — c'est le cas actuellement : aucun événement n'a encore été détecté, faute d'un compte développeur Twitch à créer pour alimenter le suivi.
 - **Synthèse du jour** : un paragraphe éditorial en tête de page qui résume l'actualité IA du jour, avec deux raccourcis vers le Top du jour et la Veille complète. Quand l'utilisateur revient au cockpit après plus d'une demi-heure, le sur-titre bascule en "Depuis ta dernière visite — Xh" et compte les nouveaux articles arrivés depuis, pour positionner la lecture comme un delta plutôt qu'un récap quotidien.
 - **Mode "nouveautés" — visite récurrente** : si la dernière visite remonte à moins de 18 h et qu'au moins un nouvel article est tombé depuis, le titre principal bascule en "X nouveautés depuis Yh." et la page liste directement les premiers articles non vus (source en capitales, titre tronqué et score de pertinence) — jusqu'à quatre éléments visibles, plus un indicateur "+ N plus" en cas de fournée plus volumineuse. Le bouton d'action principal change pour "Lire les X nouveautés" et amène droit au Top du jour. La synthèse éditoriale classique du matin reste accessible derrière un bouton repliable "Voir le brief macro complet" pour qui veut quand même la relire.
 - **Lecture audio** : un bouton qui lit la synthèse à voix haute en français, avec une estimation du temps de lecture. Utile pour démarrer la journée mains-libres.
@@ -55,6 +57,8 @@ Classes-racines :
 
 Pas d'id HTML stable sur le container ; l'identifiant de route est `"brief"` (dans `activePanel`, URL hash `#brief`). Le panel est Tier 1 (non listé dans `TIER2_PANELS` de [data-loader.js:4248](cockpit/lib/data-loader.js:4248)) — data pré-chargée avant mount.
 
+Deux encarts d'alerte se montent juste au-dessus du hero, avant la bascule Morning Card / Brief complet, donc visibles dans les deux vues : `MdtBriefCard` (sorties médiathèque, non documenté par ailleurs dans cette spec — voir Limitations) et `GamesBriefCard` (sorties jeux vidéo). Classes `.gmb-*` pour ce dernier, définies dans `cockpit/styles-gaming.css`, alignées sur `.mdt-brief` (`color-mix` sur `var(--brand)`, réactif aux trois thèmes).
+
 ## Front — fonctions JS
 | Fonction | Rôle | Fichier/ligne |
 |----------|------|---------------|
@@ -83,6 +87,11 @@ Pas d'id HTML stable sur le container ; l'identifiant de route est `"brief"` (da
 | `buildRadar(rows)` | Normalise scores 0-10→0-100, calcule `delta_30d`, `next_gap` = axe le plus bas | [data-loader.js:206](cockpit/lib/data-loader.js:206) |
 | `buildWeek(recent)` | Compte articles par jour Lun→Dim, streak, KPIs week | [data-loader.js:1028](cockpit/lib/data-loader.js:1028) |
 | `computeStreak()` | Scan localStorage `read-articles` jusqu'à 400j en arrière | [data-loader.js:58-70](cockpit/lib/data-loader.js:58) |
+| `GamesBriefCard({ releases, onNavigate })` | Composant encart Jeux : lit `data.game_releases`, affiche jusqu'à 3 événements, retourne `null` si vide | [home.jsx:247](cockpit/home.jsx:247) |
+| `patchOrThrow(path, body)` (inline dans `GamesBriefCard`) | Vérifie `r.ok` avant de considérer l'écriture réussie — `window.sb.patchJSON` renvoie la `Response` brute et ne lève jamais sur 4xx/5xx, contrairement à `postJSON` | [home.jsx:263](cockpit/home.jsx:263) |
+| `ack(r)` (inline) | `PATCH game_releases?id=eq.<id>` `{acknowledged:true}`, optimiste avec rollback si l'écriture échoue | [home.jsx:269](cockpit/home.jsx:269) |
+| `unwatch(r)` (inline) | `PATCH game_franchises?id=eq.<franchise_id>` `{watched:false}` puis acquittement de l'événement, optimiste avec rollback | [home.jsx:280](cockpit/home.jsx:280) |
+| `game_releases` fetch (Tier 1) | `game_releases` non acquittés, `detected_at` dans les 30 derniers jours, 5 lignes max, `.catch(() => [])` | [data-loader.js:1185](cockpit/lib/data-loader.js:1185) |
 
 ## Back — sources de données
 
@@ -94,8 +103,11 @@ Pas d'id HTML stable sur le container ; l'identifiant de route est `"brief"` (da
 | `skill_radar` | `axis, axis_label, score, strengths, gaps, target, history (JSONB)` | 8 axes, update manuel + par `weekly_analysis` |
 | `weekly_analysis` | `week_start, tokens_used (JSONB avec cost_usd)` | 8 dernières semaines, sert uniquement au sparkline coût dans le footer |
 | `user_profile` | `key, value` | ~15 paires, sert à construire `user.name` / `user.role` |
+| `game_releases` | `title, event_type, event_date, franchise_id, acknowledged, detected_at` | jusqu'à 5 lignes (non acquittées, 30 derniers jours) — **table vide au 2026-08-13**, pipeline jamais exécuté avec succès |
 
 Table **non lue malgré mention dans spec.json** : `activity_briefs` — écrite par [jarvis/observers/daily_brief_generator.py:251](jarvis/observers/daily_brief_generator.py:251) mais pas consommée par la home (voir TODO).
+
+Deux écritures partent de l'encart Jeux, chacune vérifiée sur le code HTTP de la réponse avant de considérer l'action réussie (sans ce contrôle, un refus RLS serait pris pour un succès) : `game_releases.acknowledged` passe à `true` quand un événement est marqué vu ; `game_franchises.watched` passe à `false` quand une licence n'est plus suivie, ce qui tarit ses futurs événements.
 
 ## Back — pipelines qui alimentent
 
@@ -108,6 +120,7 @@ Table **non lue malgré mention dans spec.json** : `activity_briefs` — écrite
   - **Lit** `skill_radar` pour calibrer les challenges/recos (pas d'écriture vers les tables du Brief)
   - Log coûts → `POST weekly_analysis` qui nourrit le footer
 - **Jarvis (local)** — la boucle nocturne n'écrit pas vers les tables du Brief. `activity_briefs` (observer 18h) reste pour l'instant un silo non branché à la home.
+- **Tracker jeux** ([igdb_tracker_sync.py](pipelines/igdb_tracker_sync.py), cron quotidien 08:30 UTC via [igdb-tracker-sync.yml](.github/workflows/igdb-tracker-sync.yml)) — quatre phases (seed bibliothèque Steam → IGDB, refresh des licences suivies, diff → `game_releases`, durée de jeu) ; nécessite `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET`. **Jamais exécuté avec succès** au 2026-08-13 : ces deux secrets ne sont pas encore posés, le run sort systématiquement en `[skip]` code 0 et `game_releases` reste vide — l'encart Jeux du Brief ne s'affiche donc pas encore.
 
 ## Appels externes
 - **Supabase REST** via `q(table, query)` dans `cockpit/lib/supabase.js` — 7 appels Tier 1 en parallèle au boot (`Promise.all`).
@@ -116,9 +129,9 @@ Table **non lue malgré mention dans spec.json** : `activity_briefs` — écrite
 - **localStorage** : clé `read-articles` (map `id → {ts}`), lue+écrite pour le streak et le "marqué lu". Clé `snoozed-articles` (map `id → {until, snoozedAt}`) pour le report d'article 3 jours.
 
 ## Dépendances
-- **Onglets aval** (via CTA) : `top` (3 incontournables), `updates` (parcourir tous), `signals` (tous les signaux), `challenges` (gap action), `week` (ouvrir ma semaine).
-- **Pipelines** : `daily_digest.yml` (obligatoire pour `articles` + `daily_briefs` + `signal_tracking`), `weekly_analysis.yml` (secondaire, pour les coûts du footer et la calibration radar indirecte).
-- **Variables d'env / secrets** : aucune côté front. Pipeline backend requiert `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `GMAIL_*`.
+- **Onglets aval** (via CTA) : `top` (3 incontournables), `updates` (parcourir tous), `signals` (tous les signaux), `challenges` (gap action), `week` (ouvrir ma semaine). L'encart Jeux (`GamesBriefCard`) fait exception : ses deux actions écrivent directement en base, aucun CTA de navigation — pas d'onglet Jeux aval (le lot 1 du tracker n'ajoute rien à `panel-gaming.jsx`, voir [tab-gaming.md](tab-gaming.md), section « Tracker jeux — lot 1 »).
+- **Pipelines** : `daily_digest.yml` (obligatoire pour `articles` + `daily_briefs` + `signal_tracking`), `weekly_analysis.yml` (secondaire, pour les coûts du footer et la calibration radar indirecte), `igdb-tracker-sync.yml` (obligatoire pour `game_releases` — jamais exécuté avec succès à ce jour).
+- **Variables d'env / secrets** : aucune côté front. Pipeline backend requiert `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `GMAIL_*`. Le tracker jeux requiert en plus `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET`, non posés au 2026-08-13 ([secrets.md](../secrets.md)).
 
 ## États & edge cases
 - **Loading** : Tier 1 bloque le mount React ; le screen affiche un loader provenant de la phase auth (voir `cockpit/lib/auth.js`). Pas de skeleton dédié à la Home.
@@ -129,6 +142,7 @@ Table **non lue malgré mention dans spec.json** : `activity_briefs` — écrite
 - **Erreur réseau Tier 1** : chaque loader est wrappé en `.catch(() => [])` ou `(() => null)` dans `Promise.all` ([data-loader.js:1138-1145](cockpit/lib/data-loader.js:1138)) → la page se monte quand même avec des tableaux vides (dégradation silencieuse).
 - **Speech API non supportée** : `AudioBriefChip.speak()` no-op si `"speechSynthesis" in window === false`.
 - **RLS** : toutes les tables exigent `authenticated` ; si le JWT expire, les fetches retournent 401 → fallback empty silencieux. Pas d'alerte UX actuellement.
+- **Encart Jeux vide** : `data.game_releases` vide (cas actuel de la production, `game_releases` n'a jamais reçu de ligne) → `GamesBriefCard` retourne `null`, pas de placeholder ni de message d'attente.
 
 ## Limitations connues / TODO
 - [ ] **`activity_briefs` non wiré à la Home** : la table existe et est remplie par `jarvis/observers/daily_brief_generator.py` mais aucun fetch côté front. À brancher si on veut un résumé activité perso sur la home.
@@ -140,8 +154,12 @@ Table **non lue malgré mention dans spec.json** : `activity_briefs` — écrite
 - [ ] **`next_brief` statique** : calcul basé uniquement sur l'heure UTC vs 06:00 ; ne reflète pas le jour férié ni le samedi (cron `1-5` uniquement, samedi `0 10 * * 6` est un ping ≠ un brief complet).
 - [ ] **`signals_rising` compte "rising" + "new"** ([data-loader.js:117](cockpit/lib/data-loader.js:117)) — pas de séparation UI.
 - [ ] **`<inconnu>` : seuils de score Top** — les scores 94/88/82 sont dérivés de `94 - i*6` ([data-loader.js:174](cockpit/lib/data-loader.js:174)), donc toujours les mêmes 3 valeurs selon le rang, **pas** un vrai score d'impact côté backend. À confirmer : est-ce intentionnel ou est-ce qu'un vrai score existe ailleurs ?
+- [ ] **Encart Jeux pas encore actif** : `game_releases` est vide et `igdb_tracker_sync` n'a jamais tourné avec succès, faute des secrets `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET`. Rien à faire côté Brief — dépend de la création d'un compte développeur Twitch par l'utilisateur. Sonde de survie une fois actif : trois semaines sans un seul `games_release_ack` ni `games_unwatch_franchise` après le premier événement détecté ⇒ le lot 2 (approfondissement du tracker) n'est pas lancé et l'encart est retiré.
+- [ ] **`MdtBriefCard` non documenté par cette spec** : l'encart sorties médiathèque se monte au même endroit que l'encart Jeux (voir Front — structure UI) mais n'a jamais été décrit ici — écart antérieur à cette mise à jour, non corrigé (hors périmètre de ce lot).
 
 ## Dernière MAJ
+2026-08-13 — encart Jeux vidéo (`GamesBriefCard`) ajouté au-dessus du hero, dans les deux vues (Morning Card et Brief complet) : jusqu'à 3 événements de licences suivies (annoncé / daté / sorti / annulé), fenêtre de 30 jours (contre 7 pour la Médiathèque — une annonce de jeu reste pertinente plus longtemps qu'une sortie d'épisode). Deux actions écrivent en base de façon optimiste avec rollback en cas d'échec : acquitter l'événement, ou cesser de suivre la licence (ce qui tarit ses futurs événements). Écritures protégées par un contrôle explicite du code HTTP (`window.sb.patchJSON` ne lève jamais sur 4xx/5xx). Alimenté par le pipeline `igdb_tracker_sync` (cron quotidien 08:30 UTC) — **pas encore en service** : secrets Twitch non posés au 2026-08-13, `game_releases` reste vide, l'encart ne s'affiche donc pas en production actuellement. Sonde de survie : trois semaines sans `games_release_ack` ni `games_unwatch_franchise` après le premier événement détecté ⇒ retrait de l'encart, lot 2 non lancé. Documentation ajoutée en rattrapage — la fonctionnalité (deux actions écrivantes, trois événements de télémétrie) avait été livrée sans mise à jour de spec, en violation de la règle cardinale du projet. Voir aussi [tab-gaming.md](tab-gaming.md), section « Tracker jeux — lot 1 ».
+
 2026-07-26 — le Top du jour affiché ici devient une sélection motivée et votable. Le score de pertinence affiché à côté de chaque carte valait `94 - i * 6` (rang dans la liste, rien d'autre) et a été retiré ; le motif de sélection le remplace. Vote 👍/👎 → `article_feedback` → recalibrage de `user_profile.veille_pref_rules` par `pipelines/veille_picks.py`.
 
 2026-04-30 — toggle compact/plein du hero : pastille discrète en haut à droite du hero, persistante via `localStorage.cockpit-hero-compact`. État compact divise padding et font-size titre/body par ~1.6 (titre passe de clamp(32-54px) à clamp(20-28px), padding outer de 44/32/40px à 20/28/18px). Telemetry : `hero_compact_toggled` `{state}`.

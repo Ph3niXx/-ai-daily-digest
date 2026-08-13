@@ -1,0 +1,419 @@
+#!/usr/bin/env python3
+"""IGDB tracker sync — bibliotheque de jeux, licences suivies, sorties annoncees.
+
+Quatre phases :
+  A. seed  — les jeux Steam joues deviennent des game_titles, via external_games
+  B. refresh — les collections `watched` sont re-remontees depuis IGDB
+  C. diff  — les changements deviennent des game_releases
+  D. duree — game_time_to_beat pour les titres qui n'en ont pas
+
+N'ecrit game_progress que via import_wishlist(), en ignore_dupes — jamais
+ailleurs. Cette fonction n'ecrase jamais un statut deja pose par l'utilisateur ;
+les quatre autres phases (A/B/C/D) ne touchent pas a cette table, qui reste
+la propriete de l'utilisateur.
+
+Reutilise le transport Supabase de media_tracker_common (sb_get / sb_upsert /
+sb_patch) mais PAS diff_events, qui parle episodes et statuts de diffusion.
+
+Spec : docs/superpowers/specs/2026-08-12-gaming-tracker-igdb-design.md
+
+Usage:
+    TWITCH_CLIENT_ID=xxx TWITCH_CLIENT_SECRET=yyy \\
+    SUPABASE_URL=... SUPABASE_SERVICE_KEY=... \\
+        python pipelines/igdb_tracker_sync.py [--dry-run] [--import-wishlist]
+
+Sans les secrets Twitch : message [skip] et sortie 0.
+"""
+from __future__ import annotations
+import argparse
+import os
+import sys
+from datetime import datetime, timezone
+
+try:
+    import requests
+except ImportError:
+    print("FATAL: requests not installed. pip install -r pipelines/requirements-igdb.txt")
+    sys.exit(1)
+
+from media_tracker_common import sb_env, sb_get, sb_upsert, sb_patch
+from igdb_client import get_token, IgdbClient, chunks, id_list, quoted_list
+from igdb_map import to_title_row, diff_game_events
+
+STEAM_SOURCE = 1          # external_game_sources : 1 = Steam (verifie en live 2026-08-13)
+SEED_MIN_MINUTES = 1      # tout jeu lance au moins une fois entre en bibliotheque
+WATCH_MIN_MINUTES = 600   # >= 10 h : la licence passe sous surveillance
+MAX_TITLES_PER_COLLECTION = 100
+MAX_TTB_PER_RUN = 50
+
+GAME_FIELDS = ("fields id,name,slug,summary,status,hypes,first_release_date,"
+               "cover.image_id,genres.name,platforms.name,collections,"
+               "release_dates.date,release_dates.human,release_dates.date_format;")
+
+
+def now_iso():
+    return datetime.now(timezone.utc).isoformat()
+
+
+def primary_collection(game):
+    """L'identifiant de collection d'un jeu, ou None s'il n'en a aucune.
+
+    IGDB sert `collections` (tableau) et non plus `collection` (singulier),
+    qui remonte None depuis la depreciation constatee en live le 2026-08-13 —
+    meme famille que `category` -> `external_game_source`. Sans ce changement
+    chaque jeu devenait sa propre franchise et AUCUNE suite n'aurait jamais
+    ete detectee : la raison d'etre du tracker.
+
+    Un jeu peut theoriquement appartenir a plusieurs collections ; aucun de la
+    bibliotheque de l'utilisateur n'est dans ce cas (verifie sur echantillon),
+    on prend donc la premiere.
+    """
+    cols = game.get("collections") or []
+    return cols[0] if cols else None
+
+
+# ── Phase A : seed depuis Steam ─────────────────────────────
+def steam_appids(url, headers):
+    """Les jeux Steam lances au moins une fois, dans le snapshot le plus recent."""
+    rows = sb_get(url, headers, "steam_games_snapshot",
+                  "select=appid,name,playtime_forever_minutes,snapshot_date"
+                  "&order=snapshot_date.desc&limit=2000")
+    if not rows:
+        return {}
+    latest = rows[0]["snapshot_date"]
+    return {r["appid"]: r.get("playtime_forever_minutes") or 0
+            for r in rows
+            if r["snapshot_date"] == latest
+            and (r.get("playtime_forever_minutes") or 0) >= SEED_MIN_MINUTES}
+
+
+def resolve_steam(client, appids):
+    """appid Steam -> id IGDB, via external_games. Retourne {appid: igdb_id}.
+
+    Filtre sur `external_game_source` et NON sur `category` : le premier
+    dry-run reel (2026-08-13) a traduit 0 appid sur 80 avec `category`, que
+    IGDB a fini de deprecier. Le champ a change, pas la valeur — l'endpoint
+    external_game_sources confirme que 1 designe toujours Steam. Le garde-fou
+    de la phase A (FATAL si aucune traduction) est ce qui a rendu la panne
+    visible ; sans lui le run serait reste vert avec une base vide.
+    """
+    out = {}
+    for batch in chunks(sorted(appids), 100):
+        rows = client.query("external_games",
+                            f"fields game,uid; where external_game_source = {STEAM_SOURCE} "
+                            f"& uid = {quoted_list(batch)}; limit 500;")
+        for r in rows:
+            uid, game = r.get("uid"), r.get("game")
+            if uid is None or game is None:
+                continue
+            try:
+                out[int(uid)] = game
+            except (TypeError, ValueError):
+                continue
+    return out
+
+
+def fetch_games(client, igdb_ids):
+    games = []
+    for batch in chunks(sorted(igdb_ids), 100):
+        games += client.query("games",
+                              f"{GAME_FIELDS} where id = {id_list(batch)}; limit 500;")
+    return games
+
+
+def fetch_collections(client, collection_ids):
+    out = {}
+    for batch in chunks(sorted(collection_ids), 50):
+        for c in client.query("collections",
+                              f"fields id,name,slug; where id = {id_list(batch)}; limit 500;"):
+            out[c["id"]] = c
+    return out
+
+
+def upsert_franchise(url, headers, name, collection_id, watched):
+    """Une franchise par collection IGDB ; les jeux sans collection en ont une
+    a eux seuls (igdb_collection_id null), donc pas de contrainte d'unicite
+    exploitable : on cherche d'abord par nom."""
+    if collection_id is not None:
+        rows = sb_upsert(url, headers, "game_franchises", [{
+            "igdb_collection_id": collection_id,
+            "name": name,
+            "updated_at": now_iso(),
+        }], "igdb_collection_id")
+        row = rows[0]
+    else:
+        existing = sb_get(url, headers, "game_franchises",
+                          f"igdb_collection_id=is.null&name=eq.{requests.utils.quote(name)}"
+                          "&select=id,bootstrapped_at,watched&limit=1")
+        if existing:
+            row = existing[0]
+        else:
+            row = sb_upsert(url, headers, "game_franchises",
+                            [{"name": name, "updated_at": now_iso()}], "id")[0]
+    if watched and not row.get("watched"):
+        sb_patch(url, headers, "game_franchises", f"id=eq.{row['id']}", {"watched": True})
+        row["watched"] = True
+    return row
+
+
+# ── Garde anti-inondation (pure, verrouillee par tests/test_igdb_tracker.py) ──
+def should_emit_events(franchise_id, bootstrapped_before):
+    """Une franchise dont la collection n'a jamais ete parcourue n'emet aucun
+    evenement : tous ses titres seraient « inedits » et l'inondation serait
+    garantie. `bootstrapped_before` est fige AVANT la phase A, expres."""
+    return franchise_id in bootstrapped_before
+
+
+# ── Import one-shot de gaming_wishlist ──────────────────────
+def import_wishlist(url, headers, client, dry_run):
+    """gaming_wishlist -> game_titles + game_progress(status='wishlist').
+
+    One-shot, mais idempotent : une ligne deja importee (meme igdb_id) est
+    reconnue par l'upsert et son game_progress n'est pas ecrase.
+    La table gaming_wishlist n'est PAS supprimee — on ne detruit pas des
+    donnees utilisateur sur la foi d'un script. Elle sera droppee a la main
+    une fois l'import verifie.
+    """
+    rows = sb_get(url, headers, "gaming_wishlist", "select=id,appid,title&order=title")
+    if not rows:
+        print("  wishlist vide — rien a importer")
+        return 0
+
+    resolved = {}
+    with_appid = [r["appid"] for r in rows if r.get("appid")]
+    if with_appid:
+        resolved = resolve_steam(client, set(with_appid))
+
+    imported = 0
+    for r in rows:
+        gid = resolved.get(r.get("appid"))
+        if gid is None:
+            # Pas d'appid, ou appid inconnu d'IGDB : recherche par nom.
+            name = r["title"].replace('"', "")
+            found = client.query("games", f'{GAME_FIELDS} search "{name}"; limit 1;')
+            if not found:
+                print(f"  WARN wishlist « {r['title']} » : introuvable sur IGDB — ignoree")
+                continue
+            game = found[0]
+        else:
+            games = fetch_games(client, [gid])
+            if not games:
+                print(f"  WARN wishlist « {r['title']} » : id IGDB {gid} muet — ignoree")
+                continue
+            game = games[0]
+
+        if dry_run:
+            print(f"    [dry-run] wishlist « {r['title']} » -> IGDB {game['id']} ({game.get('name')})")
+            continue
+
+        cid_col = primary_collection(game)
+        fname = game.get("name") or r["title"]
+        if cid_col:
+            cols = fetch_collections(client, [cid_col])
+            fname = (cols.get(cid_col) or {}).get("name") or fname
+        fr = upsert_franchise(url, headers, fname, cid_col, watched=True)
+        saved = sb_upsert(url, headers, "game_titles",
+                          [{**to_title_row(game), "franchise_id": fr["id"],
+                            "steam_appid": r.get("appid")}], "igdb_id")
+        # PAS de bootstrapped_at ici : l'import n'ecrit qu'UN titre et ne
+        # parcourt jamais la collection. Le tamponner ferait croire au run
+        # suivant que la collection est deja connue, et la phase B diffe-
+        # rait 100 titres contre 1 — une inondation d'« Annonce » garantie.
+        # Seule la phase B, qui parcourt reellement la collection, tamponne.
+        # ignore_dupes : ne jamais ecraser un statut deja pose par l'utilisateur.
+        sb_upsert(url, headers, "game_progress",
+                  [{"title_id": saved[0]["id"], "status": "wishlist"}],
+                  "title_id", ignore_dupes=True)
+        imported += 1
+        print(f"  wishlist « {r['title']} » -> {game.get('name')}")
+    return imported
+
+
+# Le parametre s'appelle import_wishlist_flag et non import_wishlist : sinon
+# il masquerait la fonction import_wishlist() ajoutee a la Task 6.
+def run_sync(dry_run, import_wishlist_flag=False):
+    cid = os.environ.get("TWITCH_CLIENT_ID")
+    secret = os.environ.get("TWITCH_CLIENT_SECRET")
+    if not cid or not secret:
+        print("[skip] TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET absents — rien a faire. "
+              "Cree une application sur https://dev.twitch.tv/console/apps.")
+        return 0
+
+    url, headers = sb_env()
+    client = IgdbClient(cid, get_token(cid, secret))
+
+    if import_wishlist_flag:
+        n = import_wishlist(url, headers, client, dry_run)
+        print(f"\nImport wishlist: {n} ligne(s).")
+        return 0
+
+    known_franchises = sb_get(url, headers, "game_franchises",
+                              "select=id,igdb_collection_id,name,watched,bootstrapped_at")
+    # steam_appid est INDISPENSABLE ici : c'est lui qui dit quels appids sont
+    # deja connus. Sans cette colonne, la phase A re-resout les 80 memes jeux
+    # a chaque run et brule du quota IGDB pour rien.
+    known_titles = sb_get(url, headers, "game_titles",
+                          "select=id,franchise_id,igdb_id,igdb_status,"
+                          "first_release_date,name,steam_appid")
+    titles_by_igdb = {t["igdb_id"]: t for t in known_titles}
+    # Fige l'etat AVANT ce run : une franchise peuplee pendant ce run ne doit
+    # pas emettre d'evenement, meme si on la relit plus tard dans la boucle.
+    bootstrapped_before = {f["id"] for f in known_franchises if f.get("bootstrapped_at")}
+
+    print(f"IGDB sync: {len(known_franchises)} franchises, {len(known_titles)} titres, "
+          f"dry_run={dry_run}")
+
+    # ── Phase A : seed Steam ────────────────────────────────
+    playtime = steam_appids(url, headers)
+    unknown = {a for a in playtime if not any(
+        t.get("steam_appid") == a for t in known_titles)}
+    seeded = 0
+    if unknown:
+        mapping = resolve_steam(client, unknown)
+        # Zero traduction ne veut pas dire la meme chose selon l'etat de la base.
+        # Si des titres portent deja un steam_appid, la traduction FONCTIONNE :
+        # ces appids-la sont simplement absents d'IGDB (outils, demos, jeux
+        # retires) et le resteront — ils repasseront ici a chaque run. Crier
+        # FATAL dans ce cas condamnerait le pipeline a un rouge quotidien et
+        # bloquerait les phases B/C/D pour toujours. Constate en vrai au run 2
+        # du 2026-08-13, avec 2 appids inconnus sur 80.
+        deja_resolu = any(t.get("steam_appid") for t in known_titles)
+        if not mapping and not deja_resolu:
+            # La, en revanche, rien n'a jamais ete traduit : ce n'est pas « rien
+            # de nouveau », c'est external_games qui ne repond plus comme avant.
+            # Ce garde-fou a deja paye une fois — il a revele le 2026-08-13 que
+            # `category` etait mort, la ou un run vert aurait laisse la base
+            # vide sans que personne ne s'en apercoive.
+            print(f"FATAL: aucun des {len(unknown)} appid(s) Steam n'a pu etre traduit "
+                  "en id IGDB, et la base n'en contient aucun deja resolu. Voir "
+                  "resolve_steam() : le filtre ou l'identifiant de source a "
+                  "probablement change cote IGDB — verifier avec `fields id,name;` "
+                  "sur l'endpoint external_game_sources.")
+            return 1
+        missing = sorted(unknown - set(mapping))
+        if missing:
+            print(f"  {len(missing)} appid(s) Steam inconnus d'IGDB, ignores : {missing[:10]}")
+        games = fetch_games(client, set(mapping.values()))
+        by_igdb = {g["id"]: g for g in games}
+        collections = fetch_collections(
+            client, {c for g in games if (c := primary_collection(g)) is not None})
+
+        appid_by_igdb = {v: k for k, v in mapping.items()}
+        for gid, game in by_igdb.items():
+            appid = appid_by_igdb.get(gid)
+            minutes = playtime.get(appid, 0)
+            cid_col = primary_collection(game)
+            fname = (collections.get(cid_col) or {}).get("name") or game.get("name") or f"#{gid}"
+            if dry_run:
+                print(f"    [dry-run] seed {game.get('name')} -> licence {fname} "
+                      f"({minutes} min, watched={minutes >= WATCH_MIN_MINUTES})")
+                continue
+            fr = upsert_franchise(url, headers, fname, cid_col,
+                                  minutes >= WATCH_MIN_MINUTES)
+            row = {**to_title_row(game), "franchise_id": fr["id"], "steam_appid": appid}
+            sb_upsert(url, headers, "game_titles", [row], "igdb_id")
+            # PAS de bootstrapped_at ici : le seed n'ecrit que le jeu Steam
+            # lui-meme, pas sa collection. Une licence tamponnee ici mais
+            # jamais parcourue (non surveillee au seed, sautee en phase B)
+            # serait diffee au run suivant contre son unique titre seede.
+            seeded += 1
+        print(f"  Phase A: {seeded} jeu(x) Steam ajoute(s)")
+    else:
+        print("  Phase A: rien de nouveau cote Steam")
+
+    if dry_run:
+        print("\n[dry-run] phases B/C/D non executees (elles dependent des ecritures de A).")
+        return 0
+
+    # ── Phases B et C : refresh + diff ──────────────────────
+    watched = sb_get(url, headers, "game_franchises",
+                     "watched=eq.true&igdb_collection_id=not.is.null"
+                     "&select=id,igdb_collection_id,name,bootstrapped_at")
+    total_events = 0
+    skipped = 0
+    for fr in watched:
+        try:
+            games = client.query("games",
+                                 f"{GAME_FIELDS} where collections = ({fr['igdb_collection_id']}); "
+                                 f"sort first_release_date desc; limit {MAX_TITLES_PER_COLLECTION};")
+        except Exception as exc:
+            print(f"  WARN {fr['name']}: fetch KO ({exc}) — licence sautee")
+            skipped += 1
+            continue
+        if len(games) >= MAX_TITLES_PER_COLLECTION:
+            print(f"  WARN {fr['name']}: collection plafonnee a "
+                  f"{MAX_TITLES_PER_COLLECTION} titres — des titres anciens sont ignores")
+
+        fresh = [{**to_title_row(g), "franchise_id": fr["id"]} for g in games]
+        old = {gid: t for gid, t in titles_by_igdb.items()
+               if t["franchise_id"] == fr["id"]}
+
+        try:
+            saved = sb_upsert(url, headers, "game_titles", fresh, "igdb_id")
+        except Exception as exc:
+            print(f"  WARN {fr['name']}: ecriture KO ({exc}) — licence sautee")
+            skipped += 1
+            continue
+
+        if not should_emit_events(fr["id"], bootstrapped_before):
+            sb_patch(url, headers, "game_franchises", f"id=eq.{fr['id']}",
+                     {"bootstrapped_at": now_iso()})
+            print(f"  {fr['name']}: {len(fresh)} titres (peuplement initial, aucun evenement)")
+            continue
+
+        events = diff_game_events(old, fresh)
+        if events:
+            id_by_igdb = {r["igdb_id"]: r["id"] for r in saved}
+            sb_upsert(url, headers, "game_releases", [{
+                "franchise_id": fr["id"],
+                "title_id": id_by_igdb.get(gid),
+                "event_type": etype,
+                "title": title,
+                "event_date": edate,
+            } for (etype, title, edate, gid) in events if id_by_igdb.get(gid)],
+                "title_id,event_type", ignore_dupes=True)
+        total_events += len(events)
+        print(f"  {fr['name']}: {len(fresh)} titres, {len(events)} evenement(s)")
+
+    # Un WARN par licence dans un log que personne ne lit n'est pas une alerte :
+    # si AUCUNE licence surveillee n'a pu etre rafraichie, le run a echoue.
+    if watched and skipped == len(watched):
+        print(f"FATAL: les {len(watched)} licence(s) surveillee(s) ont toutes echoue "
+              "— aucune collection rafraichie (voir les WARN ci-dessus).")
+        return 1
+
+    # ── Phase D : duree de jeu ──────────────────────────────
+    # Enrichissement facultatif : une panne ici (endpoint renomme, champ
+    # disparu) ne doit pas faire rougir un run dont A/B/C ont deja ecrit.
+    # Un rouge quotidien apprend a ignorer les rouges.
+    try:
+        sans_ttb = sb_get(url, headers, "game_titles",
+                          f"time_to_beat_minutes=is.null&select=id,igdb_id&limit={MAX_TTB_PER_RUN}")
+        if sans_ttb:
+            by_igdb = {t["igdb_id"]: t["id"] for t in sans_ttb}
+            rows = client.query("game_time_to_beats",
+                                f"fields game_id,normally; where game_id = {id_list(list(by_igdb))}; "
+                                f"limit 500;")
+            patched = 0
+            for r in rows:
+                tid = by_igdb.get(r.get("game_id"))
+                if tid and r.get("normally"):
+                    sb_patch(url, headers, "game_titles", f"id=eq.{tid}",
+                             {"time_to_beat_minutes": int(r["normally"] // 60)})
+                    patched += 1
+            print(f"  Phase D: {patched} duree(s) renseignee(s)")
+    except Exception as exc:
+        print(f"  WARN Phase D: duree de jeu KO ({exc}) — enrichissement saute")
+
+    print(f"\nDone. {seeded} jeux seedes, {total_events} evenements, "
+          f"{client.calls} appels IGDB.")
+    return 0
+
+
+if __name__ == "__main__":
+    p = argparse.ArgumentParser(description="Sync IGDB du tracker jeux.")
+    p.add_argument("--dry-run", action="store_true", help="aucune ecriture")
+    p.add_argument("--import-wishlist", action="store_true",
+                   help="importe gaming_wishlist dans game_progress (one-shot)")
+    args = p.parse_args()
+    sys.exit(run_sync(args.dry_run, args.import_wishlist))

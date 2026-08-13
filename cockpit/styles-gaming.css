@@ -965,3 +965,45 @@
 }
 .gm-wl-card { overflow: hidden; }
 .gm-wl-body { display: flex; flex-direction: column; gap: 6px; }
+
+/* ── Encart Jeux du Brief du jour (lot 1 du tracker) ───────── */
+.gmb-brief {
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin: 16px 0;
+  background: color-mix(in srgb, var(--brand) 6%, transparent);
+}
+.gmb-brief-head { font-weight: 600; margin-bottom: 10px; }
+.gmb-brief-list { list-style: none; margin: 0; padding: 0; }
+.gmb-brief-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 0;
+}
+.gmb-brief-text { flex: 1; min-width: 0; }
+.gmb-brief-tag {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--tx2);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.gmb-brief-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.gmb-brief-btn {
+  border: 1px solid var(--bd);
+  background: transparent;
+  color: inherit;
+  border-radius: 8px;
+  /* 44px de cible tactile : meme regle que la passe mobile de la mediatheque */
+  min-height: 44px;
+  padding: 0 12px;
+  cursor: pointer;
+  font-size: 13px;
+}
+.gmb-brief-btn.is-dismiss { opacity: 0.7; }
+@media (hover: hover) {
+  .gmb-brief-btn:hover { background: var(--bg2); }
+}
