@@ -23,6 +23,10 @@ const TITLES = [
   { id: "t2", igdb_id: 2, name: "Civ VI: Babylon Pack", steam_appid: null, franchise_id: "f1", genres: ["Strategy"] },
   { id: "t3", igdb_id: 3, name: "Silksong", steam_appid: null, franchise_id: "f2", genres: ["Platform"] },
   { id: "t4", igdb_id: 4, name: "Mass Effect 2", steam_appid: 24980, franchise_id: "f3", genres: ["RPG"] },
+  // t5 : titre avec steam_appid mais SANS entree dans SNAP. Scenario reel = jeu
+  // achete hier, appid rempli dans IGDB avant que le pipeline de snapshot
+  // n'ait couru. Le code doit le garder ET lui mettre minutes: 0, jamais NaN.
+  { id: "t5", igdb_id: 5, name: "Acheté hier", steam_appid: 111111, franchise_id: "f4", genres: [] },
 ];
 const PROGRESS = [
   { title_id: "t3", status: "wishlist", rating: null, platform: null },
@@ -36,7 +40,7 @@ const SNAP = [
 
 const lib = V.buildLibrary(TITLES, PROGRESS, SNAP);
 check("bibliotheque = steam_appid OU progress, jamais les freres de collection",
-      lib.map(c => c.t.id).sort(), ["t1", "t3", "t4"]);
+      lib.map(c => c.t.id).sort(), ["t1", "t3", "t4", "t5"]);
 check("le DLC sans appid ni progress est exclu",
       lib.some(c => c.t.id === "t2"), false);
 check("les heures Steam sont jointes par appid",
@@ -47,6 +51,8 @@ check("heures 14 jours jointes",
       lib.find(c => c.t.id === "t4").minutes2w, 120);
 check("un appid Steam sans titre IGDB n'invente pas de carte",
       lib.some(c => c.minutes === 50), false);
+check("titre avec appid mais sans snapshot = 0 minutes",
+      lib.find(c => c.t.id === "t5").minutes, 0);
 
 // ── statusOf : declare par l'utilisateur, jamais deduit ──────
 check("statut declare gagne", V.statusOf(lib.find(c => c.t.id === "t4")), "finished");
@@ -58,11 +64,11 @@ check("libelle de statut", V.STATUS_LABELS.dropped, "Lâché");
 
 // ── tri ──────────────────────────────────────────────────────
 check("tri par heures decroissantes",
-      V.sortLibrary(lib, "hours").map(c => c.t.id), ["t1", "t4", "t3"]);
+      V.sortLibrary(lib, "hours").map(c => c.t.id), ["t1", "t4", "t5", "t3"]);
 check("tri par nom",
-      V.sortLibrary(lib, "name").map(c => c.t.id), ["t1", "t4", "t3"]);
+      V.sortLibrary(lib, "name").map(c => c.t.id), ["t5", "t1", "t4", "t3"]);
 check("tri par note, non notes en dernier",
-      V.sortLibrary(lib, "rating").map(c => c.t.id), ["t4", "t1", "t3"]);
+      V.sortLibrary(lib, "rating").map(c => c.t.id), ["t4", "t5", "t1", "t3"]);
 
 // ── recherche locale ─────────────────────────────────────────
 check("recherche insensible a la casse", V.matchesQuery(lib.find(c => c.t.id === "t1"), "civ"), true);
@@ -75,7 +81,7 @@ check("recherche qui ne matche pas", V.matchesQuery(lib.find(c => c.t.id === "t1
 check("filtre sur un statut",
       V.filterByStatus(lib, ["finished"]).map(c => c.t.id), ["t4"]);
 check("filtre vide = tout",
-      V.filterByStatus(lib, []).length, 3);
+      V.filterByStatus(lib, []).length, 4);
 
 // ── rail « A venir » ─────────────────────────────────────────
 const RELEASES = [
