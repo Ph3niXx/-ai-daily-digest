@@ -1322,6 +1322,24 @@
         } catch (e) { return 0; }
       });
     },
+    // Tracker jeux (lot 2). game_titles porte 451 lignes dont ~357 sont des
+    // titres freres de collection : le filtrage en bibliotheque se fait dans
+    // games-view.js::buildLibrary(), pas ici — le panel a besoin de TOUS les
+    // titres pour resoudre les evenements du rail « A venir ».
+    async game_titles(){
+      return once("game_titles", () => q("game_titles", "select=*&limit=5000"));
+    },
+    async game_franchises(){
+      return once("game_franchises", () => q("game_franchises", "select=*&limit=2000"));
+    },
+    async game_progress(){
+      return once("game_progress", () => q("game_progress", "select=*&limit=2000"));
+    },
+    async game_releases(){
+      const from = new Date(Date.now() - 180 * 86400000).toISOString();
+      return once("game_releases", () =>
+        q("game_releases", `detected_at=gte.${from}&order=detected_at.desc&limit=200`));
+    },
     async weekly_analysis(){ return once("weekly_analysis_all", () => loadWeeklyAnalysis(30)); },
     async jobs_all(){ return once("jobs_all", () => q("jobs", "select=*&order=score_total.desc.nullslast&limit=300")); },
     async sport(){ return once("sport_articles", () => q("sport_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
@@ -4679,20 +4697,32 @@
         return { scrobbles, stats, top, loved, genres, insights, newArtists };
       }
       case "gaming": {
-        const [snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount] = await Promise.all([
+        const [snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount,
+               gTitles, gFranchises, gProgress, gReleases] = await Promise.all([
           T2.steam_snapshot(),
           T2.steam_stats(),
           T2.steam_achievements(),
           T2.steam_game_details().catch(() => []),
           T2.tft_rank_latest().catch(() => []),
           T2.tft_match_count().catch(() => 0),
+          T2.game_titles().catch(() => []),
+          T2.game_franchises().catch(() => []),
+          T2.game_progress().catch(() => []),
+          T2.game_releases().catch(() => []),
         ]);
-        if (window.GAMING_PERSO_DATA && (snapshot || []).length) {
-          const shape = transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount });
-          replaceShape(window.GAMING_PERSO_DATA, shape);
+        const games = { titles: gTitles, franchises: gFranchises,
+                        progress: gProgress, releases: gReleases };
+        if (window.GAMING_PERSO_DATA) {
+          // Le tracker s'affiche meme sans snapshot Steam : un utilisateur
+          // qui ne joue que sur console a une bibliotheque valide.
+          if ((snapshot || []).length) {
+            const shape = transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount });
+            replaceShape(window.GAMING_PERSO_DATA, shape);
+          }
+          window.GAMING_PERSO_DATA.games = games;
           window.GAMING_PERSO_DATA._raw = { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount };
         }
-        return { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount };
+        return { snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount, games };
       }
       case "stacks": {
         const from30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
