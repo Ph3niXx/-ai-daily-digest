@@ -65,7 +65,12 @@ class IgdbClient:
             if r.status_code == 429:
                 time.sleep(float(r.headers.get("Retry-After", 1)))
                 continue
-            r.raise_for_status()
-            time.sleep(THROTTLE_S)
-            return r.json()
+            try:
+                r.raise_for_status()
+                return r.json()
+            finally:
+                # Le rythme doit etre tenu meme quand la requete echoue : un
+                # appelant qui rattrape l'exception et relance immediatement
+                # repartirait sans espacement et brulerait le quota.
+                time.sleep(THROTTLE_S)
         raise RuntimeError(f"IGDB: 429 persistant sur {endpoint} — {body[:120]}")
