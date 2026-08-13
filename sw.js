@@ -2,7 +2,7 @@
 // Cache-first for static shell (cockpit/* + CDN libs pinned by SRI),
 // network-first for Supabase/API calls — so the app stays installable
 // and fast offline while always preferring fresh data when online.
-const CACHE = "cockpit-v111";
+const CACHE = "cockpit-v114";
 
 const STATIC = [
   "/jarvis-cockpit/",
@@ -16,7 +16,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/data-challenges.js?v=1",
   "/jarvis-cockpit/cockpit/data-claude.js?v=1",
   "/jarvis-cockpit/cockpit/data-forme.js?v=2",
-  "/jarvis-cockpit/cockpit/data-gaming-perso.js?v=2",
+  "/jarvis-cockpit/cockpit/data-gaming-perso.js?v=3",
   "/jarvis-cockpit/cockpit/data-gaming.js?v=2",
   "/jarvis-cockpit/cockpit/data-history.js?v=3",
   "/jarvis-cockpit/cockpit/data-ideas.js?v=1",
@@ -38,7 +38,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/lib/auth.js?v=2",
   "/jarvis-cockpit/cockpit/lib/boot-mediatheque.js?v=3",
   "/jarvis-cockpit/cockpit/lib/bootstrap.js?v=2",
-  "/jarvis-cockpit/cockpit/lib/data-loader.js?v=40",
+  "/jarvis-cockpit/cockpit/lib/data-loader.js?v=41",
   "/jarvis-cockpit/cockpit/lib/dialog.js?v=1",
   "/jarvis-cockpit/cockpit/lib/games-view.js?v=1",
   "/jarvis-cockpit/cockpit/lib/mediatheque-view.js?v=3",
@@ -51,7 +51,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/panel-challenges.jsx?v=5",
   "/jarvis-cockpit/cockpit/panel-evening.jsx?v=1",
   "/jarvis-cockpit/cockpit/panel-forme.jsx?v=4",
-  "/jarvis-cockpit/cockpit/panel-gaming.jsx?v=16",
+  "/jarvis-cockpit/cockpit/panel-gaming.jsx?v=17",
   "/jarvis-cockpit/cockpit/panel-history.jsx?v=5",
   "/jarvis-cockpit/cockpit/panel-ideas.jsx?v=7",
   "/jarvis-cockpit/cockpit/panel-jarvis-lab.jsx?v=7",
@@ -76,7 +76,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/styles-challenges.css?v=5",
   "/jarvis-cockpit/cockpit/styles-evening.css?v=1",
   "/jarvis-cockpit/cockpit/styles-forme.css?v=2",
-  "/jarvis-cockpit/cockpit/styles-gaming.css?v=12",
+  "/jarvis-cockpit/cockpit/styles-gaming.css?v=13",
   "/jarvis-cockpit/cockpit/styles-history.css?v=1",
   "/jarvis-cockpit/cockpit/styles-ideas.css?v=2",
   "/jarvis-cockpit/cockpit/styles-jarvis-lab.css?v=11",

@@ -2531,10 +2531,9 @@
   }
 
   // Build GAMING_PERSO_DATA shape from Steam + TFT tables.
-  // Produces the FULL shape that panel-gaming.jsx reads. Sections without
-  // a backend (backlog, wishlist, heatmap, milestones non-temps) are
-  // returned as empty arrays so the panel renders honestly instead of
-  // displaying invented data.
+  // Produces the shape that panel-gaming.jsx reads. Backlog/abandonnés/top
+  // all-time n'existent plus comme sections (remplacées par la bibliothèque
+  // à statuts, lot 2) : ne pas les recalculer ici, personne ne les lit.
   function transformGaming({ snapshot, stats, achievements, gameDetails, tftRank, tftMatchCount }){
     const now = Date.now();
     const dayMs = 24 * 3600 * 1000;
@@ -2669,21 +2668,6 @@
       });
     }
 
-    // ── Top all-time depuis snapshot trié par playtime_forever
-    const top_alltime = snap
-      .filter(g => (g.playtime_forever_minutes || 0) > 0)
-      .slice(0, 10)
-      .map((g, i) => ({
-        rank: i + 1,
-        appid: g.appid,
-        title: g.name || "—",
-        platform: "steam",
-        hours: Math.round((g.playtime_forever_minutes || 0) / 60),
-        sessions: 0,
-        since: "—",
-        cover_url: steamHeaderUrl(g.appid),
-      }));
-
     // ── Daily sessions 90 jours pour la courbe d'activité
     const daily_sessions = [];
     for (let i = 89; i >= 0; i--) {
@@ -2772,59 +2756,12 @@
       completion_rate,
     };
 
-    // ── Backlog : jeux owned avec playtime = 0, top 8
-    const backlog = snap
-      .filter(g => (g.playtime_forever_minutes || 0) === 0)
-      .slice(0, 8)
-      .map(g => {
-        const d = detailsByAppid.get(g.appid);
-        const headerUrl = steamHeaderUrl(g.appid);
-        return {
-          appid: g.appid,
-          title: g.name || "—",
-          platform: "PC",
-          platform_id: "steam",
-          genre: (d && d.genres && d.genres[0]) || "Steam",
-          cover: headerUrl ? `center/cover no-repeat url("${headerUrl}"), #1b2838` : "#1b2838",
-          cover_url: headerUrl,
-          cover_accent: "#66c0f4",
-          hltb: 0,
-          acquired: "—",
-          acquired_how: "Steam · jamais lancé",
-          hype: 5,
-          reason: "Dans ta bibliothèque, jamais ouvert.",
-          priority: "shame",
-          shame_years: null,
-        };
-      });
-
-    // ── Jeux abandonnés : > 60min cumulées mais 0min sur 14j
-    // (commencés sérieusement puis lâchés — bons candidats à finir ou désinstaller)
-    const abandoned = snap
-      .filter(g => (g.playtime_forever_minutes || 0) >= 60 && (g.playtime_2weeks_minutes || 0) === 0)
-      .sort((a, b) => (b.playtime_forever_minutes || 0) - (a.playtime_forever_minutes || 0))
-      .slice(0, 12)
-      .map(g => {
-        const d = detailsByAppid.get(g.appid);
-        const hoursPlayed = Math.round((g.playtime_forever_minutes || 0) / 60);
-        return {
-          appid: g.appid,
-          title: g.name || "—",
-          hours_played: hoursPlayed,
-          genre: (d && d.genres && d.genres[0]) || "—",
-          header: steamHeaderUrl(g.appid),
-        };
-      });
-
     return {
       profiles,
       totals,
       in_progress,
-      backlog,
-      abandoned,
       daily_sessions,
       genres_30d,
-      top_alltime,
       recent_achievements,
       milestones,
       _meta: {

@@ -4,7 +4,7 @@
 // Hero : last session + 4 plateformes
 // §1 En cours — cards avec progression HLTB
 // Ma bibliothèque — statuts déclarés (remplace backlog/abandonnés/top, lot 2)
-// §3 Activité (courbe 180j + heatmap 24×7)
+// §3 Activité (courbe 90j)
 // §4 Genres
 // §7 Achievements récents
 // §8 2026 milestones
@@ -13,6 +13,10 @@
 const { useState: useGmState, useMemo: useGmMemo } = React;
 
 const GM_STATUS_ORDER = ["playing", "wishlist", "finished", "dropped", "unqualified"];
+
+// Palette §4 Genres — mêmes teintes que GENRE_PALETTE côté data-loader.js
+// (transformGaming), réappliquée ici au calcul local genres14j.
+const GM_GENRE_PALETTE = ["#3a1e2e", "#2a1e38", "#2a3d2e", "#3a2a1a", "#1a2a3a", "#2a1e2e", "#555"];
 
 // La bibliotheque n'affiche JAMAIS de compteur de « jeux a qualifier » :
 // 86 jeux sans statut est un etat normal, pas une dette. Un arriere affiche
@@ -143,39 +147,6 @@ function GmUpcoming({ items, onAck, onUnwatch }) {
           </div>
         </article>
       ))}
-    </div>
-  );
-}
-
-// ── Heatmap ─────────────────────────────────────────
-function GmHeatmap({ grid }) {
-  const DOW = ["L", "M", "M", "J", "V", "S", "D"];
-  const reordered = [1, 2, 3, 4, 5, 6, 0].map((i) => grid[i]);
-  const max = Math.max(...grid.flat());
-  const color = (v) => {
-    if (v < 0.5) return "var(--bd)";
-    const t = Math.min(1, v / max);
-    const alpha = 0.15 + t * 0.85;
-    return `color-mix(in srgb, var(--brand) ${Math.round(alpha * 100)}%, transparent)`;
-  };
-  return (
-    <div>
-      <div className="gm-heatmap-grid">
-        {reordered.map((row, r) => (
-          <React.Fragment key={r}>
-            <div className="gm-heatmap-row-label">{DOW[r]}</div>
-            {row.map((v, h) => (
-              <div key={h} className="gm-heatmap-cell" style={{ background: color(v) }} title={`${DOW[r]} ${h}h · ${v.toFixed(1)}h moy.`} />
-            ))}
-          </React.Fragment>
-        ))}
-      </div>
-      <div className="gm-heatmap-hours">
-        <span></span>
-        {Array.from({ length: 24 }, (_, h) => (
-          <span key={h}>{h % 3 === 0 ? h : ""}</span>
-        ))}
-      </div>
     </div>
   );
 }
@@ -371,6 +342,22 @@ function PanelGaming({ onNavigate }) {
   const library = React.useMemo(
     () => window.gamesView.buildLibrary(G.titles, progressRows, (D && D._raw && D._raw.snapshot) || []),
     [G.titles, progressRows, D]);
+
+  // IGDB renseigne les genres de tous les titres, la ou steam_game_details
+  // plafonne a 5 lignes sur 102 — c'est ce qui affichait « 100 % Autre ».
+  const genres14j = React.useMemo(() => {
+    const tally = new Map();
+    for (const c of library) {
+      if (!c.minutes2w) continue;
+      const gs = (c.t.genres || []).length ? c.t.genres : ["Autre"];
+      for (const g of gs) tally.set(g, (tally.get(g) || 0) + c.minutes2w / gs.length);
+    }
+    const total = [...tally.values()].reduce((a, b) => a + b, 0);
+    return [...tally.entries()]
+      .map(([name, min]) => ({ name, minutes: Math.round(min),
+                               pct: total ? Math.round((min / total) * 100) : 0 }))
+      .sort((a, b) => b.minutes - a.minutes);
+  }, [library]);
 
   // On stocke l'ID et non l'objet : les cartes sont reconstruites a chaque
   // ecriture (library est un useMemo sur progressRows), donc un objet capture
@@ -777,25 +764,6 @@ function PanelGaming({ onNavigate }) {
             ? <GmActivityChart series={D.daily_sessions} range={chartRange} />
             : <div className="gm-empty">Pas de stats quotidiennes — pipeline trop récent.</div>}
         </div>
-        {D.heatmap && Array.isArray(D.heatmap) ? (
-          <div className="mz-heatmap">
-            <div className="mz-heatmap-head">
-              <div className="mz-heatmap-title">Heure × jour · moyenne 30j</div>
-              <div className="mz-heatmap-legend">
-                moins
-                <div className="mz-heatmap-scale">
-                  <span style={{ background: "var(--bd)" }}></span>
-                  <span style={{ background: "color-mix(in srgb, var(--brand) 25%, transparent)" }}></span>
-                  <span style={{ background: "color-mix(in srgb, var(--brand) 50%, transparent)" }}></span>
-                  <span style={{ background: "color-mix(in srgb, var(--brand) 75%, transparent)" }}></span>
-                  <span style={{ background: "var(--brand)" }}></span>
-                </div>
-                plus
-              </div>
-            </div>
-            <GmHeatmap grid={D.heatmap} />
-          </div>
-        ) : null}
       </section>
 
       {/* ══ §4 GENRES ══ */}
@@ -803,32 +771,32 @@ function PanelGaming({ onNavigate }) {
         <div className="gm-section-head">
           <span className="gm-section-num">04</span>
           <h2 className="gm-section-title">Genres · <em>répartition 14j</em></h2>
-          <span className="gm-section-meta">basé sur playtime_2weeks Steam · {(D.genres_30d || []).reduce((a, g) => a + (g.hours || 0), 0)}h</span>
+          <span className="gm-section-meta">basé sur playtime_2weeks Steam · {Math.round(genres14j.reduce((a, g) => a + g.minutes, 0) / 60)}h</span>
         </div>
-        {(D.genres_30d || []).length === 0 ? (
-          <div className="gm-empty">Pas assez de données enrichies (steam_game_details quasi vide).</div>
+        {genres14j.length === 0 ? (
+          <div className="gm-empty">Rien joué ces 14 derniers jours.</div>
         ) : (
         <>
         <div className="gm-genre-bar">
-          {D.genres_30d.map((g) => (
+          {genres14j.map((g, i) => (
             <div
-              key={g.label}
+              key={g.name}
               className="gm-genre-bar-seg"
-              style={{ flex: g.share, background: g.color }}
-              title={`${g.label} · ${(g.share * 100).toFixed(0)}% · ${g.hours}h`}
+              style={{ flex: g.pct, background: GM_GENRE_PALETTE[i % GM_GENRE_PALETTE.length] }}
+              title={`${g.name} · ${g.pct}% · ${Math.round(g.minutes / 60)}h`}
             >
-              {g.share > 0.06 ? `${(g.share * 100).toFixed(0)}%` : ""}
+              {g.pct > 6 ? `${g.pct}%` : ""}
             </div>
           ))}
         </div>
         <div className="gm-genre-split">
           <div className="gm-genre-table">
-            {D.genres_30d.map((g) => (
-              <div className="gm-genre-row" key={g.label}>
-                <div className="gm-genre-dot" style={{ background: g.color }}></div>
-                <div className="gm-genre-label">{g.label}</div>
-                <div className="gm-genre-share">{(g.share * 100).toFixed(0)}%</div>
-                <div className="gm-genre-hrs">{g.hours}h</div>
+            {genres14j.map((g, i) => (
+              <div className="gm-genre-row" key={g.name}>
+                <div className="gm-genre-dot" style={{ background: GM_GENRE_PALETTE[i % GM_GENRE_PALETTE.length] }}></div>
+                <div className="gm-genre-label">{g.name}</div>
+                <div className="gm-genre-share">{g.pct}%</div>
+                <div className="gm-genre-hrs">{Math.round(g.minutes / 60)}h</div>
               </div>
             ))}
           </div>
@@ -842,8 +810,9 @@ function PanelGaming({ onNavigate }) {
               textWrap: "pretty"
             }}>
               Répartition calculée depuis le temps de jeu Steam des 14 derniers jours,
-              croisé avec le genre principal récupéré via la Store API.
-              Les jeux non enrichis tombent dans "Autre".
+              pondérée par les genres IGDB de chaque titre de ta bibliothèque. Un jeu
+              multi-genres partage ses minutes entre eux ; à défaut de genre connu, il
+              tombe dans « Autre ».
             </p>
           </div>
         </div>
