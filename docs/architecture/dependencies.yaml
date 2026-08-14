@@ -213,6 +213,12 @@ panels:
     # (acknowledged). Cette entrée reads/writes
     # était restée non mise à jour depuis lot 1 jusqu'au 2026-08-13 (Task 8
     # du lot 2) — corrigée à cette occasion, voir docs/specs/tab-gaming.md.
+    # Depuis le 2026-08-14, game_releases est aussi écrite en INSERT par ce
+    # panel (et plus seulement en PATCH acknowledged) : syncFranchiseUpcoming()
+    # crée les événements « À venir » d'une licence dès qu'on la suit, sans
+    # attendre le cron de 08:30 UTC. Deuxième producteur de la table, aux
+    # mêmes clés (UNIQUE title_id,event_type) et au même libellé que le
+    # pipeline — voir ADR-36.
 
   - id: mediatheque
     file: cockpit/panel-mediatheque.jsx

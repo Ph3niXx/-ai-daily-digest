@@ -135,6 +135,83 @@
     });
   }
 
+  // ── Boucle « À venir » à l'ajout ─────────────────────────────
+  //
+  // Le pipeline ne parcourt les collections qu'à 08:30 UTC : jusqu'au sync
+  // suivant, une licence qu'on vient de suivre n'a aucun événement et le rail
+  // reste vide. Constaté le 2026-08-14 — jeu ajouté, prochaine sortie de la
+  // licence invisible jusqu'au lendemain. Le front refait donc ici, pour la
+  // seule licence concernée, ce que la phase B fera pour toutes cette nuit.
+  //
+  // Ces trois fonctions RÉPLIQUENT pipelines/igdb_map.py (is_upcoming,
+  // to_title_row, upcoming_events). Deux implémentations parce que les deux
+  // écrivent dans game_titles et game_releases. Les cas de test sont les mêmes
+  // des deux côtés (tests/test_igdb_map.py, tests/test_games_view.mjs) :
+  // toucher l'une sans l'autre les fait diverger en silence.
+  const TERMINAL_STATUS = ["cancelled", "delisted", "offline"];
+  const UPCOMING_MIN_HYPES = 20;
+
+  // La DATE fait foi, pas `status` : IGDB laisse status à NULL sur la majorité
+  // de son catalogue, y compris les jeux à venir, et le mapping retombe alors
+  // sur « released ». status ne sert qu'à écarter les impasses (annulé, retiré,
+  // serveurs fermés). Sans date, `hypes` sépare les annonces sans calendrier
+  // des vieilles fiches mortes.
+  function isUpcoming(row, today) {
+    if (TERMINAL_STATUS.indexOf(row && row.igdb_status) !== -1) return false;
+    const date = row && row.first_release_date;
+    if (date) return String(date) > String(today);
+    return ((row && row.hypes) || 0) >= UPCOMING_MIN_HYPES;
+  }
+
+  // Un résultat de l'Edge Function -> une ligne game_titles. Mêmes colonnes que
+  // to_title_row() côté pipeline : le front écrit dans la même table, un run
+  // ultérieur doit pouvoir écraser la ligne sans rien perdre ni rien changer.
+  function titleRow(g, franchiseId) {
+    return {
+      franchise_id: franchiseId,
+      igdb_id: g.id,
+      name: g.name,
+      slug: g.slug || null,
+      summary: g.summary || null,
+      cover_url: g.cover_url || null,
+      genres: g.genres || [],
+      platforms: g.platforms || [],
+      igdb_status: g.igdb_status || null,
+      first_release_date: g.first_release_date || null,
+      release_human: g.release_human || null,
+      release_precision: g.release_precision || null,
+      hypes: g.hypes == null ? null : g.hypes,
+    };
+  }
+
+  // Les lignes game_releases des titres pas encore sortis. `announced` et le
+  // libellé « À venir : » sont ceux du pipeline : l'unicité (title_id,
+  // event_type) fait que le sync de la nuit retombe sur la même ligne au lieu
+  // d'en créer une seconde — et qu'un événement déjà acquitté ne ressuscite pas.
+  function announcedRows(savedTitles, today) {
+    return (savedTitles || [])
+      .filter((t) => t && t.id && t.franchise_id && isUpcoming(t, today))
+      .map((t) => ({
+        franchise_id: t.franchise_id,
+        title_id: t.id,
+        event_type: "announced",
+        title: "À venir : " + (t.name || "#" + t.igdb_id),
+        event_date: t.first_release_date || null,
+      }));
+  }
+
+  // Fusion par id pour l'état local du panel : un upsert renvoie aussi bien des
+  // lignes inédites que des lignes déjà présentes. Concaténer créerait des
+  // doublons dans la bibliothèque et dans le rail.
+  function mergeById(current, rows) {
+    const byId = new Map((current || []).map((r) => [r.id, r]));
+    for (const r of rows || []) {
+      if (!r || r.id == null) continue;
+      byId.set(r.id, Object.assign({}, byId.get(r.id) || {}, r));
+    }
+    return Array.from(byId.values());
+  }
+
   function hoursLabel(minutes) {
     const m = minutes || 0;
     if (!m) return "jamais lancé";
@@ -157,6 +234,7 @@
     STATUS_LABELS, buildLibrary, statusOf, ratingOf, sortLibrary,
     normalize, matchesQuery, filterByStatus, buildUpcoming,
     platformOf, filterByPlatform,
+    isUpcoming, titleRow, announcedRows, mergeById,
     hoursLabel, ttbLabel, suggestPlaying,
   };
   if (typeof window !== "undefined") window.gamesView = Object.assign(window.gamesView || {}, api);

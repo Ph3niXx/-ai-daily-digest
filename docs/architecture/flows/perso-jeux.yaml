@@ -1,10 +1,10 @@
 # Flow : Tracker jeux video (IGDB + seed Steam)
-# STUB — voir pipelines.yaml::igdb_tracker_sync.
+# Voir pipelines.yaml::igdb_tracker_sync pour le detail du cron.
 
 id: perso-jeux
 label: "Tracker jeux (bibliotheque, licences suivies, sorties annoncees)"
 domain: perso
-status: todo
+status: active
 
 source_api:
   - name: "IGDB v4"
@@ -35,3 +35,14 @@ panels:
     detail: "Encart GamesBriefCard (game_releases non acquittes < 30j, Tier 1) — seul point de contact du lot 1"
   - id: gaming
     detail: "Lot 2 implemente (bibliotheque a statuts, rail « A venir ») — plus conditionne a la sonde de survie depuis son lancement, cf. docs/specs/tab-gaming.md"
+
+# Le pipeline n'est pas le seul producteur de game_releases depuis le
+# 2026-08-14 (ADR-36) : suivre une licence depuis l'onglet Gaming (ajout d'un
+# jeu console, ou case « m'avertir ») declenche un rattrapage immediat cote
+# front, sans quoi le rail « A venir » reste vide jusqu'au cron du lendemain.
+front_write_path:
+  trigger: "cockpit/panel-gaming.jsx::syncFranchiseUpcoming() — ajout d'un jeu console ou activation du suivi d'une licence"
+  proxy: "supabase/functions/igdb-proxy (mode ?collection=<id>) — verify_jwt, lecture seule cote IGDB, aucune ecriture en base"
+  scope: "licences watched, rattachees a une collection IGDB, et jamais parcourues (bootstrapped_at null) — la ou le pipeline n'a encore rien a dire"
+  writes: "game_titles (upsert on igdb_id) puis game_releases (upsert ignore-duplicates on title_id,event_type), avec le JWT de l'utilisateur, donc soumis a la RLS"
+  never: "ne pose jamais bootstrapped_at — ce tampon signifie « collection parcourue en entier » et reste la propriete de la phase B"

@@ -247,6 +247,16 @@ async function gmSearchIgdb(q) {
   return r.json();
 }
 
+// Les titres pas encore sortis d'une licence, via la meme Edge Function.
+// Sert a combler le trou entre l'ajout d'un jeu et le sync du lendemain.
+async function gmFetchCollection(collectionId) {
+  const r = await fetch(
+    window.SUPABASE_URL + "/functions/v1/igdb-proxy?collection=" + encodeURIComponent(collectionId),
+    { headers: window.sb.headers });
+  if (!r.ok) throw new Error(String(r.status));
+  return r.json();
+}
+
 // Ouvre la bibliothèque aux jeux console (PlayStation/Xbox/Switch) : seul
 // Steam alimente le tracker automatiquement, ce composant couvre le reste.
 function GmAddGame({ onAdded }) {
@@ -446,6 +456,22 @@ function PanelGaming({ onNavigate }) {
       await gmPatch("/rest/v1/game_franchises?id=eq." + franchiseId, { watched });
       window.track && window.track("games_watch_toggle", { watched });
       gmInvalidateTracker();
+      setFranchisesLocal((cur) =>
+        window.gamesView.mergeById(cur || G.franchises, [{ id: franchiseId, watched }]));
+      // Cocher « m'avertir » a le meme trou de 24 h que l'ajout d'un jeu : la
+      // licence devient suivie mais le pipeline ne la parcourra qu'a 08:30 UTC,
+      // donc le rail reste vide alors que l'utilisateur vient tout juste de
+      // demander a etre averti. Meme rattrapage, meme indulgence en cas de
+      // panne IGDB — le suivi, lui, est enregistre.
+      if (watched) {
+        const fr = (franchises || []).find((f) => f.id === franchiseId);
+        try {
+          await syncFranchiseUpcoming({ ...fr, watched: true });
+        } catch (ex) {
+          window.track && window.track("error_shown",
+            { context: "games_upcoming_sync", message: ex.message });
+        }
+      }
     } catch (e) {
       window.cockpitToast && window.cockpitToast("Suivi de licence non enregistré — réessaie.", { kind: "error" });
       window.track && window.track("error_shown", { context: "games_watch", message: e.message });
@@ -490,6 +516,73 @@ function PanelGaming({ onNavigate }) {
     if (dl && dl.invalidateCache) dl.invalidateCache("game_");
   }
 
+  // Upsert PostgREST. window.sb.postJSON ne sait pas poser on_conflict, et les
+  // deux tables ecrites ici ont une contrainte d'unicite qu'un POST simple
+  // ferait echouer en 409 : game_titles.igdb_id (le titre peut deja avoir ete
+  // seede par le pipeline) et game_releases(title_id, event_type).
+  //
+  // « ignore-duplicates » sur game_releases, jamais merge : une ligne existante
+  // peut porter acknowledged=true, et l'ecraser ferait ressusciter dans le rail
+  // une annonce que l'utilisateur a deja ecartee. Avec return=representation,
+  // seules les lignes REELLEMENT inserees reviennent — exactement ce qu'il faut
+  // pousser dans l'etat local.
+  async function gmUpsert(table, rows, onConflict, resolution) {
+    const r = await fetch(
+      window.SUPABASE_URL + "/rest/v1/" + table + "?on_conflict=" + onConflict,
+      { method: "POST",
+        headers: { ...window.sb.headers, "Content-Type": "application/json",
+                   Prefer: "resolution=" + (resolution || "merge-duplicates") +
+                           ",return=representation" },
+        body: JSON.stringify(rows) });
+    if (!r.ok) throw new Error(String(r.status));
+    return r.json();
+  }
+
+  // Ecrit les evenements « A venir » des titres passes, et les rend visibles
+  // dans l'instant. Renvoie le nombre d'evenements reellement crees.
+  async function pushUpcoming(savedTitles, today) {
+    const V = window.gamesView;
+    setTitlesLocal((cur) => V.mergeById(cur || G.titles, savedTitles));
+    const rows = V.announcedRows(savedTitles, today);
+    if (!rows.length) return 0;
+    const created = await gmUpsert("game_releases", rows, "title_id,event_type", "ignore-duplicates");
+    setRelLocal((cur) => V.mergeById(cur || G.releases, created));
+    return created.length;
+  }
+
+  // Comble le trou entre « je suis cette licence » et le sync du lendemain.
+  //
+  // Le pipeline ne parcourt les collections qu'a 08:30 UTC. Jusque-la, une
+  // licence tout juste suivie n'a aucun evenement et le rail reste vide : jeu
+  // ajoute, prochaine sortie de la licence invisible pendant 24 h — le defaut
+  // constate le 2026-08-14. On fait donc ici, pour cette seule licence, ce que
+  // la phase B fera pour toutes cette nuit.
+  //
+  // Trois gardes, dans cet ordre :
+  //  - `watched` : le pipeline ne parcourt que les licences suivies, le front
+  //    ne doit pas etre plus bavard que lui.
+  //  - une collection IGDB : sans elle il n'y a pas de licence a parcourir.
+  //  - `bootstrapped_at` vide : si le pipeline a deja parcouru la collection,
+  //    ses evenements « A venir » sont deja en base et il n'y a rien a rattraper.
+  //
+  // Ne pose JAMAIS bootstrapped_at : ce tampon signifie « collection parcourue
+  // en entier », or on ne remonte ici que les titres a venir. Le poser ferait
+  // croire au pipeline que le peuplement initial a eu lieu, et sa phase C
+  // differerait la collection complete contre ces quelques titres.
+  async function syncFranchiseUpcoming(fr) {
+    const V = window.gamesView;
+    if (!fr || !fr.watched || fr.igdb_collection_id == null || fr.bootstrapped_at) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const games = await gmFetchCollection(fr.igdb_collection_id);
+    const rows = (games || [])
+      .map((g) => V.titleRow(g, fr.id))
+      .filter((r) => V.isUpcoming(r, today));
+    if (!rows.length) return;
+    const saved = await gmUpsert("game_titles", rows, "igdb_id");
+    const n = await pushUpcoming(saved, today);
+    if (n) window.track && window.track("games_upcoming_synced", { found: n });
+  }
+
   // Un jeu console ajoute a la main : on cree sa franchise si sa collection
   // IGDB est inconnue, puis son titre, puis son statut. bootstrapped_at
   // reste NULL — seule la phase B du pipeline, qui parcourt reellement la
@@ -513,13 +606,14 @@ function PanelGaming({ onNavigate }) {
         // Pousse des sa creation, pas a la fin : si la suite echoue, une
         // nouvelle tentative doit retrouver cette franchise plutot que d'en
         // recreer une et heurter le UNIQUE sur igdb_collection_id.
-        setFranchisesLocal((franchises || []).concat([fr]));
+        setFranchisesLocal((cur) => window.gamesView.mergeById(cur || G.franchises, [fr]));
       }
+      // Meme fabrique de ligne que le rattrapage de collection ci-dessous et
+      // que to_title_row() cote pipeline : statut, precision de date et hypes
+      // compris, sans quoi isUpcoming() ne saurait pas trancher sur ce titre.
       const t = await window.sb.postJSON(
         window.SUPABASE_URL + "/rest/v1/game_titles",
-        { franchise_id: fr.id, igdb_id: g.id, name: g.name, cover_url: g.cover_url,
-          genres: g.genres, platforms: g.platforms,
-          first_release_date: g.first_release_date, release_human: g.release_human });
+        window.gamesView.titleRow(g, fr.id));
       createdTitleId = t[0].id;
       await window.sb.postJSON(window.SUPABASE_URL + "/rest/v1/game_progress",
                                { title_id: t[0].id, status: "wishlist" });
@@ -528,9 +622,25 @@ function PanelGaming({ onNavigate }) {
       // rendre les lignes creees (Prefer: return=representation), on les pousse
       // dans l'etat local et la carte apparait dans l'instant. gmInvalidateTracker
       // garantit qu'au prochain retour sur l'onglet la verite reviendra du serveur.
-      setTitlesLocal((titles || []).concat([t[0]]));
-      setProgLocal((progressRows || []).concat([{ title_id: t[0].id, status: "wishlist" }]));
+      setTitlesLocal((cur) => window.gamesView.mergeById(cur || G.titles, [t[0]]));
+      setProgLocal((cur) => (cur || G.progress || []).concat([{ title_id: t[0].id, status: "wishlist" }]));
       gmInvalidateTracker();
+      // Le rail « A venir » doit dire la verite tout de suite, pas demain : le
+      // jeu ajoute s'il n'est pas encore sorti, puis ses freres de collection.
+      //
+      // Son propre try, et c'est essentiel : l'ajout a deja reussi et ses
+      // lignes sont ecrites. Laisser une panne IGDB remonter au catch principal
+      // declencherait la suppression compensatoire et afficherait « Ajout
+      // impossible » alors que le jeu EST dans la bibliotheque. On avale donc,
+      // et le sync de la nuit rattrapera.
+      try {
+        const today = new Date().toISOString().slice(0, 10);
+        await pushUpcoming([t[0]], today);
+        await syncFranchiseUpcoming(fr);
+      } catch (e) {
+        window.track && window.track("error_shown",
+          { context: "games_upcoming_sync", message: e.message });
+      }
       return { ok: true };
     } catch (e) {
       // Le titre existe mais son statut n'a pas pu etre ecrit : sans ligne de

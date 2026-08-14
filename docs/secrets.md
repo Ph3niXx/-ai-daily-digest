@@ -95,12 +95,13 @@ IGDB v4 s'authentifie via OAuth `client_credentials` Twitch (IGDB appartient à 
 
 ### Edge Function `igdb-proxy`
 
-Proxy de recherche IGDB pour l'onglet Gaming ([supabase/functions/igdb-proxy/index.ts](../supabase/functions/igdb-proxy/index.ts)) : IGDB refuse les requêtes navigateur (CORS) et exige un client secret, la recherche front ne peut donc pas l'appeler directement.
+Proxy IGDB pour l'onglet Gaming ([supabase/functions/igdb-proxy/index.ts](../supabase/functions/igdb-proxy/index.ts)) : IGDB refuse les requêtes navigateur (CORS) et exige un client secret, le front ne peut donc pas l'appeler directement. Deux modes : `?q=<texte>` (recherche, ajout d'un jeu console) et `?collection=<id>` (les titres pas encore sortis d'une licence, pour le rattrapage immédiat du rail « À venir » — ADR-36).
 
 - Secrets lus via `Deno.env.get("TWITCH_CLIENT_ID")` / `Deno.env.get("TWITCH_CLIENT_SECRET")` — jamais en dur dans le source (ce dépôt est public).
-- `verify_jwt: true` au déploiement — obligatoire, voir la leçon `jsearch-proxy` ci-dessous.
+- `verify_jwt: true` au déploiement — obligatoire, voir la leçon `jsearch-proxy` ci-dessous. ⚠️ **`verify_jwt` ne suffit pas** : il garantit que la *signature* du jeton a été validée par la passerelle, pas que l'appelant est un utilisateur connecté. La publishable key du projet — publique, en dur dans [cockpit/lib/supabase.js](../cockpit/lib/supabase.js), dans un dépôt public — passe ce filtre. Vérifié en live le 2026-08-14 : elle seule suffisait à obtenir une réponse complète. La fonction contrôle donc elle-même le rôle porté par le jeton (`isAuthenticatedUser()`, refus en 403 si ≠ `authenticated`). Décoder la charge utile sans revalider la signature est sûr **à cet endroit précis** parce que la passerelle l'a déjà fait en amont — un jeton forgé prétendant `role: authenticated` est rejeté en 401 avant d'atteindre le code (vérifié). **Toute future Edge Function doit reprendre ce contrôle** : `verify_jwt` seul laisse la porte ouverte à quiconque lit le dépôt.
 - CORS borné à `https://ph3nixx.github.io` (pas `*`).
 - Token applicatif Twitch (`client_credentials`) mis en cache en mémoire (~60 j) pour ne pas brûler de quota à chaque requête.
+- **Lecture seule** : la fonction n'écrit rien en base et n'utilise aucune clé Supabase. Les insertions déclenchées par le mode `?collection=` sont faites par le front avec le JWT de l'utilisateur, donc soumises à la RLS — la fonction ne détient pas de pouvoir d'écriture à détourner.
 
 ## Jobs Radar — routine Claude Code distante (aucun secret GitHub)
 
