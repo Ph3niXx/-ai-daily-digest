@@ -48,11 +48,9 @@ jobs:
           if [ -n "$EXISTING" ]; then
             gh issue comment "$EXISTING" --body "Nouvel échec le $(date -u +%Y-%m-%d) — $URL"
           else
-            gh issue create --title "$TITLE" \
-              --body "Le workflow \`backup-supabase\` a échoué. Aucune sauvegarde n'a été produite cette semaine.
-
-Run : $URL
-
-Cette issue reste ouverte tant que le problème persiste ; referme-la une fois un run réussi." \
-              --label "" || true
+            BODY=$(printf '%s\n\n%s\n\n%s' \
+              "Le workflow backup-supabase a échoué. Aucune sauvegarde n'a été produite cette semaine." \
+              "Run : $URL" \
+              "Cette issue reste ouverte tant que le problème persiste ; referme-la après un run réussi.")
+            gh issue create --title "$TITLE" --body "$BODY"
           fi
