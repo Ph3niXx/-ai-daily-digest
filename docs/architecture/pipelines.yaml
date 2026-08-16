@@ -453,6 +453,52 @@ pipelines:
     # pipeline_health.checked_at à l'heure courante (cf. PipelineHealthBanner).
     notes: "Tourne à 09:00 UTC, après le dernier cron du matin (07:45), donc sur un état stabilisé. Sort en code 0 même quand des pipelines sont dégradés : il rapporte l'état, il ne le subit pas."
 
+  - id: backup_supabase
+    name: "Sauvegarde des données saisies"
+    cron: "0 4 * * 0"
+    human_time: "Hebdomadaire dimanche 04:00 UTC"
+    workflow_file: ".github/workflows/backup-supabase.yml"
+    script: "pipelines/backup_supabase.py"
+    input_api: "PostgREST (service key) — aucun appel externe"
+    output_tables: []
+    read_tables:
+      - jobs
+      - job_scans
+      - user_profile
+      - user_profile_history
+      - profile_facts
+      - skill_radar
+      - business_ideas
+      - commitments
+      - uncomfortable_questions
+      - media_entries
+      - media_progress
+      - media_franchises
+      - media_releases
+      - game_titles
+      - game_progress
+      - game_franchises
+      - game_releases
+      - gaming_wishlist
+      - jp_seen
+      - article_feedback
+      - challenge_attempts
+      - history_notes
+    avg_duration_s: 30
+    budget_usd: 0
+    status: active
+    # Pas de bloc `health` : ce pipeline n'écrit aucune table, donc la fraîcheur
+    # d'une donnée ne peut pas servir de sonde. Il se surveille autrement — le
+    # workflow ouvre une issue GitHub sur `if: failure()`, et le script sort en
+    # code 1 si une seule table échoue ou si le total est vide.
+    notes: >-
+      Périmètre volontairement restreint aux données qu'aucun pipeline ne sait refabriquer
+      (saisies utilisateur + sortie de la routine Jobs Radar). Les corpus RSS, scrobbles,
+      snapshots Steam et l'index vectoriel de Jarvis sont exclus : ils se régénèrent depuis
+      leur source. Sortie = un artefact de run conservé 90 jours (~3 Mo), pas une table.
+      Transport PostgREST et non pg_dump, faute de mot de passe Postgres dans les secrets.
+      Introduit par ADR-37 (audit du 2026-08-15).
+
 # Pipelines locaux (pas GitHub Actions) — listés ici pour la vue d'ensemble,
 # mais non inclus dans la timeline 24h côté UI.
 local_pipelines:

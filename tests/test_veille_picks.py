@@ -7,6 +7,11 @@ l'échec arriverait à l'écriture, loin de sa cause. On tranche ici.
 Run: python tests/test_veille_picks.py
 """
 import sys
+
+# La console Windows est en cp1252 : sans ca, un caractere hors Latin-1 dans un
+# libelle de check fait planter le test au print, alors qu'il est en train de reussir.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 import types
 from pathlib import Path
 

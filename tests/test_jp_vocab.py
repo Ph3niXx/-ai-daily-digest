@@ -7,6 +7,11 @@ donc la règle est mécanique : tout mot absent du titre natif est jeté.
 Run: python tests/test_jp_vocab.py
 """
 import sys
+
+# La console Windows est en cp1252 : sans ca, un caractere hors Latin-1 dans un
+# libelle de check fait planter le test au print, alors qu'il est en train de reussir.
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pipelines"))

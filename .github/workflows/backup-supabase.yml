@@ -1,0 +1,58 @@
+name: Sauvegarde — données saisies
+
+on:
+  schedule:
+    # Hebdomadaire, dimanche à 4h UTC (6h Paris), avant les pipelines du matin
+    - cron: '0 4 * * 0'
+  workflow_dispatch:
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Dump user-authored tables
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python pipelines/backup_supabase.py --out backup
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup-${{ github.run_number }}
+          path: backup/
+          retention-days: 90
+          if-no-files-found: error
+
+      # Une sauvegarde dont l'échec passe inaperçu n'est pas une sauvegarde.
+      # L'issue est unique et se rouvre/commente à chaque semaine en échec.
+      - name: Signal failure via a GitHub issue
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="[backup] La sauvegarde hebdomadaire a échoué"
+          URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          EXISTING=$(gh issue list --state open --search "$TITLE in:title" --json number --jq '.[0].number')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "Nouvel échec le $(date -u +%Y-%m-%d) — $URL"
+          else
+            gh issue create --title "$TITLE" \
+              --body "Le workflow \`backup-supabase\` a échoué. Aucune sauvegarde n'a été produite cette semaine.
+
+Run : $URL
+
+Cette issue reste ouverte tant que le problème persiste ; referme-la une fois un run réussi." \
+              --label "" || true
+          fi

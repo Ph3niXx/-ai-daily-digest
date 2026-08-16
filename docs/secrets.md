@@ -12,7 +12,7 @@ Liste des secrets injectés dans les GitHub Actions et utilisés par les pipelin
 | `ANTHROPIC_API_KEY` | Claude API — `weekly_analysis.py` (Haiku 4.5, budget 1$/run) + mode Cloud de Jarvis |
 | `SUPABASE_URL` | `https://mrmgptqpflzyavdfqwwv.supabase.co` |
 | `SUPABASE_KEY` | Publishable key (`sb_publishable_...`) — usage lecture front |
-| `SUPABASE_SERVICE_KEY` | Service role key — bypass RLS pour les pipelines backend (Jarvis refuse de démarrer sans) |
+| `SUPABASE_SERVICE_KEY` | Service role key — bypass RLS pour les pipelines backend (Jarvis refuse de démarrer sans) ; aussi utilisée par `pipelines/backup_supabase.py` (sauvegarde hebdo, ADR-37) |
 | `SUPABASE_USER_ID` | UUID de l'utilisateur Supabase auth (injecté dans certaines requêtes RPC) |
 
 ## Email
