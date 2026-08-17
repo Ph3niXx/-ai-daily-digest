@@ -15,6 +15,9 @@ on:
 permissions:
   contents: read
   actions: read      # requis pour lire les conclusions des autres workflows
+  issues: write      # ouvre/ferme l'issue d'alerte « Pipelines dégradés »
+                     # (les permissions par défaut du dépôt sont `read` :
+                     #  sans cette ligne, l'appel API renvoie 403)
 
 jobs:
   health:

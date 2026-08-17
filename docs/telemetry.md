@@ -19,7 +19,7 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 
 | event_type | payload | Point d'instrumentation |
 |---|---|---|
-| `section_opened` | `{section}` | `handleNavigate()` dans `cockpit/app.jsx` |
+| `section_opened` | `{section, entry}` | Effet sur `[activePanel]` dans `cockpit/app.jsx` + `cockpit/lib/boot-mediatheque.js` |
 | `search_performed` | `{query_length, results_count}` | `cockpit/panel-search.jsx` après fetch |
 | `link_clicked` | `{url, section}` | Event delegation globale `a[target="_blank"]` dans `app.jsx` |
 | `pipeline_triggered` | `{pipeline, mode}` | `cockpit/panel-jarvis.jsx` avant `jarvisSend()` |
@@ -67,6 +67,32 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `games_search` | `{}` | `cockpit/panel-gaming.jsx::GmAddGame::run()`, après réponse réussie de l'Edge Function `igdb-proxy` (`gmSearchIgdb()`) — recherche IGDB pour ajouter un jeu console (PS/Xbox/Switch) à la bibliothèque, seul Steam étant tracké automatiquement |
 | `games_add` | `{igdb_id}` | `cockpit/panel-gaming.jsx::PanelGaming::addConsoleGame()`, après écriture réussie de `game_titles` + `game_progress` (`status: "wishlist"`), et de `game_franchises` si la collection IGDB était encore inconnue — l'utilisateur ajoute un jeu console trouvé via `GmAddGame`. `bootstrapped_at` n'est jamais posé par cette écriture, seule la phase B du pipeline IGDB en a le droit |
 | `games_upcoming_synced` | `{found}` | `cockpit/panel-gaming.jsx::PanelGaming::syncFranchiseUpcoming()`, après insertion réussie d'au moins un événement dans `game_releases` — le front a rattrapé les sorties à venir d'une licence tout juste suivie (ajout d'un jeu console, ou case « m'avertir » cochée) sans attendre le cron de 08:30 UTC (ADR-36). `found` = nombre d'événements **réellement créés** (l'upsert tourne en `ignore-duplicates`, un événement déjà connu ne compte pas). Émis uniquement quand quelque chose a été trouvé : un `0` n'est pas tracé, la licence sans suite annoncée étant le cas nominal. À lire comme la mesure de valeur du rattrapage — s'il ne se déclenche jamais, c'est que les licences suivies sont déjà parcourues par le pipeline au moment où l'utilisateur les suit, et le chemin front peut être retiré |
+
+## Lire `section_opened` : un biais à connaître
+
+Jusqu'au 2026-08-17, `section_opened` n'était émis que depuis `handleNavigate()`,
+c'est-à-dire **uniquement sur un clic explicite** (sidebar, CTA, palette). Deux
+surfaces majeures n'émettaient donc rien :
+
+- **L'écran d'atterrissage.** Le panel initial est posé par un `useState` qui ne
+  passe pas par `handleNavigate`. Comme cet écran est le Brief, le Brief
+  paraissait mort alors qu'il est vu à chaque ouverture du cockpit. Ordre de
+  grandeur mesuré sur août 2026 : **2** clics « brief » enregistrés contre **30**
+  `recent_filter_auto_on`, qui ne peut se déclencher qu'une fois par chargement
+  et seulement après un rendu de `Home`.
+- **La PWA Médiathèque.** `boot-mediatheque.js` monte le panel directement ;
+  aucune ouverture depuis `mediatheque.html` n'était comptée.
+
+Le champ **`entry`** distingue désormais les régimes : `landing` (écran
+d'atterrissage), `nav` (clic), `pwa` (ouverture de la PWA), `pwa-resume`
+(retour au premier plan après plus de 5 min).
+
+**Conséquence pour toute analyse d'usage :** les lignes **antérieures au
+2026-08-17 n'ont pas de champ `entry`** et sous-comptent massivement le Brief et
+la Médiathèque. Ne jamais conclure à la mort d'un onglet à partir de ces
+lignes-là sans vérifier s'il peut être un écran d'atterrissage. Pour la période
+antérieure, croiser avec un event émis au rendu (`recent_filter_auto_on`,
+`zero_state_shown`, `hero_delta_shown`, `mediatheque_progress`).
 
 ## Règle de maintenance
 

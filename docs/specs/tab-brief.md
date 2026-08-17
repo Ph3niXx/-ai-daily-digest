@@ -109,6 +109,24 @@ Table **non lue malgré mention dans spec.json** : `activity_briefs` — écrite
 
 Deux écritures partent de l'encart Jeux, chacune vérifiée sur le code HTTP de la réponse avant de considérer l'action réussie (sans ce contrôle, un refus RLS serait pris pour un succès) : `game_releases.acknowledged` passe à `true` quand un événement est marqué vu ; `game_franchises.watched` passe à `false` quand une licence n'est plus suivie, ce qui tarit ses futurs événements.
 
+## Bandeau de santé des pipelines
+
+Depuis le 2026-08-17, le Brief affiche **toutes** les pannes de pipeline, pas
+seulement celles de son domaine. Les autres onglets gardent le filtrage par
+`pipeline_health.panels`.
+
+La raison est un cercle vicieux constaté à l'audit du 2026-08-15 : une alerte
+n'atteignait que l'onglet propriétaire du pipeline en panne — c'est-à-dire
+exactement l'onglet que la panne avait fait déserter. `strava_sync` et
+`withings_sync` alertaient sur `perf` (0 ouverture en 30 jours), `weekly_analysis`
+sur `recos` et `challenges` (0 ouverture depuis le 28 avril). L'onglet meurt
+parce que la donnée est morte, et l'explication reste enfermée dans l'onglet mort.
+
+Le Brief étant le point de passage quotidien, il porte désormais l'alerte. Le
+bandeau reste non-dismissible et disparaît de lui-même quand le pipeline repart.
+Canal jumeau hors cockpit : `pipeline_health` tient à jour une issue GitHub
+unique (voir ADR-38).
+
 ## Back — pipelines qui alimentent
 
 - **Daily pipeline** ([main.py](main.py)) — GitHub Actions cron `0 6 * * 1-5` ([daily_digest.yml](.github/workflows/daily_digest.yml)), samedi `0 10 * * 6` (ping anti-pause uniquement) :

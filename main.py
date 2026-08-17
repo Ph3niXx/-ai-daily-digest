@@ -108,6 +108,15 @@ RSS_FEEDS = [
 MAX_ARTICLES_PER_FEED = 4
 LOOKBACK_HOURS = 36  # 36h pour couvrir le week-end
 
+# Socle connu de flux morts, mesuré en direct le 2026-08-17 : 16 des 43 sources
+# déclarées ne répondent plus (sections `energy` en entier, la plupart de
+# `tools`, plus Anthropic News, Mistral, Meta AI, The Batch, LlamaIndex,
+# LangChain). Ce n'est PAS un objectif : c'est une dette chiffrée. Le run
+# échoue dès qu'un flux de PLUS meurt, sans rougir tous les jours pour une
+# dette déjà connue. En réparant ou en retirant un flux, baisse ce nombre —
+# c'est un cliquet, il ne doit jamais remonter.
+MAX_DEAD_FEEDS = 16
+
 HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -275,12 +284,41 @@ def ping_supabase():
 
 # ─── STEP 2 : FETCH RSS ──────────────────────────────────────────────────────
 
+def feed_failure(feed):
+    """Pourquoi ce flux n'a rien donné, ou None s'il va bien.
+
+    feedparser ne lève JAMAIS d'exception sur un flux mort : un 404, un 410,
+    une redirection vers une page HTML ou un domaine disparu renvoient un objet
+    normal avec `bozo=1` et `entries == []`. Le `try/except` qui entoure la
+    boucle est donc inatteignable pour le cas le plus fréquent, et un flux qui
+    change d'adresse disparaît sans un mot. C'est ce qui a fait passer
+    « 16 sources sur 43 ne produisent plus rien » pour « ces sources publient
+    peu » pendant des mois (cf. la ligne « LLMs, Énergie souvent à 0 » de
+    CLAUDE.md — ce n'était pas un rythme de publication, c'étaient des flux morts).
+    """
+    status = getattr(feed, "status", None)
+    if status is not None and status >= 400:
+        return f"HTTP {status}"
+    if not feed.entries:
+        exc = getattr(feed, "bozo_exception", None)
+        # Une redirection vers une page HTML est le symptôme classique d'un blog
+        # qui a déménagé : le flux répond 200 mais ne contient plus de XML.
+        return f"0 entrée ({exc})" if exc else "0 entrée"
+    return None
+
+
 def fetch_recent_articles():
     cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     articles = []
+    dead = []
     for source_name, url, section in RSS_FEEDS:
         try:
             feed = feedparser.parse(url)
+            why = feed_failure(feed)
+            if why:
+                dead.append((section, source_name, why))
+                print(f"   [DEAD] {section}/{source_name}: {why}")
+                continue
             count = 0
             for entry in feed.entries:
                 if count >= MAX_ARTICLES_PER_FEED:
@@ -309,8 +347,26 @@ def fetch_recent_articles():
                 })
                 count += 1
         except Exception as e:
+            dead.append((section, source_name, str(e)[:80]))
             print(f"   [WARN] {source_name}: {e}")
+
     print(f"   → {len(articles)} articles RSS récupérés")
+
+    if dead:
+        print(f"   → {len(dead)}/{len(RSS_FEEDS)} flux muets : "
+              + ", ".join(f"{s}/{n}" for s, n, _ in dead))
+    if len(dead) > MAX_DEAD_FEEDS:
+        # Cliquet volontaire, pas un seuil de qualité. Le socle actuel de flux
+        # morts est connu et documenté ; le faire échouer tous les jours
+        # noierait le signal et rendrait le brief quotidien rouge en permanence
+        # pour une dette déjà identifiée. En revanche toute mort NOUVELLE doit
+        # se voir le jour même : c'est exactement ce qui a manqué jusqu'ici.
+        raise RuntimeError(
+            f"{len(dead)} flux RSS muets alors que le socle connu est de {MAX_DEAD_FEEDS}. "
+            f"Un flux vient de mourir — répare-le, ou abaisse MAX_DEAD_FEEDS "
+            f"après l'avoir retiré de RSS_FEEDS."
+        )
+
     return articles
 
 

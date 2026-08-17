@@ -105,7 +105,13 @@ def strava_get(access_token, path, params=None):
             f"  Si la réponse mentionne une permission manquante : relancer "
             f"python scripts/strava_oauth_init.py (scopes demandés : "
             f"read, activity:read_all, profile:read_all).\n"
-            f"  Si elle mentionne un quota : attendre la fenêtre suivante."
+            f"  Si elle mentionne un quota : attendre la fenêtre suivante.\n"
+            f"  Si elle dit `resource: Application` / `field: Status` / "
+            f"`code: Inactive` : c'est l'APPLICATION Strava elle-même qui est "
+            f"désactivée, côté strava.com/settings/api. Aucune ré-autorisation "
+            f"OAuth ne peut y changer quoi que ce soit — c'est le cas réel "
+            f"depuis le 2026-06-30, et les deux branches ci-dessus ne le "
+            f"couvraient pas, ce qui laissait le lecteur sans remède."
         )
     resp.raise_for_status()
     return resp.json()

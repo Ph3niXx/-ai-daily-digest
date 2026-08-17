@@ -56,7 +56,13 @@ pipelines:
     avg_duration_s: 120
     budget_usd: 0
     status: active
-    notes: "Cron unique tous les jours 06:00 UTC. Retry Gemini ×4 avec fallback HTML si 503."
+    notes: >-
+      Cron unique tous les jours 06:00 UTC. Retry Gemini ×4 avec fallback HTML si 503.
+      Détection des flux RSS morts depuis le 2026-08-17 (ADR-38) : feedparser ne lève
+      jamais sur un 404 ou une redirection HTML, on teste donc `status` et `entries`
+      explicitement. Socle connu de 16 flux muets sur 43 (constante MAX_DEAD_FEEDS) —
+      le run échoue dès qu'un flux de PLUS meurt, sans rougir chaque jour pour une
+      dette déjà identifiée. C'est un cliquet : il ne doit jamais remonter.
 
   - id: weekly_analysis
     name: "Analyses hebdo (Claude Haiku)"
@@ -88,7 +94,14 @@ pipelines:
     avg_duration_s: 420
     budget_usd: 0.03
     status: active
-    notes: "CostTracker hard-cap 1 $/run. 6 étapes : enrich_wiki, analyze_signals, generate_recommendations, generate_challenges, enrich_rte, analyze_opportunities."
+    notes: >-
+      CostTracker hard-cap 1 $/run. 6 étapes : enrich_wiki, analyze_signals,
+      generate_recommendations, generate_challenges, enrich_rte, analyze_opportunities.
+      Depuis le 2026-08-17 (ADR-38) le run SORT EN CODE 1 s'il n'a passé aucun appel
+      Claude réussi, et un refus définitif (401, 403, 400 « credit balance », 404 model)
+      annule immédiatement les étapes restantes au lieu d'enchaîner 7 appels condamnés.
+      Motif : entre le 2026-07-12 et le 2026-08-16, cinq runs consécutifs ont affiché
+      un coche vert en ne produisant rien — solde de crédit Anthropic épuisé.
 
   - id: tft_sync
     name: "TFT matches (Riot API)"
@@ -451,7 +464,16 @@ pipelines:
     # Pas de bloc `health` : un surveillant qui se surveille lui-même ne détecte
     # pas sa propre mort. C'est le front qui garde ce flanc, en comparant
     # pipeline_health.checked_at à l'heure courante (cf. PipelineHealthBanner).
-    notes: "Tourne à 09:00 UTC, après le dernier cron du matin (07:45), donc sur un état stabilisé. Sort en code 0 même quand des pipelines sont dégradés : il rapporte l'état, il ne le subit pas."
+    notes: >-
+      Tourne à 09:00 UTC, après le dernier cron du matin (07:45), donc sur un état
+      stabilisé. Sort en code 0 même quand des pipelines sont dégradés : il rapporte
+      l'état, il ne le subit pas. Depuis le 2026-08-17 (ADR-38) il tient aussi à jour
+      UNE issue GitHub « [pipelines] Pipelines dégradés » — corps réécrit à chaque
+      passage (le cron est quotidien, commenter ferait 365 notifications/an), fermée
+      automatiquement au retour au vert. C'est le seul canal qui voit les DEUX cas :
+      un hook `if: failure()` ne verrait pas un pipeline `stale`, c'est-à-dire vert
+      mais n'écrivant rien — la panne exacte qui s'est cachée cinq semaines.
+      Requiert `issues: write` : les permissions par défaut du dépôt sont `read`.
 
   - id: backup_supabase
     name: "Sauvegarde des données saisies"

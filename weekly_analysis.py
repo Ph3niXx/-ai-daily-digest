@@ -14,6 +14,7 @@ Garde-fou : le script s'arrête si le coût estimé dépasse MAX_COST_PER_RUN.
 """
 
 import os
+import sys
 import json
 import requests
 from datetime import datetime, timedelta, timezone
@@ -51,11 +52,19 @@ class CostTracker:
         self.total_input = 0
         self.total_output = 0
         self.calls = 0
+        # Refus définitif de l'API : plus rien ne réussira ce run.
+        self.fatal = False
+        self.last_error = None
 
     def add(self, input_tokens, output_tokens):
         self.total_input += input_tokens
         self.total_output += output_tokens
         self.calls += 1
+
+    def mark_fatal(self, status, body):
+        """Enregistre un refus contre lequel réessayer ne sert à rien."""
+        self.fatal = True
+        self.last_error = f"HTTP {status} — {body}"
 
     @property
     def cost(self):
@@ -64,7 +73,9 @@ class CostTracker:
 
     @property
     def can_continue(self):
-        return self.cost < self.max_cost
+        # `fatal` court-circuite les 6 étapes : le 2026-07-19, le run a passé
+        # 7 appels alors que le premier avait déjà dit « crédit épuisé ».
+        return not self.fatal and self.cost < self.max_cost
 
     def summary(self):
         return {
@@ -81,8 +92,58 @@ tracker = CostTracker(MAX_COST_PER_RUN)
 
 # ─── CLAUDE API ───────────────────────────────────────────────────────────────
 
+def is_fatal_api_error(status, body):
+    """Ce refus condamne-t-il tout le run, ou seulement cet appel ?
+
+    Distinguer les deux est ce qui manquait : jusqu'ici toute réponse non-200
+    rendait None de la même façon, donc un compte sans crédit produisait
+    7 appels condamnés au lieu d'un seul, et le run finissait quand même vert.
+
+    Définitif — réessayer ne peut pas aider :
+      401 authentication_error : clé absente, révoquée ou malformée
+      403 permission_error     : la clé n'a pas accès au modèle
+      400 + « credit balance » : compte sans crédit (le cas réel du 2026-07-19)
+      404 + « model »          : model id inconnu ou retiré
+
+    Transitoire — le run continue :
+      429 rate_limit_error, 5xx api_error / overloaded_error
+
+    Un 400 ordinaire (prompt trop long, max_tokens invalide) reste local à
+    l'appel : il ne doit pas annuler les étapes qui ont des prompts différents.
+    """
+    if status in (401, 403):
+        return True
+    text = (body or "").lower()
+    if status == 400 and "credit balance" in text:
+        return True
+    if status == 404 and "model" in text:
+        return True
+    return False
+
+
+def run_exit_code(tracker):
+    """0 si le run a produit quelque chose, 1 sinon.
+
+    Un run à zéro appel réussi n'est jamais un succès, même quand chaque étape
+    a « bien » rendu 0 : c'est la conjonction qui a masqué la panne pendant
+    cinq dimanches. Un refus définitif échoue aussi, même si des appels avaient
+    réussi avant lui — le résultat est partiel et personne ne doit le croire complet.
+    """
+    if tracker.fatal:
+        return 1
+    if tracker.calls == 0:
+        return 1
+    return 0
+
+
 def call_claude(system_prompt, user_prompt, max_tokens=MAX_OUTPUT_TOKENS):
     """Appelle Claude Haiku et retourne le texte + met à jour le tracker."""
+    if tracker.fatal:
+        # Ne pas réutiliser le message « budget dépassé » ici : il désignerait
+        # la mauvaise cause, ce qui est précisément le défaut qu'on corrige.
+        print("   [STOP] Refus définitif déjà reçu — appel non tenté.")
+        return None
+
     if not tracker.can_continue:
         print(f"   [STOP] Budget dépassé ({tracker.cost:.4f}$ / {tracker.max_cost}$)")
         return None
@@ -105,6 +166,9 @@ def call_claude(system_prompt, user_prompt, max_tokens=MAX_OUTPUT_TOKENS):
 
     if response.status_code != 200:
         print(f"   [ERROR] Claude API: {response.status_code} {response.text[:200]}")
+        if is_fatal_api_error(response.status_code, response.text):
+            tracker.mark_fatal(response.status_code, response.text[:200])
+            print("   [FATAL] Refus définitif de l'API — les étapes restantes sont annulées.")
         return None
 
     data = response.json()
@@ -788,6 +852,15 @@ def main():
     print(f"   Budget restant : {MAX_COST_PER_RUN - summary['cost_usd']:.4f}$")
     print("=" * 60)
 
+    return run_exit_code(tracker)
+
 
 if __name__ == "__main__":
-    main()
+    code = main()
+    if code:
+        print("\n[ÉCHEC] Ce run n'a rien produit d'exploitable.")
+        if tracker.last_error:
+            print(f"        Cause : {tracker.last_error}")
+        print("        Un run sans appel Claude réussi ne doit pas passer pour un succès —")
+        print("        c'est ce silence qui a laissé le groupe Apprentissage figé cinq semaines.")
+    sys.exit(code)

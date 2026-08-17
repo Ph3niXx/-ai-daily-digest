@@ -1,5 +1,5 @@
 // App root — theme switcher + router
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 // Global keyboard shortcuts (PC/Mac). Anything panel-specific stays in the
 // panel file; this is only the top-level index.
@@ -120,7 +120,20 @@ function Stub({ id, theme, onBack }) {
 // silence qu'on cherche à corriger. Il disparaît quand le pipeline repart.
 function PipelineHealthBanner({ panelId, rows }) {
   const all = rows || [];
-  const mine = all.filter(r => (r.panels || []).includes(panelId));
+
+  // Le Brief est le point de passage quotidien : il porte TOUTES les pannes,
+  // pas seulement celles de son domaine. Ailleurs, on garde le filtrage
+  // contextuel — un bandeau Strava sur l'onglet Musique serait du bruit.
+  //
+  // Sans ça, une alerte n'atteint que l'onglet propriétaire du pipeline en
+  // panne — c'est-à-dire, très exactement, l'onglet que la panne a fait
+  // déserter. Constaté le 2026-08-15 : strava_sync et withings_sync alertaient
+  // sur `perf` (0 ouverture en 30 jours) et weekly_analysis sur `recos` et
+  // `challenges` (0 ouverture depuis le 28 avril). Le cercle est vicieux :
+  // l'onglet meurt parce que la donnée est morte, et l'explication est
+  // enfermée dans l'onglet mort.
+  const isEntryPoint = panelId === "brief";
+  const mine = isEntryPoint ? all : all.filter(r => (r.panels || []).includes(panelId));
   const hits = mine.filter(r => r.status === "failing" || r.status === "stale");
 
   // Surveiller le surveillant : si le checker n'a pas tourné, la table gèle sur
@@ -334,10 +347,31 @@ function App() {
     setSbMobileOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
     try { window.location.hash = id; } catch {}
-    try { window.track && window.track("section_opened", { section: id }); } catch {}
+    // `section_opened` n'est PLUS émis ici : voir l'effet sur [activePanel]
+    // plus bas. Émettre depuis handleNavigate ne comptait que les clics, donc
+    // jamais l'écran d'atterrissage.
     // Tier 2 lazy load happens in the effect below — triggering on every
     // activePanel change including the first mount (deep-linked refresh).
   };
+
+  // Télémétrie d'ouverture de panel.
+  //
+  // Longtemps émise depuis handleNavigate, qui ne se déclenche que sur un clic
+  // explicite (sidebar, CTA, palette). Le panel initial est posé par le
+  // useState ci-dessus sans passer par là — donc le Brief, qui EST l'écran
+  // d'atterrissage, n'était jamais compté : personne ne clique sur « Brief du
+  // jour » quand c'est déjà ce qui s'affiche. Mesuré en août 2026 : 2 clics
+  // « brief » enregistrés pour ~30 chargements réels du cockpit.
+  //
+  // Le champ `entry` distingue les deux régimes sans casser l'historique :
+  // les lignes antérieures n'ont pas de `entry` et restent comparables aux
+  // futures `entry='nav'`.
+  const firstPanelRef = useRef(true);
+  useEffect(() => {
+    const entry = firstPanelRef.current ? "landing" : "nav";
+    firstPanelRef.current = false;
+    try { window.track && window.track("section_opened", { section: activePanel, entry }); } catch {}
+  }, [activePanel]);
 
   // Tier 2 lazy load: fires whenever activePanel changes or retry is
   // requested. Covers deep-link refreshes (#music, #perf…) — the panel

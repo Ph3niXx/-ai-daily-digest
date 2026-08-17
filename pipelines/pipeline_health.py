@@ -241,6 +241,92 @@ def verdict(run_info, age_hours, max_age_hours):
     return "ok"
 
 
+ALERT_TITLE = "[pipelines] Pipelines dégradés"
+ALERT_MARKER = "<!-- pipeline-health-alert -->"
+
+
+def _gh(method, repo, token, path, **kwargs):
+    """Appel GitHub API. Renvoie None sur problème — jamais d'exception ici :
+    l'alerte est un service rendu au run, elle ne doit pas le faire échouer."""
+    try:
+        resp = requests.request(
+            method,
+            f"{GITHUB_API}/repos/{repo}{path}",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+            },
+            timeout=TIMEOUT,
+            **kwargs,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except requests.RequestException as exc:
+        print(f"   ! Alerte GitHub indisponible ({method} {path}) : {exc}")
+        return None
+
+
+def sync_alert_issue(repo, token, rows, degraded):
+    """Tient à jour UNE issue GitHub qui reflète l'état dégradé du moment.
+
+    Pourquoi ici plutôt que dans chaque workflow : un hook `if: failure()` ne
+    voit que les runs rouges. La panne qui s'est cachée cinq semaines
+    (weekly_analysis, crédit Anthropic épuisé) sortait **verte** — seul le
+    statut `stale`, calculé ici, la voyait. L'alerte doit donc vivre là où les
+    deux cas sont connus.
+
+    Une seule issue, dont le corps est réécrit à chaque passage : le cron est
+    quotidien, commenter produirait 365 notifications par an.
+    """
+    existing = _gh("GET", repo, token, "/issues",
+                   params={"state": "open", "per_page": 100})
+    if existing is None:
+        return
+    issue = next((i for i in existing
+                  if i.get("title") == ALERT_TITLE and "pull_request" not in i), None)
+
+    if not degraded:
+        if issue:
+            _gh("POST", repo, token, f"/issues/{issue['number']}/comments",
+                json={"body": "Tous les pipelines sont repassés au vert. Fermeture automatique."})
+            _gh("PATCH", repo, token, f"/issues/{issue['number']}", json={"state": "closed"})
+            print("   ✓ alerte fermée (plus aucun pipeline dégradé)")
+        return
+
+    by_id = {r["pipeline_id"]: r for r in rows}
+    lines = [
+        ALERT_MARKER,
+        f"**{len(degraded)} pipeline(s) dégradé(s)** au dernier contrôle.",
+        "",
+        "| Pipeline | Statut | Cause | Run |",
+        "|---|---|---|---|",
+    ]
+    for pid in degraded:
+        r = by_id.get(pid, {})
+        url = r.get("last_run_url") or ""
+        link = f"[voir]({url})" if url else "—"
+        lines.append(f"| `{pid}` | {r.get('status', '?')} | {r.get('last_error') or '—'} | {link} |")
+    lines += [
+        "",
+        "`failing` = le run échoue. `stale` = **le run est vert mais la table n'a rien reçu** —",
+        "c'est le cas qu'aucune alerte d'échec classique ne peut voir.",
+        "",
+        "Cette issue est réécrite à chaque contrôle quotidien et se ferme d'elle-même",
+        "quand tout repasse au vert.",
+    ]
+    body = "\n".join(lines)
+
+    if issue:
+        _gh("PATCH", repo, token, f"/issues/{issue['number']}", json={"body": body})
+        print(f"   ✓ alerte mise à jour (issue #{issue['number']})")
+    else:
+        created = _gh("POST", repo, token, "/issues",
+                      json={"title": ALERT_TITLE, "body": body})
+        if created:
+            print(f"   ✓ alerte ouverte (issue #{created['number']})")
+
+
 def main():
     dry_run = "--dry-run" in sys.argv
 
@@ -318,6 +404,14 @@ def main():
         print(f"\n✓ {len(rows)} lignes écrites dans pipeline_health")
 
     print(f"\n{len(degraded)} pipeline(s) dégradé(s)" + (f" : {', '.join(degraded)}" if degraded else ""))
+
+    # Canal d'alerte hors cockpit. Le bandeau front existe déjà mais s'affiche
+    # sur l'onglet propriétaire du pipeline — donc, pour les pipelines en panne,
+    # sur des onglets désertés. Une issue GitHub se voit sans ouvrir le cockpit.
+    if dry_run:
+        print("[dry-run] alerte GitHub non synchronisée")
+    else:
+        sync_alert_issue(repo, gh_token, rows, degraded)
 
     # Sortie 0 même en cas de pipeline dégradé : ce workflow rapporte l'état,
     # il n'échoue pas à cause de l'état qu'il rapporte. Sinon on remplacerait

@@ -167,6 +167,15 @@ class MdtErrorBoundary extends React.Component {
   renderPanel();
   window.__mdtRefresh = refresh;
 
+  // La PWA monte PanelMediatheque directement, sans passer par handleNavigate :
+  // jusqu'ici elle n'emettait donc AUCUN `section_opened`, alors que c'est la
+  // surface la plus utilisee du cockpit. `entry: "pwa"` la distingue des
+  // ouvertures faites depuis l'onglet Mediatheque du cockpit complet.
+  const trackOpen = (entry) => {
+    try { window.track && window.track("section_opened", { section: "mediatheque", entry }); } catch {}
+  };
+  trackOpen("pwa");
+
   // iOS suspend une PWA plutot que de la fermer : rouverte le lendemain, elle
   // reprend l'etat de la veille et loadPanel est memoise par once(). On refetch
   // au retour au premier plan si l'absence a depasse le seuil.
@@ -176,6 +185,10 @@ class MdtErrorBoundary extends React.Component {
     if (document.visibilityState === "hidden") { hiddenAt = Date.now(); return; }
     if (hiddenAt && Date.now() - hiddenAt > STALE_MS) {
       hiddenAt = null;
+      // Un retour au premier plan apres plus de 5 min est une reouverture du
+      // point de vue de l'usage : sans ca, une PWA laissee ouverte une semaine
+      // ne compterait qu'une seule ouverture.
+      trackOpen("pwa-resume");
       refresh().catch((e) => console.error("[boot-mdt] refresh", e));
     }
   });
