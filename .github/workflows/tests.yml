@@ -30,7 +30,7 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install dependencies
-        run: pip install requests
+        run: pip install requests pyyaml   # pyyaml : pipelines/pipeline_health.py lit pipelines.yaml
       # Les tests du repo n'utilisent pas pytest : chaque fichier est un script
       # qui sort en 1 si un check echoue. On les lance un par un pour que le nom
       # du fichier fautif apparaisse dans le log.
