@@ -1758,6 +1758,26 @@
     return { salary_estimate, skills_required, skills_source, employer_logo };
   }
 
+  // Charge à la demande des offres absentes de la fenêtre initiale, et les
+  // fusionne dans window.JOBS_DATA.offers.
+  //
+  // Nécessaire parce que le bloc « Ce que le marché te reproche » promet
+  // « voir les N offres » : au 2026-08-17, l'axe ML/MLOps porte 60 offres dont
+  // 36 sont archivées hors des 300 les mieux notées. Sans ce rattrapage, le
+  // filtre affichait 24 offres en en annonçant 60 — une promesse fausse, soit
+  // exactement le genre de compteur que cet audit cherche à supprimer.
+  async function fetchJobsByIds(ids){
+    const known = new Set(((window.JOBS_DATA && window.JOBS_DATA.offers) || []).map(o => o.id));
+    const missing = (ids || []).filter(id => id && !known.has(id));
+    if (!missing.length) return 0;
+    const rows = await q("jobs", `select=*&id=in.(${missing.join(",")})&limit=1000`);
+    const added = (rows || []).map(transformJobRow);
+    if (!added.length) return 0;
+    window.JOBS_DATA = window.JOBS_DATA || {};
+    window.JOBS_DATA.offers = [...(window.JOBS_DATA.offers || []), ...added];
+    return added.length;
+  }
+
   function transformJobRow(row){
     return {
       id: row.id,
@@ -4901,5 +4921,6 @@
     buildOpportunitiesFromDB, buildIdeasFromDB, transformProfile,
     // helpers
     isoWeek, dayOfYear, relTime, stripHtml, getReadMap, computeStreak,
+    fetchJobsByIds,
   };
 })();

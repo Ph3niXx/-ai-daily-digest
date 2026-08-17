@@ -71,9 +71,15 @@ canon as (
 )
 select
   axe,
-  count(*)                                              as offres,
-  count(*) filter (where not on_cv)                     as manquant,
-  round(100.0 * count(*) filter (where not on_cv) / count(*))::int as pct_manquant,
+  -- On compte des OFFRES DISTINCTES, pas des paires compétence/offre.
+  -- Une même offre porte souvent plusieurs libellés du même axe (« mlops /
+  -- data engineering » ET « developpement ml / data science »), et compter les
+  -- paires gonflait le chiffre : 91 affiché pour 60 offres réelles. Le bloc
+  -- promet « voir les N offres » — le compteur doit donc être en offres.
+  count(distinct job_id)                                as offres,
+  count(distinct job_id) filter (where not on_cv)       as manquant,
+  round(100.0 * count(distinct job_id) filter (where not on_cv)
+        / nullif(count(distinct job_id), 0))::int       as pct_manquant,
   round(avg(score_total) filter (where not on_cv), 1)   as score_moyen_offres_manquantes,
   max(first_seen_date)                                  as derniere_offre,
   -- Permet au front de brancher chaque ligne sur un filtre de la liste déjà
@@ -84,7 +90,7 @@ select
   array_agg(distinct brut) filter (where not on_cv)     as libelles_bruts
 from canon
 group by axe
-having count(*) filter (where not on_cv) >= 3
+having count(distinct job_id) filter (where not on_cv) >= 3
 order by manquant desc, offres desc;
 
 comment on view public.market_skill_gap is

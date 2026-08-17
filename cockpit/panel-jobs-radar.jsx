@@ -1051,9 +1051,16 @@ function PanelJobsRadar({ data, onNavigate }) {
   // des offres concernées, et le compteur du bloc ne correspondrait plus à ce
   // que la liste affiche — le pire des deux mondes, une promesse de N offres
   // suivie d'une liste de trois.
-  const pickGap = (axe, ids) => {
+  const pickGap = async (axe, ids) => {
     setGapFilter({ axe, ids: new Set(ids) });
     setStatusFilter("all");
+    // La plupart de ces offres sont archivées et tombent hors de la fenêtre
+    // initiale (300 archivées les mieux notées). On les charge à la demande,
+    // sinon le filtre afficherait 24 offres en en annonçant 60.
+    try {
+      const added = await window.cockpitDataLoader?.fetchJobsByIds?.(ids);
+      if (added) setOffers(((window.JOBS_DATA && window.JOBS_DATA.offers) || []).slice());
+    } catch {}
     try {
       window.track && window.track("jobs_action", {
         action: "skill_gap_filter", job_id: "", value: String(axe).slice(0, 64),
