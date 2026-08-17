@@ -1350,3 +1350,112 @@
   border: 1px solid var(--bd2); background: var(--surface); color: var(--tx); resize: vertical;
 }
 .jr-calib-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+
+/* ─── Écart de compétences (« Ce que le marché te reproche ») ───────────────
+   Bloc introduit par la vague 2 de l'audit du 2026-08-15 (ADR-39). Volontairement
+   sobre : c'est un instrument de lecture posé sous le scan, pas une section
+   héroïque. La barre encode le nombre de manques relativement à l'axe le plus
+   manquant, pas un pourcentage — c'est un classement, pas une jauge de progrès. */
+.jr-gap {
+  border: 1px solid var(--bd);
+  border-radius: var(--radius-lg);
+  background: var(--bg2);
+  padding: 18px 20px 14px;
+  margin-bottom: 20px;
+}
+
+.jr-gap-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.jr-gap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.jr-gap-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(80px, 200px) auto;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.jr-gap-row:hover:not(:disabled) { background: var(--bg3); }
+.jr-gap-row:disabled { cursor: default; opacity: 0.55; }
+.jr-gap-row.is-active {
+  border-color: var(--brand);
+  background: var(--brand-tint);
+}
+.jr-gap-row:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+.jr-gap-axe {
+  font-size: 13.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.jr-gap-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bd2);
+  overflow: hidden;
+}
+.jr-gap-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--brand);
+}
+
+.jr-gap-num {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.jr-gap-num strong { color: var(--brand-ink); }
+.jr-gap-den { color: var(--tx3); }
+
+.jr-gap-foot {
+  margin: 12px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--tx3);
+}
+.jr-gap-foot code {
+  font-family: var(--font-mono);
+  font-size: 0.92em;
+}
+
+/* Sous 760 px la barre ne porte plus d'information lisible : on la retire et
+   on empile libellé / compteur. Voir aussi styles-mobile.css, qui traite le
+   reste du panel — il n'avait aucun palier sous 760 px avant la vague 2. */
+@media (max-width: 760px) {
+  .jr-gap { padding: 14px 14px 12px; }
+  .jr-gap-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+  }
+  .jr-gap-bar { display: none; }
+  .jr-gap-axe { white-space: normal; }
+}

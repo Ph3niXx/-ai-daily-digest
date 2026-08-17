@@ -1344,7 +1344,32 @@
         q("game_releases", "acknowledged=eq.false&order=detected_at.desc&limit=200"));
     },
     async weekly_analysis(){ return once("weekly_analysis_all", () => loadWeeklyAnalysis(30)); },
-    async jobs_all(){ return once("jobs_all", () => q("jobs", "select=*&order=score_total.desc.nullslast&limit=300")); },
+    // Deux requêtes plutôt qu'un `limit=300` trié par score.
+    //
+    // L'ancienne fenêtre unique masquait des offres actives : au 2026-08-17,
+    // 55 offres `new` — dont des offres du jour — tombaient hors des 300
+    // premières parce que 300 offres archivées mieux notées les précédaient.
+    // Le seuil de coupure montait tout seul à mesure que la base grossit.
+    //
+    // On ne peut pas se contenter de filtrer sur les statuts actifs : les
+    // filtres « Clôturées » et « Tout » du panel (panel-jobs-radar.jsx) et le
+    // prédicat sur `closed_at` s'appuient sur les lignes archivées. D'où la
+    // séparation — tout l'actif (142 lignes au 2026-08-17, plafond large de
+    // sécurité) et un échantillon des archivées, toujours trié par score.
+    async jobs_all(){
+      return once("jobs_all", async () => {
+        const ACTIFS = "new,to_apply,applied,snoozed,interview,rejected,ghosted";
+        const [actives, archivees] = await Promise.all([
+          q("jobs", `select=*&status=in.(${ACTIFS})&order=score_total.desc.nullslast&limit=1000`),
+          q("jobs", "select=*&status=eq.archived&order=score_total.desc.nullslast&limit=300"),
+        ]);
+        return [...(actives || []), ...(archivees || [])];
+      });
+    },
+    // Écart entre ce que le marché exige et ce que porte le CV. Vue SQL
+    // (sql/031_market_skill_gap.sql) : l'agrégat n'a pas sa place côté client,
+    // il déroule 2 156 paires compétence/offre.
+    async market_skill_gap(){ return once("market_skill_gap", () => q("market_skill_gap", "select=*")); },
     async sport(){ return once("sport_articles", () => q("sport_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
     async gaming_news(){ return once("gaming_articles", () => q("gaming_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
     async anime(){ return once("anime_articles", () => q("anime_articles", "order=date_published.desc.nullslast,date_fetched.desc&limit=200")); },
@@ -1578,6 +1603,28 @@
     return Math.max(0, Math.round((today - d) / 86400000));
   }
 
+  // Ancienneté d'une candidature, et surtout : par rapport à QUOI.
+  //
+  // Trois sources, par ordre de fiabilité décroissante. La dernière —
+  // `last_seen_date` — ne dit PAS quand on a candidaté : c'est la dernière fois
+  // que JSearch a re-listé l'offre. Elle bouge à chaque scan. Les 32
+  // candidatures antérieures au 2026-08-17 n'ont aucune date de candidature
+  // enregistrée (voir sql/030), et il n'y avait rien d'honnête à backfiller.
+  // Le libellé change donc avec la source, pour ne jamais affirmer une date
+  // de candidature qu'on ne connaît pas.
+  function followupAge(j){
+    if (j.last_followup_at) {
+      const days = daysSinceDate(j.last_followup_at);
+      return { days, label: `relancé il y a ${days} j` };
+    }
+    if (j.applied_at) {
+      const days = daysSinceDate(j.applied_at);
+      return { days, label: `candidaté il y a ${days} j` };
+    }
+    const days = daysSinceDate(j.last_seen_date);
+    return { days, label: `vue il y a ${days} j — date de candidature inconnue` };
+  }
+
   // The Cowork routine that writes jobs.rubric_justif has drifted into ~17
   // distinct shapes (legacy strings, FR variants, short-form `sen/sec/imp`,
   // structured `{max, just, score}` axes, single-line `redflag`/`reason`/…).
@@ -1743,6 +1790,11 @@
       user_verdict_at: row.user_verdict_at || null,
       closed_at: row.closed_at || null,
       is_remote: typeof row.is_remote === "boolean" ? row.is_remote : null,
+      // Suivi de candidature (sql/030). `applied_at` est null sur les lignes
+      // antérieures au 2026-08-17 : aucune date fiable n'existait alors.
+      applied_at: row.applied_at || null,
+      last_followup_at: row.last_followup_at || null,
+      followup_count: Number(row.followup_count) || 0,
     };
   }
 
@@ -1782,14 +1834,36 @@
     // Date label in French
     const dLabel = `${DAYS_FR_SCAN[today.getDay()]} ${today.getDate()} ${MONTHS_FR_SCAN[today.getMonth()]}`;
 
-    // Actions — fall back to a computed reminder when the scan doesn't carry any
-    let actions = (todayScan && Array.isArray(todayScan.actions)) ? todayScan.actions : [];
+    // Actions — la routine distante en écrit parfois, sinon on les calcule.
+    //
+    // Normalisation obligatoire : la routine écrit `{note, job_id, company,
+    // priority}` alors que le panel lit `{id, kind, label, cta}`. Les deux
+    // schémas divergeaient en silence et les lignes se rendaient VIDES quand la
+    // routine en produisait vraiment. On accepte désormais les deux formes.
+    const rawActions = (todayScan && Array.isArray(todayScan.actions)) ? todayScan.actions : [];
+    let actions = rawActions.map((a, i) => ({
+      id: a.id || `scan-${i}-${a.job_id || ""}`,
+      job_id: a.job_id || null,
+      kind: a.kind || "apply",
+      label: a.label || a.note || `${a.company || "Offre"} — action à traiter`,
+      cta: a.cta || "Ouvrir",
+    }));
+
     if (!actions.length) {
-      const staleApplied = (allJobs || []).filter(j => j.status === "applied" && daysSinceDate(j.last_seen_date) >= 10).slice(0, 2);
-      actions = staleApplied.map(j => ({
+      const stale = (allJobs || [])
+        .filter(j => j.status === "applied")
+        .map(j => ({ j, age: followupAge(j) }))
+        .filter(x => x.age.days >= 10)
+        // Les plus anciennes d'abord : c'est l'ordre dans lequel on veut agir.
+        .sort((a, b) => b.age.days - a.age.days)
+        // Plafond relevé de 2 à 6. À 2, une liste de 30 candidatures en
+        // souffrance se vidait au rythme de deux par jour au mieux.
+        .slice(0, 6);
+      actions = stale.map(({ j, age }) => ({
         id: "relance-" + j.id,
+        job_id: j.id,
         kind: "apply",
-        label: `Relancer ${j.company} — ${j.title} (candidaté il y a ${daysSinceDate(j.last_seen_date)}j)`,
+        label: `Relancer ${j.company} — ${j.title} (${age.label})`,
         cta: "Relancer",
       }));
     }
@@ -4706,10 +4780,13 @@
         return { signals: raw.signals || [] };
       }
       case "jobs": {
-        const [allJobs, todayScan, last7Scans] = await Promise.all([
+        const [allJobs, todayScan, last7Scans, skillGap] = await Promise.all([
           T2.jobs_all().catch(() => []),
           T2.jobs_scan_today().catch(() => null),
           T2.jobs_scans_7d().catch(() => []),
+          // `catch` volontaire : la vue peut ne pas exister sur une base pas
+          // encore migrée. Le bloc disparaît, le reste du panel fonctionne.
+          T2.market_skill_gap().catch(() => []),
         ]);
         // Hydrate JOBS_DATA only when Supabase returned real data. If the table
         // is empty, leave window.JOBS_DATA undefined — the panel renders its
@@ -4719,9 +4796,10 @@
           window.JOBS_DATA = window.JOBS_DATA || {};
           window.JOBS_DATA.offers = offers;
           window.JOBS_DATA.scan = transformJobScan(todayScan, last7Scans, offers);
+          window.JOBS_DATA.skillGap = Array.isArray(skillGap) ? skillGap : [];
           window.JOBS_DATA._raw = { jobs: allJobs, todayScan, last7Scans };
         }
-        return { jobs: allJobs, todayScan, last7Scans };
+        return { jobs: allJobs, todayScan, last7Scans, skillGap };
       }
       case "mediatheque": {
         const [franchises, entries, progress, releases, briefRows, jpWords, jpSeen] = await Promise.all([

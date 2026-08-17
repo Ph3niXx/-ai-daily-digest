@@ -156,13 +156,71 @@ Route id = `"jobs"`. **Panel Tier 2** ([data-loader.js:4528](cockpit/lib/data-lo
 - **Menu open sur une offre, scroll sur une autre** : le `ref.current.contains(e.target)` gère correctement le dismiss sur click outside.
 - **Republication LinkedIn d'une offre archivée/snoozée** : quand la routine insère une nouvelle annonce (nouveau `linkedin_job_id`) avec le même `(lower(trim(title)), lower(trim(company)))` qu'une ligne récemment archivée (≤30j) ou snoozée (≤7j, durée du snooze), un trigger Postgres `BEFORE INSERT` (`jobs_inherit_user_status`, migration `sql/013_jobs_inherit_status.sql`) hérite du `status` et copie les `user_notes` si la nouvelle ligne en est dépourvue. Les autres colonnes (score, intel, dates, url) restent celles du nouveau scan. Au-delà des fenêtres temporelles, la nouvelle ligne repart en `status='new'`.
 
+## Écart de compétences et relance (2026-08-17)
+
+Deux ajouts de la vague 2 de l'audit du 2026-08-15 (ADR-39), tous deux dans
+Jobs Radar plutôt que dans un nouvel onglet.
+
+### « Ce que le marché te reproche »
+
+Bloc posé sous le ScanBanner. Il agrège `jobs.intel->skills_required`, que la
+routine remplit offre par offre avec un drapeau `on_cv`, et que le front
+n'affichait jusqu'ici que carte par carte — soit 2 156 paires dont aucun verdict
+n'était tiré. L'agrégat vit dans la vue SQL `market_skill_gap`
+([sql/031](sql/031_market_skill_gap.sql)), pas côté client.
+
+Verdict au 2026-08-17 : **Profondeur technique ML / MLOps, absente sur 91 des
+93 offres qui l'exigent (98 %)**, loin devant tout le reste.
+
+Cliquer un axe filtre la liste sur ses offres et force le filtre de statut à
+« Tout » — sinon le défaut « actives » masquerait la majorité des offres
+concernées et le compteur du bloc ne correspondrait plus à la liste affichée.
+Le filtre n'est **pas** persisté en `localStorage`, contrairement à ceux de la
+toolbar : c'est une exploration ponctuelle, la retrouver au chargement suivant
+donnerait une liste mystérieusement tronquée.
+
+Ce bloc ne ressuscite pas le groupe Apprentissage. Celui-ci reposait sur un
+auto-diagnostic déclaratif (`skill_radar` figé au 2026-04-04) et du contenu
+poussé que personne n'ouvrait ; ici c'est le marché qui parle, le calcul existe
+déjà, et l'affichage est dans un onglet réellement fréquenté.
+
+### Bouton « Relancer »
+
+Le calcul des candidatures en souffrance existait déjà dans `data-loader.js` ;
+le bouton qui les affichait n'avait aucun `onClick`, et 30 candidatures sur 32
+attendaient depuis plus de dix jours (la plus ancienne : 2026-04-28).
+
+Trois correctifs indissociables :
+
+1. **Le bouton écrit.** `last_followup_at` + `followup_count`, via la whitelist
+   de `patchJobSupabase` — qu'il fallait élargir, sinon le patch était avalé
+   en silence. L'offre sort alors de la liste : la file se vide au lieu de
+   réafficher éternellement les mêmes lignes.
+2. **Le plafond passe de 2 à 6**, trié du plus ancien au plus récent. À 2, une
+   file de 30 se serait vidée à deux par jour au mieux.
+3. **La date de référence ne ment plus.** L'ancien libellé disait « candidaté
+   il y a N j » à partir de `last_seen_date`, qui est la dernière fois que
+   JSearch a re-listé l'offre. `applied_at` est désormais horodaté au clic sur
+   « Postuler », mais reste **NULL sur les 32 candidatures antérieures** : aucune
+   date fiable n'existait et `updated_at` bouge à chaque rescan de la routine
+   (vérifié le 2026-08-17 sur l'offre Accor). Pour ces lignes-là, le libellé
+   dégrade honnêtement en « vue il y a N j — date de candidature inconnue ».
+
+Le schéma `job_scans.actions` écrit par la routine (`{note, job_id, company,
+priority}`) est aussi normalisé vers celui que lit le panel (`{id, kind, label,
+cta}`) : les deux divergeaient en silence et les lignes se rendaient **vides**
+quand la routine en produisait vraiment.
+
+Statuts de funnel ajoutés : `interview`, `rejected`, `ghosted`
+([sql/030](sql/030_jobs_followup.sql)). Trois valeurs, pas un CRM.
+
 ## Limitations connues / TODO
 - [x] **Mock toujours affiché si tables vides** — résolu le 2026-04-29 (commit `5e83774`) : `data-jobs.js` supprimé, le panel utilise désormais l'état vide légitime quand Supabase ne remonte rien.
 - [ ] **RLS permissive** : `jobs_read_public` + `jobs_user_update` utilisent `using(true)` sans `TO authenticated`. Anon avec juste l'apikey lit toutes les offres + peut PATCH n'importe quoi. À aligner sur migration 006.
 - [ ] **Toast ok trompeur si `sb.patchJSON` absent** : l'update reste purement local mais le toast affiche "Postulé · statut mis à jour". Devrait être un toast "Synchro indisponible — local only".
 - [ ] **Pas de rollback sur PATCH échoué** : juste un toast erreur, l'offre garde son statut mis à jour localement. Au prochain reload, la DB écrase — perte silencieuse.
 - [x] **Bouton « Enrichir l'Intel → » retiré** (2026-05-28) — l'enrichissement intel warm est abandonné (migration vers API structurée).
-- [ ] **Pas de pagination** : `limit=300` dans `jobs_all`. Passé ce seuil les offres plus anciennes disparaissent du feed — dédup cross-jours, pas de mécanisme "Charger plus". Le README le mentionne.
+- [ ] **Pas de pagination** : `limit=300` (archivées uniquement depuis le 2026-08-17 ; les offres actives sont chargées sans plafond utile — cf. ADR-39) dans `jobs_all`. Passé ce seuil les offres plus anciennes disparaissent du feed — dédup cross-jours, pas de mécanisme "Charger plus". Le README le mentionne.
 - [ ] **`tendances.ratios_category` jsonb ignoré** : la routine peut pré-calculer des ratios plus fins (pondérés, secteurs), mais `transformJobScan` les recalcule systématiquement depuis `activeJobs`. Idem `volumes_7d` qui pourrait être lu depuis `tendances.volumes_7d` si présent.
 - [ ] **`dedup_strict_count` jamais affiché** : colonne calculée par le scan, présente dans `job_scans`, jamais consommée. Info perdue.
 - [ ] **Pas de cross-nav vers Jarvis** : contrairement à `opps` qui a un bouton "Plan d'action" + stash, Jobs Radar n'offre pas "Demande à Jarvis de prépare ton pitch pour cette offre". Manque évident.

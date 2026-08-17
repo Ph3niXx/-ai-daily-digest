@@ -30,7 +30,7 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 | `challenge_completed` | `{challenge_id, mode}` | `cockpit/panel-challenges.jsx` post-submit |
 | `idea_moved` | `{id, from_status, to_status}` | `cockpit/panel-ideas.jsx` drag&drop |
 | `wiki_shared` | `{slug}` | `cockpit/panel-wiki.jsx` partage |
-| `jobs_action` | `{action, job_id, value}` | `cockpit/panel-jobs-radar.jsx` — statut (snooze/archive/apply) + notes + clôture manuelle (`action:"close"`/`"reopen"`, écrit `closed_at`) |
+| `jobs_action` | `{action, job_id, value}` | `cockpit/panel-jobs-radar.jsx` — statut (snooze/archive/apply) + notes + clôture manuelle (`action:"close"`/`"reopen"`, écrit `closed_at`). Depuis le 2026-08-17 (ADR-39) : `action:"followup"` — relance envoyée, `value` = rang de la relance (1 = première), écrit `last_followup_at` + `followup_count` ; et `action:"skill_gap_filter"` — un axe du bloc « Ce que le marché te reproche » a été cliqué, `value` = l'axe, `job_id` vide. **Sonde de valeur du lot** : si `followup` reste à zéro alors que 30 candidatures sont en souffrance, le bouton ne suffisait pas et le problème est ailleurs |
 | `jobs_feedback` | `{verdict, reason, job_id, score_at_vote}` | `cockpit/panel-jobs-radar.jsx::voteJob()` — 👍/👎 + raison. `score_at_vote` mesure le désaccord avec le score (doit décroître). |
 | `history_pin_toggled` | `{iso, pinned}` | `cockpit/panel-history.jsx::handleTogglePin()` |
 | `review_action` | `{action, id}` | `cockpit/panel-review.jsx::markReadAndAdvance()` |

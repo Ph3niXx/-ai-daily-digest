@@ -9,6 +9,14 @@
       identifiés par audit le 2026-05-22 et ciblés sur leurs VRAIES
       classes (audit précédent : ~38 sélecteurs devinés étaient morts).
 
+   PANELS RÉELLEMENT AUDITÉS pour le mobile, au 2026-08-17 :
+     Médiathèque (styles-mediatheque.css, 17 @media, paliers 720/760/480)
+     Jobs Radar  (bloc en fin de ce fichier + @media 760 dans son CSS)
+   Tous les autres n'ont PAS été vérifiés sous 760 px et se replient au
+   mieux à 900-920 px, une largeur de tablette. Ne pas lire l'absence de
+   règle ici comme « ce panel va bien » — c'est ce silence qui avait rendu
+   le trou de Jobs Radar invisible jusqu'à l'audit du 2026-08-15.
+
    NB cascade : ce fichier étant chargé en dernier, à spécificité égale
    il gagne sans `!important`. Les `!important` ne subsistent que là où
    une règle desktop a une spécificité supérieure ou pour neutraliser
@@ -250,4 +258,37 @@
   .vl-hero-metrics { grid-template-columns: 1fr !important; }
   .week-stats-row { grid-template-columns: 1fr !important; }
   .mz-kpis { grid-template-columns: 1fr; }
+}
+
+
+/* ═══════════════════════════════════════════════════════════════
+   JOBS RADAR — ajouté par la vague 2 de l'audit du 2026-08-15 (ADR-39)
+   Ce fichier ne contenait AUCUN sélecteur .jr- : le panel se repliait
+   à 900 px puis plus rien. Sur 390 px, .jr-scan-grid restait à deux
+   colonnes avec 32 px de gouttière — chaque colonne faisait ~160 px.
+   Corrélation qui a motivé le correctif : le seul écran réellement conçu
+   pour un téléphone (Médiathèque) est aussi le seul dont l'usage a décollé.
+   ═══════════════════════════════════════════════════════════════ */
+@media (max-width: 760px) {
+  /* Le repli de .jr-scan-grid s'arrêtait à 1200px → 2 colonnes. */
+  .jr-scan-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  /* La recherche imposait 200px de large dans une barre déjà à l'étroit. */
+  .jr-search {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  /* Le bloc actions du jour : le libellé de relance est long, il doit
+     pouvoir passer à la ligne au lieu de comprimer le bouton. */
+  .jr-action-item {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .jr-action-label { white-space: normal; }
+
+  .panel-jobs-radar { padding: 20px 14px 48px; }
 }

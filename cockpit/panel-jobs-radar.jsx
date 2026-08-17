@@ -20,6 +20,12 @@ async function patchJobSupabase(id, patch) {
   if ("user_verdict_reason" in patch) safe.user_verdict_reason = patch.user_verdict_reason;
   if ("user_verdict_at" in patch) safe.user_verdict_at = patch.user_verdict_at;
   if ("closed_at" in patch) safe.closed_at = patch.closed_at;
+  // Suivi de candidature (sql/030). Sans ces trois lignes, la whitelist
+  // ci-dessus avale silencieusement le patch et le bouton « Relancer »
+  // n'écrirait rien — c'est une liste blanche stricte, pas un filtre indicatif.
+  if ("applied_at" in patch) safe.applied_at = patch.applied_at;
+  if ("last_followup_at" in patch) safe.last_followup_at = patch.last_followup_at;
+  if ("followup_count" in patch) safe.followup_count = patch.followup_count;
   if (!Object.keys(safe).length) return;
   if (!window.sb || !window.sb.patchJSON || !window.SUPABASE_URL) return;
   const url = window.SUPABASE_URL + "/rest/v1/jobs?id=eq." + encodeURIComponent(id);
@@ -705,8 +711,76 @@ function JrCalibrage() {
   );
 }
 
+// ─── Ce que le marché reproche au CV ───────────────────────────────────────
+//
+// La routine extrait déjà, offre par offre, les compétences exigées avec un
+// drapeau `on_cv`. C'était affiché carte par carte et jamais en cumul — soit
+// 2 156 paires dont personne ne tirait de verdict. La vue SQL market_skill_gap
+// (sql/031) fait l'agrégat et la normalisation ; ici on ne fait que rendre.
+//
+// Ce bloc n'est PAS une résurrection du groupe Apprentissage. Celui-ci est mort
+// parce qu'il reposait sur un auto-diagnostic déclaratif et du contenu poussé.
+// Ici la source est inversée — c'est le marché qui parle — et ça s'affiche dans
+// l'onglet que l'utilisateur ouvre vraiment.
+function JrSkillGap({ rows, activeAxe, onPick, onClear }) {
+  if (!Array.isArray(rows) || !rows.length) return null;
+  const top = rows.slice(0, 5);
+  const max = Math.max(...top.map(r => r.manquant || 0), 1);
+
+  return (
+    <section className="jr-gap">
+      <div className="jr-gap-head">
+        <div className="jr-scan-kicker">Ce que le marché te reproche</div>
+        {activeAxe && (
+          <button className="jr-btn jr-btn--ghost jr-btn--sm" onClick={onClear}>
+            Filtre « {activeAxe} » · retirer
+          </button>
+        )}
+      </div>
+
+      <ul className="jr-gap-list">
+        {top.map(r => {
+          const isActive = r.axe === activeAxe;
+          const n = r.manquant || 0;
+          const ids = Array.isArray(r.job_ids_manquants) ? r.job_ids_manquants : [];
+          return (
+            <li key={r.axe}>
+              <button
+                className={"jr-gap-row" + (isActive ? " is-active" : "")}
+                onClick={() => (isActive ? onClear() : onPick(r.axe, ids))}
+                disabled={!ids.length}
+                title={
+                  ids.length
+                    ? `Afficher les ${n} offres qui l'exigent et où il est absent de ton CV`
+                    : "Aucune offre rattachée"
+                }
+              >
+                <span className="jr-gap-axe">{r.axe}</span>
+                <span className="jr-gap-bar">
+                  <span className="jr-gap-fill" style={{ width: `${Math.round((n / max) * 100)}%` }} />
+                </span>
+                <span className="jr-gap-num">
+                  <strong>{n}</strong>
+                  <span className="jr-gap-den"> / {r.offres}</span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <p className="jr-gap-foot">
+        Lecture : <strong>manquant / offres qui l'exigent</strong>, d'après le drapeau{" "}
+        <code>on_cv</code> posé par la routine à chaque scan. Seuls les axes à
+        3 manques ou plus sont affichés — en dessous, le bruit des libellés
+        uniques domine.
+      </p>
+    </section>
+  );
+}
+
 // ─── Scan banner (tendances, signal CV, actions du jour) ───
-function ScanBanner({ scan }) {
+function ScanBanner({ scan, onFollowUp }) {
   const { volumes_7d, ratios_category } = scan.tendances;
   const maxVol = Math.max(...volumes_7d);
   const days = ["L", "M", "M", "J", "V", "S", "D"];
@@ -761,7 +835,12 @@ function ScanBanner({ scan }) {
                   <span className={`jr-action-kind jr-action-kind--${a.kind}`}>{a.kind === "apply" ? "Relance" : "Prep"}</span>
                   <span className="jr-action-label">{a.label}</span>
                 </div>
-                <button className="jr-btn jr-btn--ghost jr-btn--sm">{a.cta}</button>
+                <button
+                  className="jr-btn jr-btn--ghost jr-btn--sm"
+                  onClick={() => a.job_id && onFollowUp && onFollowUp(a.job_id)}
+                  disabled={!a.job_id}
+                  title={a.job_id ? "Ouvrir l'offre et enregistrer la relance" : "Action sans offre rattachée"}
+                >{a.cta}</button>
               </li>
             ))}
           </ul>
@@ -783,6 +862,12 @@ function PanelJobsRadar({ data, onNavigate }) {
   const [openMenu, setOpenMenu] = useStateJr(null);
   const [notesEditing, setNotesEditing] = useStateJr(null);
   const toastTimer = useRefJr(null);
+
+  // Filtre issu du bloc « Ce que le marché te reproche ». Volontairement NON
+  // persisté (contrairement aux filtres de la toolbar) : c'est une exploration
+  // ponctuelle, la retrouver au prochain chargement donnerait une liste
+  // mystérieusement tronquée.
+  const [gapFilter, setGapFilter] = useStateJr(null);   // { axe, ids: Set }
 
   // Re-sync if window.JOBS_DATA.offers was replaced by a Tier 2 load after mount
   useEffectJr(() => {
@@ -866,9 +951,46 @@ function PanelJobsRadar({ data, onNavigate }) {
     if (!offer || !offer.url) return;
     try { window.open(offer.url, "_blank", "noopener,noreferrer"); } catch {}
     if (offer.status !== "applied") {
-      updateJob(offer.id, { status: "applied" }, "Postulé · statut mis à jour");
+      // On horodate la candidature ICI, au seul moment où on la connaît.
+      // Aucune autre colonne ne portait cette date : `last_seen_date` est la
+      // dernière re-parution de l'offre chez JSearch et `updated_at` bouge à
+      // chaque rescan de la routine.
+      updateJob(
+        offer.id,
+        { status: "applied", applied_at: new Date().toISOString() },
+        "Postulé · statut mis à jour"
+      );
     }
     setOpenMenu(null);
+  };
+
+  // Relance d'une candidature restée sans réponse. Le calcul de la liste
+  // existait déjà dans data-loader.js ; le bouton qui l'affichait n'avait
+  // simplement aucun `onClick`, et 30 candidatures sur 32 attendaient.
+  const followUpJob = (jobId) => {
+    const offer = (offers || []).find(o => o.id === jobId);
+    if (!offer) return;
+    if (offer.url) {
+      try { window.open(offer.url, "_blank", "noopener,noreferrer"); } catch {}
+    }
+    try {
+      window.track && window.track("jobs_action", {
+        action: "followup",
+        job_id: String(jobId).slice(0, 64),
+        value: String((offer.followup_count || 0) + 1),
+      });
+    } catch {}
+    // `last_followup_at` fait sortir l'offre de la liste des candidatures en
+    // souffrance : c'est ce qui permet à la file de se vider au lieu de
+    // réafficher éternellement les mêmes lignes.
+    persistJobPatch(
+      jobId,
+      {
+        last_followup_at: new Date().toISOString(),
+        followup_count: (offer.followup_count || 0) + 1,
+      },
+      "Relance enregistrée"
+    );
   };
   const snoozeJob = (id) => { updateJob(id, { status: "snoozed" }, "Snoozée 7 jours"); setOpenMenu(null); };
   const archiveJob = (id) => { updateJob(id, { status: "archived" }, "Archivée"); setOpenMenu(null); };
@@ -924,7 +1046,31 @@ function PanelJobsRadar({ data, onNavigate }) {
 
   // ─── Prédicat de filtrage partagé (hero + liste) — hero-filters 2026-05-31 ───
   // Couvre catégorie + remote + statut/clôturé + recherche. La bande de score est gérée par section.
+  // Cliquer un axe de l'écart de compétences restreint la liste à ses offres.
+  // On force `statusFilter` à "all" : le défaut ("active") masquerait la plupart
+  // des offres concernées, et le compteur du bloc ne correspondrait plus à ce
+  // que la liste affiche — le pire des deux mondes, une promesse de N offres
+  // suivie d'une liste de trois.
+  const pickGap = (axe, ids) => {
+    setGapFilter({ axe, ids: new Set(ids) });
+    setStatusFilter("all");
+    try {
+      window.track && window.track("jobs_action", {
+        action: "skill_gap_filter", job_id: "", value: String(axe).slice(0, 64),
+      });
+    } catch {}
+    try {
+      document.querySelector(".jr-list-section")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch {}
+  };
+  const clearGap = () => setGapFilter(null);
+
   const passesFilters = (o) => {
+    // Filtre « écart de compétence » : restreint la liste aux offres qui
+    // exigent l'axe cliqué ET où il est absent du CV. Placé en tête parce
+    // qu'il est le plus discriminant.
+    if (gapFilter && !gapFilter.ids.has(o.id)) return false;
     if (catFilter !== "all" && o.role_category !== catFilter) return false;
     if (remoteFilter === "remote" && o.is_remote !== true) return false;
     if (statusFilter === "closed") {
@@ -961,7 +1107,7 @@ function PanelJobsRadar({ data, onNavigate }) {
     showHero
       ? offers.filter(o => passesFilters(o) && o.score_total >= 7).sort((a, b) => b.score_total - a.score_total)
       : [],
-  [offers, scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, query]);
+  [offers, scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, query, gapFilter]);
 
   // Liste dense = set filtré, moins les membres du hero, avec le filtre de bande score.
   const listOffers = useMemoJr(() => {
@@ -976,7 +1122,7 @@ function PanelJobsRadar({ data, onNavigate }) {
       arr.sort((a, b) => a.seen_days_ago - b.seen_days_ago);
     }
     return arr;
-  }, [offers, heroLeads, scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, query, sort]);
+  }, [offers, heroLeads, scoreFilter, catFilter, remoteFilter, statusFilter, freshFilter, query, sort, gapFilter]);
 
   // Stats line
   const totalCount = offers.length;
@@ -1024,7 +1170,15 @@ function PanelJobsRadar({ data, onNavigate }) {
       </header>
 
       {/* ─── SCAN BANNER ─── */}
-      <ScanBanner scan={scan} />
+      <ScanBanner scan={scan} onFollowUp={followUpJob} />
+
+      {/* ─── CE QUE LE MARCHÉ REPROCHE AU CV ─── */}
+      <JrSkillGap
+        rows={jobs.skillGap}
+        activeAxe={gapFilter ? gapFilter.axe : null}
+        onPick={pickGap}
+        onClear={clearGap}
+      />
 
       {/* ─── CALIBRAGE ─── */}
       <JrCalibrage />

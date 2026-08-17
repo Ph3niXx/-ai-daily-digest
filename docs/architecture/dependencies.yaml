@@ -132,7 +132,8 @@ panels:
       - jobs
       - job_scans
       - user_profile  # job_pref_rules (règles utilisateur verrouillées), job_pref_observed (profil inféré par la routine Jobs Radar) — Lot 2/3
-    writes: [jobs]  # status + user_notes + user_verdict + user_verdict_reason + user_verdict_at + closed_at (whitelist)
+      - market_skill_gap  # VUE (sql/031), pas une table : agrège jobs.intel->skills_required pour le bloc « Ce que le marché te reproche » (ADR-39)
+    writes: [jobs]  # status + user_notes + user_verdict + user_verdict_reason + user_verdict_at + closed_at + applied_at + last_followup_at + followup_count (whitelist)
     realtime:
       channel: jobs_radar_sub
       tables: [jobs, job_scans]
@@ -354,6 +355,11 @@ tables:
     owner_pipeline: jarvis_status_generator
     rls: authenticated
     domain: jarvis
+
+  - name: market_skill_gap
+    owner_pipeline: none  # VUE SQL (sql/031_market_skill_gap.sql), dérivée de jobs.intel — aucun pipeline ne l'écrit
+    rls: authenticated  # vue en security_invoker : la RLS de `jobs` s'applique à l'appelant
+    domain: business
 
   - name: job_scans
     owner_pipeline: jobs_radar_routine  # routine Claude Code distante (claude.ai, cron 4×/sem) via MCP Supabase — ADR-19 (ex-cowork_external)
