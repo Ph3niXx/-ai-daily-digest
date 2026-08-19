@@ -104,6 +104,20 @@
     return (cards || []).filter((c) => set.has(statusOf(c)));
   }
 
+  // Libellés hérités. Jusqu'au 2026-08-19 les deux producteurs (le pipeline
+  // et announcedRows ci-dessous) écrivaient le type d'événement DANS `title` :
+  // « À venir : Silksong ». Les lignes en base ont été reprises et les deux
+  // producteurs corrigés, mais un client qui n'a pas encore rechargé son JS
+  // peut encore en écrire une — d'où ce filet, gardé côté lecture.
+  //
+  // Il retire les quatre libellés CONNUS et eux seuls. Le `^[^:]+ : ` générique
+  // d'avant amputait « Persona 5 : Royal » en « Royal » : un nom de jeu a tout
+  // à fait le droit de contenir un deux-points.
+  const EVENT_LABEL = /^(À venir|Date annoncée|Sorti|Annulé) : /;
+  function stripEventLabel(title) {
+    return String(title || "").replace(EVENT_LABEL, "");
+  }
+
   // Le rail affiche des JEUX, pas des libellés d'événement : « Silksong »
   // et non « À venir : Silksong ». Les acquittés en sortent.
   function buildUpcoming(releases, titlesById, franchisesById) {
@@ -116,7 +130,7 @@
         id: r.id,
         titleId: r.title_id,
         franchiseId: r.franchise_id,
-        name: (t && t.name) || String(r.title || "").replace(/^[^:]+ : /, ""),
+        name: (t && t.name) || stripEventLabel(r.title),
         licence: (f && f.name) || null,
         when: (t && t.release_human) || r.event_date || null,
         precision: (t && t.release_precision) || null,
@@ -195,7 +209,7 @@
         franchise_id: t.franchise_id,
         title_id: t.id,
         event_type: "announced",
-        title: "À venir : " + (t.name || "#" + t.igdb_id),
+        title: t.name || "#" + t.igdb_id,
         event_date: t.first_release_date || null,
       }));
   }
@@ -232,7 +246,7 @@
 
   const api = {
     STATUS_LABELS, buildLibrary, statusOf, ratingOf, sortLibrary,
-    normalize, matchesQuery, filterByStatus, buildUpcoming,
+    normalize, matchesQuery, filterByStatus, buildUpcoming, stripEventLabel,
     platformOf, filterByPlatform,
     isUpcoming, titleRow, announcedRows, mergeById,
     hoursLabel, ttbLabel, suggestPlaying,

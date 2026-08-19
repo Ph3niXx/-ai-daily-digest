@@ -307,6 +307,14 @@ function GamesBriefCard({ releases = [], onNavigate }) {
   const shown = visible.slice(0, 3);
   const rest = visible.length - shown.length;
 
+  // Même filet que le rail Gaming (games-view.js::stripEventLabel) : depuis le
+  // 2026-08-19 `title` est le nom nu, mais un client au JS périmé peut encore
+  // écrire une ligne préfixée. Les deux surfaces doivent afficher la même
+  // chose — le tag à côté dit déjà « annoncé ».
+  const cleanTitle = (t) => (window.gamesView && window.gamesView.stripEventLabel)
+    ? window.gamesView.stripEventLabel(t)
+    : String(t == null ? "" : t);
+
   const fmtDate = (d) => {
     if (!d) return null;
     const t = new Date(d);
@@ -325,7 +333,7 @@ function GamesBriefCard({ releases = [], onNavigate }) {
           return (
             <li key={r.id} className="gmb-brief-item">
               <span className="gmb-brief-text">
-                <span className="gmb-brief-title">{r.title}</span>
+                <span className="gmb-brief-title">{cleanTitle(r.title)}</span>
                 <span className={`gmb-brief-tag is-${r.event_type}`}>
                   {LABEL[r.event_type] || r.event_type}
                 </span>
@@ -333,7 +341,7 @@ function GamesBriefCard({ releases = [], onNavigate }) {
               </span>
               <span className="gmb-brief-actions">
                 <button className="gmb-brief-btn" onClick={() => ack(r)}
-                        title={`Marquer vu — ${r.title}`}>Vu</button>
+                        title={`Marquer vu — ${cleanTitle(r.title)}`}>Vu</button>
                 <button className="gmb-brief-btn is-dismiss" onClick={() => unwatch(r)}
                         title="Ne plus suivre cette licence : ses futurs événements ne remonteront plus">Ne plus suivre</button>
               </span>

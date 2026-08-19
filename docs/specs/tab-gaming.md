@@ -70,6 +70,7 @@ Route id = `"gaming"`. **Panel Tier 2** ([data-loader.js:4639](cockpit/lib/data-
 | `GmSheet({ card, franchise, ... })` | Fiche jeu — statut (4 valeurs), note 0-100, plateforme, suivi de licence | [panel-gaming.jsx:158](cockpit/panel-gaming.jsx:158) |
 | `GmAddGame({ onAdded })` | Recherche IGDB + ajout d'un jeu console à la bibliothèque | [panel-gaming.jsx:249](cockpit/panel-gaming.jsx:249) |
 | `window.gamesView.buildLibrary/buildUpcoming/...` | Logique pure bibliothèque + rail (statuts, tri, recherche) — testée sous Node, aucune dépendance DOM | [cockpit/lib/games-view.js](cockpit/lib/games-view.js) |
+| `window.gamesView.stripEventLabel(title)` | Retire les 4 libellés d'événement hérités (`À venir`/`Date annoncée`/`Sorti`/`Annulé`) d'un `game_releases.title`. Depuis ADR-40 le titre est le nom nu des deux côtés : ce filet ne couvre plus qu'une ligne écrite par un client au JS périmé. Resserré sur les libellés connus — le `^[^:]+ : ` d'avant amputait « Persona 5 : Royal » en « Royal » | [cockpit/lib/games-view.js](cockpit/lib/games-view.js) |
 | `T2.steam_snapshot()` | `GET steam_games_snapshot?snapshot_date=eq.{today}&limit=2000&order=playtime_forever_minutes.desc.nullslast` | [data-loader.js:1309](cockpit/lib/data-loader.js:1309) |
 | `T2.steam_stats()` | `GET gaming_stats_daily?order=stat_date.desc&limit=180` | [data-loader.js:1313](cockpit/lib/data-loader.js:1313) |
 | `T2.steam_achievements()` | `GET steam_achievements?order=unlocked_at.desc&limit=50` | [data-loader.js:1314](cockpit/lib/data-loader.js:1314) |

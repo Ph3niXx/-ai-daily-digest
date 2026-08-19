@@ -130,7 +130,7 @@ ups = upcoming_events([title(1, status="released", date="2027-05-01", name="Wolv
                        title(3, status="cancelled", date="2027-01-01", name="Annule")], TODAY)
 check("upcoming_events ne retient que ce qui est a venir", [e[3] for e in ups], [1])
 check("upcoming_events type d'evenement", ups[0][0], "announced")
-check("upcoming_events libelle", ups[0][1], "À venir : Wolverine")
+check("upcoming_events libelle = le nom nu", ups[0][1], "Wolverine")
 check("upcoming_events porte la date", ups[0][2], "2027-05-01")
 check("upcoming_events sur liste vide", upcoming_events([], TODAY), [])
 
@@ -156,28 +156,43 @@ check("report de date => aucun evenement",
 # L'annonce vient desormais de upcoming_events, pas de diff_game_events.
 announced_event = upcoming_events([title(10, name="Premia", date="2027-04-02")], TODAY)[0]
 check("announced tuple type", announced_event[0], "announced")
-check("announced tuple title", announced_event[1], "À venir : Premia")
+check("announced tuple title", announced_event[1], "Premia")
 check("announced tuple date", announced_event[2], "2027-04-02")
 check("announced tuple igdb_id", announced_event[3], 10)
 
 date_announced_event = diff_game_events({20: title(20)}, [title(20, date="2027-06-15")])[0]
 check("date_announced tuple type", date_announced_event[0], "date_announced")
-check("date_announced tuple title", "Date annoncée :" in date_announced_event[1], True)
+check("date_announced tuple title", date_announced_event[1], "Suite")
 check("date_announced tuple date", date_announced_event[2], "2027-06-15")
 check("date_announced tuple igdb_id", date_announced_event[3], 20)
 
 released_event = diff_game_events({30: title(30, date="2027-03-01")},
                                    [title(30, status="released", date="2027-03-01")])[0]
 check("released tuple type", released_event[0], "released")
-check("released tuple title", released_event[1], "Sorti : Suite")
+check("released tuple title", released_event[1], "Suite")
 check("released tuple date", released_event[2], "2027-03-01")
 check("released tuple igdb_id", released_event[3], 30)
 
 cancelled_event = diff_game_events({40: title(40)}, [title(40, status="cancelled")])[0]
 check("cancelled tuple type", cancelled_event[0], "cancelled")
-check("cancelled tuple title", cancelled_event[1], "Annulé : Suite")
+check("cancelled tuple title", cancelled_event[1], "Suite")
 check("cancelled tuple date is None", cancelled_event[2], None)
 check("cancelled tuple igdb_id", cancelled_event[3], 40)
+
+# ── `title` ne porte plus le type d'evenement (2026-08-19) ────
+# Le type vit dans event_type et la date dans event_date : les repeter en
+# francais dans title donnait « Date annoncee : X — 2027-06-15 » a cote d'un
+# tag « DATE » et d'une colonne date. Un seul fait, un seul endroit.
+LABELS = ("À venir", "Date annoncée", "Sorti", "Annulé")
+tous = (upcoming_events([title(50, name="Nom", date="2027-01-01")], TODAY)
+        + diff_game_events({51: title(51)}, [title(51, name="Nom", date="2027-06-15")])
+        + diff_game_events({52: title(52, date="2027-03-01")},
+                           [title(52, name="Nom", status="released", date="2027-03-01")])
+        + diff_game_events({53: title(53)}, [title(53, name="Nom", status="cancelled")]))
+check("les 4 types produisent bien un evenement", len(tous), 4)
+check("aucun libelle d'evenement ne fuit dans title",
+      [e[1] for e in tous if any(e[1].startswith(l) for l in LABELS)], [])
+check("title est exactement le nom du jeu", sorted({e[1] for e in tous}), ["Nom"])
 
 print(f"\n{failures} test(s) en echec" if failures else "\nTous les tests passent")
 sys.exit(1 if failures else 0)

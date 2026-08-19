@@ -2,7 +2,7 @@
 // Cache-first for static shell (cockpit/* + CDN libs pinned by SRI),
 // network-first for Supabase/API calls — so the app stays installable
 // and fast offline while always preferring fresh data when online.
-const CACHE = "cockpit-v126";
+const CACHE = "cockpit-v127";
 
 const STATIC = [
   "/jarvis-cockpit/",

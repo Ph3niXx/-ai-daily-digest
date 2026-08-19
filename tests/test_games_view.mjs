@@ -97,6 +97,16 @@ check("les dates connues passent avant les inconnues", up[0].id, "r1");
 check("le rail porte le nom de la licence", up[0].licence, "Hollow Knight");
 check("le rail porte le nom du jeu, pas le libelle d'evenement", up[0].name, "Silksong");
 
+// Repli quand title_id ne resout pas (ligne heritee, ou ecrite par un client
+// qui n'a pas encore recharge le JS). Il doit retirer les libelles CONNUS et
+// rien d'autre : un nom legitime contenant « : » ne doit pas etre ampute.
+const orphan = (title) => V.buildUpcoming(
+  [{ id: "r9", title_id: "inconnu", franchise_id: "f1", title, acknowledged: false }], {}, FR)[0].name;
+check("repli : le prefixe herite est retire", orphan("À venir : Black Myth: Zhong Kui"), "Black Myth: Zhong Kui");
+check("repli : les 3 autres libelles aussi", [orphan("Sorti : Civ VI"), orphan("Annulé : X"), orphan("Date annoncée : Y")], ["Civ VI", "X", "Y"]);
+check("repli : un nom avec deux-points reste entier", orphan("Persona 5 : Royal"), "Persona 5 : Royal");
+check("repli : un nom deja nu est rendu tel quel", orphan("Silksong"), "Silksong");
+
 // ── libelles ─────────────────────────────────────────────────
 check("heures : moins d'une heure", V.hoursLabel(45), "45 min");
 check("heures : arrondi", V.hoursLabel(6733), "112 h");
@@ -200,8 +210,10 @@ check("announcedRows ne retient que ce qui est a venir", ann.map(r => r.title_id
 check("announcedRows type d'evenement", ann[0].event_type, "announced");
 // Libelle identique a upcoming_events() cote pipeline : c'est ce qui garantit
 // que le sync de la nuit retombe sur la meme ligne (UNIQUE title_id,event_type)
-// au lieu d'en creer une seconde.
-check("announcedRows libelle", ann[0].title, "À venir : Wolverine");
+// au lieu d'en creer une seconde. Le nom nu depuis le 2026-08-19 : le type
+// d'evenement vit dans event_type, le repeter en francais dans title le
+// dupliquait a l'ecran a cote de son propre tag.
+check("announcedRows libelle = le nom nu", ann[0].title, "Wolverine");
 check("announcedRows porte la date", ann[0].event_date, "2027-05-01");
 check("announcedRows porte la franchise", ann[0].franchise_id, "f1");
 check("announcedRows sur liste vide", V.announcedRows([], TODAY), []);

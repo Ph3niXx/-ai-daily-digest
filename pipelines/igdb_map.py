@@ -138,8 +138,15 @@ def upcoming_events(fresh_rows, today):
     reels attendaient. L'unicite `(title_id, event_type)` en base fait que
     chaque titre ne le dit qu'une fois, jamais deux, et un evenement
     acquitte ne revient pas.
+
+    `title` porte le NOM DU JEU, nu. Le type d'evenement a deja sa colonne
+    (`event_type`) et la date la sienne (`event_date`) : les reecrire en
+    francais dans le libelle les affichait deux fois a l'ecran — « À venir :
+    Silksong » sous un tag « ANNONCÉ », et « Date annoncee : X — 2026-09-04 »
+    a cote d'une colonne date. Un seul fait, un seul endroit. Le rail Gaming
+    l'avait deja compris et deprefixait a l'affichage (games-view.js).
     """
-    return [("announced", f"À venir : {r.get('name') or '#' + str(r['igdb_id'])}",
+    return [("announced", r.get("name") or "#" + str(r["igdb_id"]),
              r.get("first_release_date"), r["igdb_id"])
             for r in fresh_rows if is_upcoming(r, today)]
 
@@ -171,10 +178,12 @@ def diff_game_events(old_by_igdb_id, fresh_rows, today=None):
             # serait faux.
             continue
 
+        # `label` nu, sans prefixe : cf. upcoming_events(). event_type porte
+        # deja la nature de l'evenement, event_date deja sa date.
         if not old.get("first_release_date") and date:
-            events.append(("date_announced", f"Date annoncée : {label} — {date}", date, gid))
+            events.append(("date_announced", label, date, gid))
         if old.get("igdb_status") != "released" and row.get("igdb_status") == "released":
-            events.append(("released", f"Sorti : {label}", date, gid))
+            events.append(("released", label, date, gid))
         if old.get("igdb_status") != "cancelled" and row.get("igdb_status") == "cancelled":
-            events.append(("cancelled", f"Annulé : {label}", None, gid))
+            events.append(("cancelled", label, None, gid))
     return events
