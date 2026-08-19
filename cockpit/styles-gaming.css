@@ -609,46 +609,103 @@
   margin-top: 12px;
 }
 
-/* ── Encart Jeux du Brief du jour (lot 1 du tracker) ───────── */
+/* ── Encart Jeux du Brief du jour (lot 1 du tracker) ─────────
+   Même grammaire que l'encart Médiathèque (.mdt-brief) : les deux
+   sont voisins dans le Brief et doivent se lire comme une paire.
+   Marge horizontale = var(--space-6), la même que .ph, sinon
+   l'encart flotte contre le bord alors que tout le reste est calé.
+   ──────────────────────────────────────────────────────────── */
 .gmb-brief {
   border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
-  border-radius: 12px;
-  padding: 14px 16px;
-  margin: 16px 0;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  margin: 0 var(--space-6) var(--space-5);
   background: color-mix(in srgb, var(--brand) 6%, transparent);
 }
-.gmb-brief-head { font-weight: 600; margin-bottom: 10px; }
+.gmb-brief-head {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--tx2);
+  margin-bottom: var(--space-3);
+}
 .gmb-brief-list { list-style: none; margin: 0; padding: 0; }
 .gmb-brief-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-  padding: 6px 0;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--brand) 14%, transparent);
 }
-.gmb-brief-text { flex: 1; min-width: 0; }
+.gmb-brief-item:last-child { border-bottom: none; }
+
+.gmb-brief-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.gmb-brief-title { color: var(--tx); font-size: var(--text-md); }
 .gmb-brief-tag {
-  margin-left: 8px;
-  font-size: 11px;
-  color: var(--tx2);
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  color: var(--tx3);
 }
-.gmb-brief-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.gmb-brief-tag.is-released  { color: var(--positive); }
+.gmb-brief-tag.is-cancelled { color: var(--alert); }
+.gmb-brief-date {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  color: var(--tx3);
+}
+
+.gmb-brief-actions { display: flex; gap: var(--space-1); flex-shrink: 0; }
+
+/* Boutons texte discrets plutôt que des glyphes en boîte : « ✓ » et
+   « ✕ licence » dans deux cadres de 44 px pesaient plus que la ligne
+   qu'ils servaient. Ici la cible tactile de 44 px est rétablie au
+   pointeur grossier seulement — la souris n'en a pas besoin. */
 .gmb-brief-btn {
-  border: 1px solid var(--bd);
+  border: 1px solid transparent;
   background: transparent;
-  color: inherit;
-  border-radius: 8px;
-  /* 44px de cible tactile : meme regle que la passe mobile de la mediatheque */
-  min-height: 44px;
-  padding: 0 12px;
+  border-radius: var(--radius);
+  padding: var(--space-1) var(--space-2);
+  color: var(--tx3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
   cursor: pointer;
-  font-size: 13px;
+  transition: color 120ms, border-color 120ms;
 }
-.gmb-brief-btn.is-dismiss { opacity: 0.7; }
-@media (hover: hover) {
-  .gmb-brief-btn:hover { background: var(--bg2); }
+.gmb-brief-btn:hover { color: var(--tx); border-color: var(--bd); }
+.gmb-brief-btn.is-dismiss:hover { color: var(--alert); border-color: var(--alert); }
+
+@media (pointer: coarse) {
+  .gmb-brief-btn { min-height: 44px; padding: 0 var(--space-3); border-color: var(--bd); }
+}
+
+.gmb-brief-cta {
+  margin-top: var(--space-3);
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--brand);
+  font: inherit;
+  font-size: var(--text-md);
+  cursor: pointer;
+}
+.gmb-brief-cta:hover { text-decoration: underline; text-underline-offset: 2px; }
+
+@media (max-width: 720px) {
+  .gmb-brief { margin: 0 var(--space-4) var(--space-4); }
+  .gmb-brief-item { flex-wrap: wrap; }
 }
 
 /* ── Rail « À venir » (lot 2) ─────────────────────────────── */

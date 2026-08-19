@@ -32,7 +32,7 @@ tables:
 
 panels:
   - id: brief
-    detail: "Encart GamesBriefCard (game_releases non acquittes < 30j, Tier 1) — seul point de contact du lot 1"
+    detail: "Encart GamesBriefCard (game_releases non acquittes < 30j, Tier 1) — 3 lignes max, CTA « +N autres dans Gaming » depuis le 2026-08-19"
   - id: gaming
     detail: "Lot 2 implemente (bibliotheque a statuts, rail « A venir ») — plus conditionne a la sonde de survie depuis son lancement, cf. docs/specs/tab-gaming.md"
 

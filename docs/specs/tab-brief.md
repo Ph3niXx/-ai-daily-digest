@@ -87,7 +87,7 @@ Deux encarts d'alerte se montent juste au-dessus du hero, avant la bascule Morni
 | `buildRadar(rows)` | Normalise scores 0-10→0-100, calcule `delta_30d`, `next_gap` = axe le plus bas | [data-loader.js:206](cockpit/lib/data-loader.js:206) |
 | `buildWeek(recent)` | Compte articles par jour Lun→Dim, streak, KPIs week | [data-loader.js:1028](cockpit/lib/data-loader.js:1028) |
 | `computeStreak()` | Scan localStorage `read-articles` jusqu'à 400j en arrière | [data-loader.js:58-70](cockpit/lib/data-loader.js:58) |
-| `GamesBriefCard({ releases, onNavigate })` | Composant encart Jeux : lit `data.game_releases`, affiche jusqu'à 3 événements, retourne `null` si vide | [home.jsx:247](cockpit/home.jsx:247) |
+| `GamesBriefCard({ releases, onNavigate })` | Composant encart Jeux : lit `data.game_releases`, annonce le total en tête, affiche les 3 premiers événements et reporte le reste dans un CTA `+N autres dans Gaming` ; retourne `null` si vide | [home.jsx:247](cockpit/home.jsx:247) |
 | `patchOrThrow(path, body)` (inline dans `GamesBriefCard`) | Vérifie `r.ok` avant de considérer l'écriture réussie — `window.sb.patchJSON` renvoie la `Response` brute et ne lève jamais sur 4xx/5xx, contrairement à `postJSON` | [home.jsx:263](cockpit/home.jsx:263) |
 | `ack(r)` (inline) | `PATCH game_releases?id=eq.<id>` `{acknowledged:true}`, optimiste avec rollback si l'écriture échoue | [home.jsx:269](cockpit/home.jsx:269) |
 | `unwatch(r)` (inline) | `PATCH game_franchises?id=eq.<franchise_id>` `{watched:false}` puis acquittement de l'événement, optimiste avec rollback | [home.jsx:280](cockpit/home.jsx:280) |
@@ -127,6 +127,36 @@ bandeau reste non-dismissible et disparaît de lui-même quand le pipeline repar
 Canal jumeau hors cockpit : `pipeline_health` tient à jour une issue GitHub
 unique (voir ADR-38).
 
+### Forme : un relevé, pas une pile de bandeaux (2026-08-19)
+
+Porter toutes les pannes sur le Brief a produit son propre effet de bord : six
+pannes simultanées donnaient six bandeaux pleine largeur sur fond rouge, chacun
+répétant la même phrase (« Ce que tu vois ici est figé »), le lien « voir le
+run » passant sous le bouton flottant `.recent-toggle`. Illisible, et quand tout
+est rouge plus rien ne l'est.
+
+Le bandeau est désormais une bande unique en tête de `<main>`, calée sur la
+même marge que `.ph` :
+
+- **Titre** — compteur en accent (`N sources figées`) : c'est le seul endroit
+  qui crie. Laissé court et aligné à gauche parce que `.recent-toggle`
+  (`position: fixed`, top 14 / right 60) survole les ~46 premiers pixels.
+- **Chapeau** — la phrase d'explication, dite une fois au lieu de N.
+- **Relevé** — une ligne par pipeline, en colonnes alignées : pastille de
+  statut, nom, cause en deux mots (`sync en échec` / `run à vide`), âge en
+  mono à chiffres tabulaires, lien vers le run en icône. L'œil compare les
+  âges verticalement au lieu de relire N phrases.
+
+Tri par **fraîcheur croissante** : la panne la plus récente en haut, c'est la
+seule encore actionnable. À âge affiché égal, la panne franche passe devant le
+run à vide. La couleur suit deux axes séparés — la teinte dit la nature (rouge
+`--alert` pour `failing`, ambre `--neutral` pour `stale`, comme la pastille), la
+graisse dit la fraîcheur (< 7 jours). Une source morte depuis 118 jours reste
+présente et grise : c'est une décision déjà prise, pas une urgence du jour.
+
+Non-dismissibilité inchangée — aucun repli, aucun état persisté : la bande est
+seulement passée de ~340 px de rouge à ~200 px de papier.
+
 ## Back — pipelines qui alimentent
 
 - **Daily pipeline** ([main.py](main.py)) — GitHub Actions cron `0 6 * * 1-5` ([daily_digest.yml](.github/workflows/daily_digest.yml)), samedi `0 10 * * 6` (ping anti-pause uniquement) :
@@ -147,7 +177,7 @@ unique (voir ADR-38).
 - **localStorage** : clé `read-articles` (map `id → {ts}`), lue+écrite pour le streak et le "marqué lu". Clé `snoozed-articles` (map `id → {until, snoozedAt}`) pour le report d'article 3 jours.
 
 ## Dépendances
-- **Onglets aval** (via CTA) : `top` (3 incontournables), `updates` (parcourir tous), `signals` (tous les signaux), `challenges` (gap action), `week` (ouvrir ma semaine). L'encart Jeux (`GamesBriefCard`) reste sans CTA de navigation — ses deux actions écrivent directement en base, sans lien vers un onglet. Mais depuis le 2026-08-13, l'encart du Brief **n'est plus le seul point de contact** du tracker jeux : l'onglet Gaming (sidebar, groupe Personnel) expose désormais son propre rail « À venir » avec les deux mêmes actions (acquitter / cesser de suivre) — cf. [tab-gaming.md](tab-gaming.md), section « Tracker jeux — lot 1 », et ADR-35 dans `docs/architecture/decisions.md` pour le lancement anticipé du lot 2.
+- **Onglets aval** (via CTA) : `top` (3 incontournables), `updates` (parcourir tous), `signals` (tous les signaux), `challenges` (gap action), `week` (ouvrir ma semaine), `gaming` (encart Jeux). Depuis le 2026-08-19 l'encart Jeux porte un CTA de navigation vers `gaming` : le titre annonce le total d'événements mais la liste s'arrête à 3, et sans ce lien les suivants n'avaient aucun chemin d'accès depuis le Brief (le compteur annonçait « 4 nouveautés » au-dessus de 3 lignes). Ses deux actions d'écriture restent inchangées. Depuis le 2026-08-13, l'encart du Brief **n'est plus le seul point de contact** du tracker jeux : l'onglet Gaming (sidebar, groupe Personnel) expose désormais son propre rail « À venir » avec les deux mêmes actions (acquitter / cesser de suivre) — cf. [tab-gaming.md](tab-gaming.md), section « Tracker jeux — lot 1 », et ADR-35 dans `docs/architecture/decisions.md` pour le lancement anticipé du lot 2.
 - **Pipelines** : `daily_digest.yml` (obligatoire pour `articles` + `daily_briefs` + `signal_tracking`), `weekly_analysis.yml` (secondaire, pour les coûts du footer et la calibration radar indirecte), `igdb-tracker-sync.yml` (obligatoire pour `game_releases` — en service depuis le 2026-08-13).
 - **Variables d'env / secrets** : aucune côté front. Pipeline backend requiert `GEMINI_API_KEY`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `GMAIL_*`. Le tracker jeux requiert en plus `TWITCH_CLIENT_ID` / `TWITCH_CLIENT_SECRET` — posés le 2026-08-13 à 12h35 UTC, à la fois dans GitHub Actions (pipeline) et dans les secrets Supabase (Edge Function `igdb-proxy`) ([secrets.md](../secrets.md)).
 

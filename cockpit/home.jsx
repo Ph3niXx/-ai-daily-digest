@@ -301,27 +301,49 @@ function GamesBriefCard({ releases = [], onNavigate }) {
     }
   }
 
+  // L'encart montre 3 lignes au plus mais le titre annonce le total : sans le
+  // report « +N autres », le compteur mentait (« 4 nouveautés » pour 3 lignes)
+  // et la 4e n'avait aucun chemin d'accès depuis le Brief.
+  const shown = visible.slice(0, 3);
+  const rest = visible.length - shown.length;
+
+  const fmtDate = (d) => {
+    if (!d) return null;
+    const t = new Date(d);
+    if (isNaN(t.getTime())) return String(d);
+    return t.toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  };
+
   return (
     <section className="gmb-brief" aria-label="Sorties jeux">
       <div className="gmb-brief-head">
-        🎮 Jeux — {visible.length} nouveauté{visible.length > 1 ? "s" : ""}
+        <span aria-hidden="true">🎮</span> Jeux · {visible.length} nouveauté{visible.length > 1 ? "s" : ""}
       </div>
       <ul className="gmb-brief-list">
-        {visible.slice(0, 3).map((r) => (
-          <li key={r.id} className="gmb-brief-item">
-            <span className="gmb-brief-text">
-              {r.title}
-              <span className="gmb-brief-tag">{LABEL[r.event_type] || r.event_type}</span>
-            </span>
-            <span className="gmb-brief-actions">
-              <button className="gmb-brief-btn" onClick={() => ack(r)}
-                      title="J'ai vu">✓</button>
-              <button className="gmb-brief-btn is-dismiss" onClick={() => unwatch(r)}
-                      title="Ne plus suivre cette licence">✕ licence</button>
-            </span>
-          </li>
-        ))}
+        {shown.map((r) => {
+          const when = fmtDate(r.event_date);
+          return (
+            <li key={r.id} className="gmb-brief-item">
+              <span className="gmb-brief-text">
+                <span className="gmb-brief-title">{r.title}</span>
+                <span className={`gmb-brief-tag is-${r.event_type}`}>
+                  {LABEL[r.event_type] || r.event_type}
+                </span>
+                {when && <span className="gmb-brief-date">{when}</span>}
+              </span>
+              <span className="gmb-brief-actions">
+                <button className="gmb-brief-btn" onClick={() => ack(r)}
+                        title={`Marquer vu — ${r.title}`}>Vu</button>
+                <button className="gmb-brief-btn is-dismiss" onClick={() => unwatch(r)}
+                        title="Ne plus suivre cette licence : ses futurs événements ne remonteront plus">Ne plus suivre</button>
+              </span>
+            </li>
+          );
+        })}
       </ul>
+      <button className="gmb-brief-cta" onClick={() => onNavigate && onNavigate("gaming")}>
+        {rest > 0 ? `+${rest} autre${rest > 1 ? "s" : ""} dans Gaming` : "Ouvrir Gaming"} →
+      </button>
     </section>
   );
 }

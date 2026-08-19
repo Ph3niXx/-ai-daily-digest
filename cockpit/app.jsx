@@ -118,6 +118,13 @@ function Stub({ id, theme, onBack }) {
 // Volontairement NON dismissible. Un bandeau qu'on peut faire taire est un
 // bandeau qu'on fait taire une fois puis qu'on oublie — soit exactement le
 // silence qu'on cherche à corriger. Il disparaît quand le pipeline repart.
+//
+// Forme = un relevé, pas une pile de bandeaux. Six pannes empilées donnaient
+// six phrases quasi identiques (« Ce que tu vois ici est figé » × 6) sur six
+// fonds rouges : illisible, et quand tout est rouge plus rien ne l'est. La
+// phrase est dite une fois en tête ; les lignes ne gardent que ce qui diffère,
+// aligné en colonnes pour que l'œil compare verticalement. L'alarme vit dans
+// le titre (compteur en accent), les lignes restent calmes.
 function PipelineHealthBanner({ panelId, rows }) {
   const all = rows || [];
 
@@ -148,49 +155,94 @@ function PipelineHealthBanner({ panelId, rows }) {
 
   if (!hits.length && !checkStale) return null;
 
-  const fmtAge = (row) => {
+  // Âge en jours de la dernière donnée valide. Sert à deux choses : trier
+  // (la panne la plus fraîche en haut — c'est la seule encore actionnable,
+  // les vieilles sont des décisions déjà prises) et colorer (une panne de
+  // 2 jours est une nouvelle, une panne de 118 jours est du décor).
+  const ageDays = (row) => {
     const ref = row.data_last_seen || row.last_success_at;
     if (!ref) return null;
-    const days = Math.floor((Date.now() - new Date(ref).getTime()) / 86400000);
-    if (days >= 2) return `${days} jours`;
-    const hours = Math.max(1, Math.floor((Date.now() - new Date(ref).getTime()) / 3600000));
-    return `${hours} h`;
+    return (Date.now() - new Date(ref).getTime()) / 86400000;
   };
 
+  const fmtAge = (row) => {
+    const d = ageDays(row);
+    if (d === null) return null;
+    if (d >= 2) return `${Math.floor(d)} j`;
+    return `${Math.max(1, Math.floor(d * 24))} h`;
+  };
+
+  // Le plus frais d'abord. La colonne d'âges se lit alors comme un dégradé
+  // (2 j / 2 j / 37 j / 50 j / 117 j) et non comme six phrases identiques.
+  const sorted = hits.slice().sort((a, b) => {
+    const da = ageDays(a), db = ageDays(b);
+    if (da === null || db === null) return (da === null) - (db === null);
+    // Sur l'âge AFFICHÉ, pas sur les millisecondes : deux lignes qui montrent
+    // toutes deux « 2 j » doivent s'ordonner par gravité, pas par une
+    // précision invisible au lecteur. Panne franche avant run à vide.
+    const fa = Math.floor(da), fb = Math.floor(db);
+    if (fa !== fb) return fa - fb;
+    const sa = a.status === "failing" ? 0 : 1, sb = b.status === "failing" ? 0 : 1;
+    return sa - sb || String(a.label).localeCompare(String(b.label), "fr");
+  });
+
+  const n = sorted.length;
+  const plural = n > 1 ? "s" : "";
+
   return (
-    <div className="phb" role="status">
-      {checkStale && (
-        <div className="phb-row phb-row--stale">
-          <Icon name="plug" size={14} stroke={1.75} />
-          <div className="phb-text">
-            <strong>Surveillance à l'arrêt</strong>
-            {" — le contrôle de santé n'a pas tourné depuis plus de 48 h. Les états ci-dessous datent du "}
-            {new Date(lastCheck).toLocaleDateString("fr-FR")} et peuvent être faux.
-          </div>
-        </div>
+    <aside className="phb" role="status" aria-label="Santé des pipelines">
+      <div className="phb-head">
+        <Icon name="plug" size={14} stroke={1.75} />
+        <span className="phb-kicker">
+          {n > 0 ? `${n} source${plural} figée${plural}` : "Surveillance à l'arrêt"}
+        </span>
+      </div>
+      <p className="phb-lede">
+        {n > 0
+          ? "Ces pipelines ne produisent plus. Les onglets concernés affichent encore leurs dernières données valides."
+          : `Le contrôle de santé n'a pas tourné depuis plus de 48 h — dernier verdict le ${new Date(lastCheck).toLocaleDateString("fr-FR")}. Les états affichés ailleurs peuvent être faux.`}
+      </p>
+
+      {checkStale && n > 0 && (
+        <p className="phb-warn">
+          Le contrôle de santé lui-même n'a pas tourné depuis plus de 48 h : ce relevé date du{" "}
+          {new Date(lastCheck).toLocaleDateString("fr-FR")} et peut être incomplet.
+        </p>
       )}
-      {hits.map(row => {
-        const age = fmtAge(row);
-        const failing = row.status === "failing";
-        return (
-          <div key={row.pipeline_id} className={`phb-row phb-row--${row.status}`}>
-            <Icon name="plug" size={14} stroke={1.75} />
-            <div className="phb-text">
-              <strong>{row.label}</strong>
-              {" — "}
-              {failing
-                ? <>la synchronisation échoue{age ? `, plus rien de neuf depuis ${age}` : ""}. Ce que tu vois ici est figé.</>
-                : <>les runs passent mais rien n'est produit{age ? ` depuis ${age}` : ""}. Ce que tu vois ici est figé.</>}
-            </div>
-            {row.last_run_url && (
-              <a className="phb-link" href={row.last_run_url} target="_blank" rel="noopener noreferrer">
-                voir le run
-              </a>
-            )}
-          </div>
-        );
-      })}
-    </div>
+
+      {n > 0 && (
+        <ul className="phb-list">
+          {sorted.map(row => {
+            const d = ageDays(row);
+            const fresh = d !== null && d < 7;
+            return (
+              <li key={row.pipeline_id} className={`phb-row is-${row.status}${fresh ? " is-fresh" : ""}`}>
+                <span className="phb-dot" aria-hidden="true" />
+                <span className="phb-name">{row.label}</span>
+                <span className="phb-cause">
+                  {row.status === "failing" ? "sync en échec" : "run à vide"}
+                </span>
+                <span className="phb-age">{fmtAge(row) || "—"}</span>
+                {row.last_run_url ? (
+                  <a
+                    className="phb-link"
+                    href={row.last_run_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={`Voir le dernier run — ${row.label}`}
+                    aria-label={`Voir le dernier run — ${row.label}`}
+                  >
+                    <Icon name="arrow_right" size={13} stroke={2} />
+                  </a>
+                ) : (
+                  <span className="phb-link is-empty" aria-hidden="true" />
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </aside>
   );
 }
 

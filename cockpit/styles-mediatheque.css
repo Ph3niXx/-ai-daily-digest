@@ -279,12 +279,18 @@
 .mdt-spinner { padding: 40px; text-align: center; color: var(--tx3); font-family: var(--font-mono); font-size: 12px; }
 
 /* Encart Brief du jour */
-.mdt-brief { margin: 0 0 22px; padding: 14px 18px; border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
-  border-radius: 12px; background: color-mix(in srgb, var(--brand) 6%, transparent); }
-.mdt-brief-head { font-family: var(--font-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--tx2); margin-bottom: 8px; }
-.mdt-brief-list { margin: 0 0 10px; padding-left: 18px; font-size: 13.5px; }
+/* Voisin de l'encart Jeux (.gmb-brief) dans le Brief : même cadre, même
+   marge horizontale que .ph (var(--space-6)). Sans cette marge les deux
+   encarts collaient au bord alors que tout le reste de la page est calé. */
+.mdt-brief { margin: 0 var(--space-6) var(--space-5); padding: var(--space-4) var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--brand) 35%, transparent);
+  border-radius: var(--radius-lg); background: color-mix(in srgb, var(--brand) 6%, transparent); }
+.mdt-brief-head { font-family: var(--font-mono); font-size: var(--text-xs); letter-spacing: .12em; text-transform: uppercase; color: var(--tx2); margin-bottom: var(--space-3); }
+.mdt-brief-list { margin: 0 0 var(--space-3); padding-left: 18px; font-size: var(--text-md); }
 .mdt-brief-list li { margin: 3px 0; }
-.mdt-brief-cta { border: none; background: transparent; color: var(--brand); font: inherit; font-size: 12.5px; cursor: pointer; padding: 0; }
+.mdt-brief-cta { border: none; background: transparent; color: var(--brand); font: inherit; font-size: var(--text-md); cursor: pointer; padding: 0; }
+.mdt-brief-cta:hover { text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 720px) { .mdt-brief { margin: 0 var(--space-4) var(--space-4); } }
 
 /* « Ce soir » — remplace le hero de 18 h à 2 h. Trois cartes au plus, souvent
    moins : la grille se contente de ce qu'elle reçoit (auto-fit) plutôt que

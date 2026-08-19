@@ -4739,59 +4739,145 @@ select:focus-visible {
 .ck-dialog-btn--ok.is-danger:hover { background: var(--alert); filter: brightness(1.08); }
 
 /* ═══ Bandeau santé des pipelines ════════════════════════════
-   Posé dans <main> au-dessus du panel actif quand la source de
-   données de l'onglet est dégradée. Uniquement des tokens de
-   thème — pas d'hex en dur, il doit suivre Dawn/Obsidian/Atlas.
+   Bande pleine largeur posée dans <main> au-dessus du panel actif
+   quand la source de données de l'onglet est dégradée. Se lit comme
+   un relevé : titre → chapeau → tableau réglé. Uniquement des tokens
+   de thème — pas d'hex en dur, il doit suivre Dawn/Obsidian/Atlas.
+
+   Le titre porte seul l'alarme (accent + compteur) et reste à gauche :
+   le bouton flottant « Récent · 24h » (.recent-toggle, position fixed
+   top 14 / right 60) survole cette bande sur ses ~46 premiers pixels.
+   Rien de large ni de cliquable ne doit y monter, sinon c'est masqué.
    ────────────────────────────────────────────────────────── */
 .phb {
+  display: block;
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  background: var(--bg3);
+  border-bottom: 1px solid var(--bd);
+}
+
+.phb-head {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-2);
-  margin: 0 0 var(--space-4);
+}
+.phb-head > svg { flex: none; color: var(--alert); }
+
+.phb-kicker {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--alert);
+}
+
+.phb-lede {
+  margin: var(--space-2) 0 0;
+  max-width: 76ch;
+  font-size: var(--text-md);
+  line-height: 1.5;
+  color: var(--tx2);
+}
+
+/* Surveiller le surveillant : le relevé lui-même peut être périmé. */
+.phb-warn {
+  margin: var(--space-2) 0 0;
+  max-width: 76ch;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  color: var(--tx3);
+  font-style: italic;
+}
+
+.phb-list {
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--bd);
 }
 
 .phb-row {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3) var(--space-4);
-  border: 1px solid var(--bd);
-  border-radius: var(--radius);
+  padding: var(--space-2) 0;
+  border-bottom: 1px solid var(--grid-line);
+}
+.phb-row:last-child { border-bottom: none; }
+
+.phb-dot {
+  flex: none;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--neutral);
+}
+.phb-row.is-failing .phb-dot { background: var(--alert); }
+
+.phb-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--tx);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Le seul « pourquoi » de la ligne, en deux mots. Largeur fixe pour que
+   les causes s'alignent d'une ligne à l'autre — c'est ce qui fait la
+   différence entre un tableau et six phrases. */
+.phb-cause {
+  flex: none;
+  width: 104px;
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--tx3);
+}
+
+/* La gravité, c'est la fraîcheur — pas le rouge. Une panne de 2 jours est
+   une nouvelle et s'allume ; une panne de 118 jours est une décision déjà
+   prise et reste en gris, présente sans crier.
+
+   Un canal par axe : la graisse dit la fraîcheur, la teinte dit la nature.
+   Un « run à vide » récent ne doit pas s'afficher en rouge alors que sa
+   pastille est ambre — il passe en encre pleine. Pas en var(--neutral) :
+   #b8956a sur var(--bg3) ne donne que 2,6:1, sous le seuil AA. L'ambre
+   reste réservé à la pastille, qui n'est pas du texte. */
+.phb-age {
+  flex: none;
+  width: 54px;
+  text-align: right;
+  font-family: var(--font-mono);
   font-size: var(--text-sm);
-  color: var(--tx2);
-  background: var(--surface);
+  font-variant-numeric: tabular-nums;
+  color: var(--tx3);
 }
-
-/* Panne franche : le run échoue. */
-.phb-row--failing {
-  border-color: var(--alert);
-  background: var(--alert-tint);
-}
-.phb-row--failing > svg { color: var(--alert); flex: none; }
-
-/* Péremption : les runs passent mais rien n'est produit. Moins
-   alarmant qu'une panne, tout aussi mensonger pour l'affichage. */
-.phb-row--stale {
-  border-color: var(--neutral);
-  background: var(--neutral-tint);
-}
-.phb-row--stale > svg { color: var(--neutral); flex: none; }
-
-.phb-text { flex: 1; min-width: 0; }
-.phb-text strong { color: var(--tx); font-weight: 600; }
+.phb-row.is-fresh .phb-age { font-weight: 600; color: var(--tx); }
+.phb-row.is-fresh.is-failing .phb-age { color: var(--alert); }
 
 .phb-link {
   flex: none;
-  color: var(--tx2);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: var(--radius);
+  color: var(--tx3);
+  transition: color 120ms, background 120ms;
 }
-.phb-link:hover { color: var(--tx); }
+.phb-link:hover {
+  color: var(--tx);
+  background: color-mix(in srgb, var(--tx) 7%, transparent);
+}
+.phb-link.is-empty { pointer-events: none; }
 
 @media (max-width: 720px) {
-  .phb-row { flex-wrap: wrap; }
-  .phb-text { flex: 1 1 100%; order: 2; }
+  .phb { padding: var(--space-4); }
+  .phb-cause { display: none; }
 }
 
 /* ═══ Kill-switch global pour reduced-motion ═════════════════
