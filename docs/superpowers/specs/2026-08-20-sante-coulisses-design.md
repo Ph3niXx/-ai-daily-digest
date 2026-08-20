@@ -131,7 +131,7 @@ statut supplémentaire en base :
 |---|---|---|
 | `ok` | `status='ok'` et `data_last_seen` non nul et `max_age_hours` non nul | `ok · article du jour à 06h04` |
 | **`au repos`** | `status='ok'`, `data_last_seen` non nul, **`max_age_hours` nul** | `au repos · rien depuis 37 j` |
-| **`non mesuré`** | `status='ok'`, **`data_last_seen` nul** | `run vert · fraîcheur non mesurée` |
+| **`fraîcheur inconnue`** | `status='ok'`, **`data_last_seen` nul** | `run vert · fraîcheur inconnue` |
 | `EN PANNE` | `status='failing'` | le dernier run a échoué |
 | `FIGÉ` | `status='stale'` | les runs passent, la table ne bouge plus |
 | `inconnu` | `status='unknown'` | aucun run décisif trouvé |
@@ -141,8 +141,11 @@ leur vide est nominal (ils sont pilotés par l'activité de l'utilisateur, d'où
 l'absence volontaire de `max_age_hours`). Aujourd'hui ils s'affichent « ok » et
 l'âge disparaît de l'écran. Désormais : mesuré, daté, pas alarmé.
 
-**« Non mesuré »** applique le principe 4. Il ne concerne, après les corrections
-ci-dessous, plus que `igdb_tracker_sync`, `backup_supabase` et `pipeline_health`.
+**« Fraîcheur inconnue »** applique le principe 4. Il concerne, après les
+corrections ci-dessous, `igdb_tracker_sync`, `backup_supabase` et `pipeline_health`
+— **et aussi** le cas d'une sonde déclarée sur une table encore vide. Le front ne
+peut pas distinguer les deux sans une colonne de plus, et n'en a pas besoin : le
+mot choisi est vrai dans les deux cas. « Non mesurée » aurait menti dans le second.
 
 ## Contrat de surveillance — extensions de `pipelines.yaml`
 
@@ -275,7 +278,7 @@ rapporte le **run précédent**. Un `pipeline_health` qui échoue est vu au run 
 | `anime_tracker_sync` | `media_entries` sans filtre | + `filter: source=eq.anilist` | `tmdb_tracker_sync` écrit la même table : AniList peut mourir sans que la ligne bouge |
 | `tmdb_tracker_sync` | aucune sonde | `media_entries`, `updated_at`, `filter: source=in.(tmdb_tv,tmdb_movie)`, `max_age_hours: 30` | un run vert à vide y est invisible |
 | `jp_vocab_sync` | aucune sonde | `jp_words`, `created_at`, **sans `max_age_hours`** | table exclusive, mais alimentée à l'ajout d'une franchise ⇒ piloté par l'activité, donc « au repos », jamais `stale` |
-| `igdb_tracker_sync` | aucune sonde | **reste sans sonde**, affiché « non mesuré » | ses trois tables sont co-écrites par le front depuis le 2026-08-14 (ADR-36) : aucune colonne ne distingue le pipeline de l'utilisateur |
+| `igdb_tracker_sync` | aucune sonde | **reste sans sonde**, affiché « fraîcheur inconnue » | ses trois tables sont co-écrites par le front depuis le 2026-08-14 (ADR-36) : aucune colonne ne distingue le pipeline de l'utilisateur |
 
 `media_entries.source` (défaut `'anilist'`) et `jp_words.created_at` sont vérifiés
 présents dans `sql/020_media_tracker.sql` et `sql/024_jp_vocab.sql`.
@@ -392,7 +395,7 @@ retiré plutôt que maintenu par principe.
 | Filtre de fraîcheur | idem | `filter` est bien transmis aux params PostgREST ; son absence ne change pas la requête |
 | Chargement du YAML | idem | `external_routines` remontent avec `remote: True` ; les pipelines `status != active` restent exclus |
 | Vocabulaire `domain` | `scripts/validate_architecture.py` | Tout bloc `health` d'un pipeline actif porte un `domain` du vocabulaire fermé ; `panels: []` exige `impact`. **Bloquant.** |
-| Rendu des cinq états | `tests/test_sante_view.mjs` (nouveau) | Les trois rendus de `ok` (mesuré / au repos / non mesuré), plus `failing` et `stale`, à partir de lignes fixtures |
+| Les six rendus | `tests/test_sante_view.mjs` (nouveau) | Les trois rendus de `ok` (mesuré / au repos / fraîcheur inconnue), plus `failing`, `stale` et `unknown`, à partir de lignes fixtures |
 | Homonymie de labels | idem | `gaming` et `gaming_news` produisent deux libellés distincts |
 
 Le test de rendu suit le harnais SSR Node déjà utilisé pour `test_games_view.mjs`
