@@ -37,6 +37,19 @@ EDGE_TYPES = {"cross_layer", "adjacent", "intra_layer"}
 RLS_VALUES = {"authenticated", "service_role", "public"}
 FLOW_REQUIRED_KEYS = {"id", "label", "domain", "status", "source_api", "pipeline", "tables", "panels"}
 
+# Sections de l'onglet Santé. Vocabulaire FERMÉ : une brique dont le domaine
+# n'est pas là tomberait dans la section « Non classé » de la page sans que
+# personne le sache. Ajouter une valeur ici est un acte délibéré.
+HEALTH_DOMAINS = {
+    "veille_ia",
+    "apprentissage",
+    "veille_satellite",
+    "mediatheque",
+    "perso",
+    "business",
+    "socle",
+}
+
 
 @dataclass
 class Violation:
@@ -70,6 +83,35 @@ def _load_yaml(path: Path, rpt: Report) -> dict | None:
         return None
     rpt.checked_files.append(path.relative_to(REPO_ROOT).as_posix())
     return data
+
+
+def _validate_health(rpt: Report, rel: str, ident: str, health: dict) -> None:
+    """Valide un bloc `health` — le contrat lu par pipelines/pipeline_health.py."""
+    if not isinstance(health, dict):
+        rpt.add(rel, f"{ident}.health : doit être un objet")
+        return
+    domain = health.get("domain")
+    if domain not in HEALTH_DOMAINS:
+        rpt.add(
+            rel,
+            f"{ident}.health.domain : '{domain}' absent ou hors vocabulaire "
+            f"{sorted(HEALTH_DOMAINS)}",
+        )
+    # Sans panels, la phrase d'effet ne peut pas se dériver : elle doit être
+    # écrite. Sinon la ligne s'affiche sans dire ce qu'elle coûte.
+    if not (health.get("panels") or []) and not health.get("impact"):
+        rpt.add(
+            rel,
+            f"{ident}.health : 'panels' vide exige 'impact' "
+            "(sinon aucune phrase d'effet n'est possible)",
+        )
+    # Une sonde de fraîcheur se déclare en entier ou pas du tout.
+    if bool(health.get("table")) != bool(health.get("date_column")):
+        rpt.add(
+            rel,
+            f"{ident}.health : 'table' et 'date_column' vont ensemble "
+            "(l'une sans l'autre ne mesure rien)",
+        )
 
 
 def _validate_pipelines(rpt: Report) -> None:
@@ -113,6 +155,19 @@ def _validate_pipelines(rpt: Report) -> None:
         cron = p.get("cron")
         if cron and not re.match(r"^[\d*/,\s-]+$", str(cron)):
             rpt.add(rel, f"pipelines[{pid or i}].cron : '{cron}' n'a pas la forme d'un cron")
+        health = p.get("health")
+        if health is not None and p.get("status") == "active":
+            _validate_health(rpt, rel, f"pipelines[{pid or i}]", health)
+
+    # Les routines distantes (claude.ai, hors GitHub Actions) portent le même
+    # contrat de santé, sans workflow_file. La boucle no-ope tant qu'aucune
+    # n'a déclaré de bloc `health`.
+    for i, r in enumerate(data.get("external_routines") or []):
+        if not isinstance(r, dict):
+            continue
+        health = r.get("health")
+        if health is not None and r.get("status") == "active":
+            _validate_health(rpt, rel, f"external_routines[{r.get('id') or i}]", health)
 
 
 def _validate_dependencies(rpt: Report) -> None:

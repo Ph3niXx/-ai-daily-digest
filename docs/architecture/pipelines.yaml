@@ -13,6 +13,10 @@
 #   budget_usd    : coût moyen par run en USD (0 pour tier gratuit)
 #   status        : active | draft | archived
 #   health        : contrat de surveillance, consommé par pipelines/pipeline_health.py
+#     domain          : section de l'onglet Santé. Vocabulaire FERMÉ de 7 valeurs
+#                       (veille_ia, apprentissage, veille_satellite, mediatheque,
+#                       perso, business, socle), imposé par validate-arch. Une
+#                       brique sans domaine tomberait dans « Non classé ».
 #     panels          : onglets du cockpit qui affichent la donnée de ce pipeline.
 #                       Sert à savoir où poser le bandeau d'avertissement.
 #     table           : table dont on mesure la fraîcheur.
@@ -31,6 +35,18 @@
 #                                mesure quand même, pour pouvoir dire « plus rien
 #                                depuis 26 jours » au lieu d'un message muet.
 #       ni l'un ni l'autre     → seul le verdict du run compte.
+#
+#     filter          : (optionnel) fragment de requête PostgREST appliqué à la
+#                       sonde de fraîcheur — ex. `source=eq.anilist`. Nécessaire
+#                       dès que la table de sortie a plusieurs écrivains, sinon
+#                       la sonde d'un pipeline est satisfaite par les écritures
+#                       d'un autre.
+#     remediation     : (optionnel) le geste qui répare, une à deux phrases.
+#                       Affiché tel quel sur l'onglet Santé. Absent = la ligne
+#                       dégradée n'affiche pas de flèche, ce qui vaut mieux
+#                       qu'un conseil creux.
+#     impact          : (optionnel) la phrase d'effet, OBLIGATOIRE quand `panels`
+#                       est vide. Ailleurs, l'effet se dérive des panels.
 
 pipelines:
   - id: daily_digest
@@ -39,6 +55,7 @@ pipelines:
     human_time: "Tous les jours 06:00 UTC"
     workflow_file: ".github/workflows/daily_digest.yml"
     health:
+      domain: veille_ia
       panels: [brief, updates, top]
       table: articles
       date_column: fetch_date
@@ -70,6 +87,7 @@ pipelines:
     human_time: "Dimanche 22:00 UTC"
     workflow_file: ".github/workflows/weekly_analysis.yml"
     health:
+      domain: apprentissage
       panels: [recos, challenges, opps, signals]
       # On surveille learning_recommendations, PAS weekly_analysis : le run du
       # 2026-07-19 a écrit sa ligne de compte-rendu avec 0 token / 0 appel /
@@ -109,6 +127,7 @@ pipelines:
     human_time: "Toutes les 2 heures"
     workflow_file: ".github/workflows/tft-sync.yml"
     health:
+      domain: perso
       panels: [gaming]
       # Mesurée mais pas sanctionnée : ne produit que si l'utilisateur joue.
       table: tft_matches
@@ -132,6 +151,7 @@ pipelines:
     human_time: "Quotidien 04:30 UTC"
     workflow_file: ".github/workflows/strava-sync.yml"
     health:
+      domain: perso
       panels: [perf]
       # Mesurée mais pas sanctionnée (pas de max_age_hours) : pas de sortie =
       # pas d'activité, pas une panne. Sert seulement à dater le bandeau.
@@ -156,6 +176,7 @@ pipelines:
     human_time: "Quotidien 04:45 UTC"
     workflow_file: ".github/workflows/withings-sync.yml"
     health:
+      domain: perso
       panels: [perf]
       # Mesurée mais pas sanctionnée : pas de pesée = pas de donnée, pas une panne.
       table: withings_measurements
@@ -179,6 +200,7 @@ pipelines:
     human_time: "Quotidien 05:00 UTC"
     workflow_file: ".github/workflows/lastfm-sync.yml"
     health:
+      domain: perso
       panels: [music]
       # Mesurée mais pas sanctionnée : pas d'écoute = pas de scrobble, pas une panne.
       table: music_scrobbles
@@ -206,6 +228,7 @@ pipelines:
     human_time: "Quotidien 05:30 UTC"
     workflow_file: ".github/workflows/steam-sync.yml"
     health:
+      domain: perso
       panels: [gaming]
       table: steam_games_snapshot   # snapshot quotidien, écrit même sans jeu lancé
       date_column: snapshot_date
@@ -229,6 +252,7 @@ pipelines:
     human_time: "Quotidien 06:30 UTC"
     workflow_file: ".github/workflows/sport-sync.yml"
     health:
+      domain: veille_satellite
       panels: [sport]
       table: sport_articles
       date_column: fetch_date
@@ -248,6 +272,7 @@ pipelines:
     human_time: "Quotidien 06:45 UTC"
     workflow_file: ".github/workflows/gaming-sync.yml"
     health:
+      domain: veille_satellite
       panels: [gaming_news]
       table: gaming_articles
       date_column: fetch_date
@@ -267,6 +292,7 @@ pipelines:
     human_time: "Quotidien 07:00 UTC"
     workflow_file: ".github/workflows/anime-sync.yml"
     health:
+      domain: veille_satellite
       panels: [anime]
       table: anime_articles
       date_column: fetch_date
@@ -287,6 +313,7 @@ pipelines:
     human_time: "Quotidien 07:30 UTC"
     workflow_file: ".github/workflows/anime-tracker-sync.yml"
     health:
+      domain: mediatheque
       panels: [mediatheque]
       table: media_entries
       date_column: updated_at
@@ -311,6 +338,7 @@ pipelines:
     human_time: "Quotidien 07:45 UTC"
     workflow_file: ".github/workflows/tmdb-tracker-sync.yml"
     health:
+      domain: mediatheque
       panels: [mediatheque]
       # Pas de contrôle de fraîcheur : sans TMDB_API_KEY le pipeline sort en
       # [skip] code 0 — un run vert et zéro écriture est ici un cas nominal.
@@ -334,6 +362,7 @@ pipelines:
     human_time: "Quotidien 08:30 UTC"
     workflow_file: ".github/workflows/igdb-tracker-sync.yml"
     health:
+      domain: perso
       panels: [brief]
       # Pas de contrôle de fraîcheur : sans les secrets Twitch le pipeline
       # sort en [skip] code 0 — un run vert et zéro écriture est nominal.
@@ -365,6 +394,7 @@ pipelines:
     human_time: "Quotidien 07:15 UTC"
     workflow_file: ".github/workflows/news-sync.yml"
     health:
+      domain: veille_satellite
       panels: [news]
       table: news_articles
       date_column: fetch_date
@@ -396,6 +426,7 @@ pipelines:
     budget_usd: 0
     status: active
     health:
+      domain: veille_ia
       panels: [brief, top]
       table: daily_picks
       date_column: created_at
@@ -426,6 +457,7 @@ pipelines:
     budget_usd: 0
     status: active
     health:
+      domain: mediatheque
       panels: [mediatheque]
       # Pas de contrôle de fraîcheur : incrémental par conception, le run
       # nominal n'écrit rien. Une table qui ne bouge pas est ici l'état normal.
