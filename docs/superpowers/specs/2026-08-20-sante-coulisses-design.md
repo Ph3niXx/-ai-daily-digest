@@ -105,11 +105,12 @@ Veille IA quotidienne (Gemini)          ok            article du jour à 06h04
 
 ```
 Analyses hebdo (Claude Haiku)           EN PANNE                       118 j
-  Compte Anthropic sans crédit — HTTP 400 sur chaque appel.
+  Dernier run : failure (au moins 15 échecs d'affilée)
   Recommandations, Challenges, Opportunités et Signaux faibles
-  affichent encore le 28 avril.
-  → Recharger le crédit sur console.anthropic.com, puis relancer
-    le workflow weekly_analysis.                            [voir le run ↗]
+  affichent encore des données figées.
+  → Recharger le crédit sur console.anthropic.com — un HTTP 400
+    « credit balance » est la panne historique de ce pipeline — puis
+    relancer weekly_analysis.yml.                           [voir le run ↗]
 ```
 
 Quatre registres, quatre sources :
@@ -120,6 +121,16 @@ Quatre registres, quatre sources :
 | Cause | `last_error` | oui |
 | Effet | dérivé de `panels` × labels de `COCKPIT_NAV` | non — calcul front |
 | Geste | `remediation` | **non — nouveau champ** |
+
+**Le registre « Cause » ne dit pas *pourquoi*, il dit *quoi*.** `last_error` ne
+contient que ce que `build_row()` fabrique à partir du verdict — `Dernier run :
+failure (N échecs d'affilée)` ou `Runs au vert mais <table> n'a rien reçu depuis
+N h`. `pipeline_health.py` ne lit aucun log, aucun corps de réponse HTTP : il
+n'a structurellement pas de quoi écrire « compte Anthropic sans crédit ».
+C'est l'arbitrage retenu, pas un manque : la **cause métier** est déclarée une
+fois pour toutes dans `remediation`, à côté du pipeline qu'elle répare
+(principe 3), là où elle est maintenue par un humain qui la connaît — plutôt
+que devinée à chaque run par un parseur de logs qui se trompera.
 
 ### Les six rendus
 
@@ -378,7 +389,7 @@ retiré plutôt que maintenu par principe.
 
 | Cas | Comportement |
 |---|---|
-| `pipeline_health` vide (premier boot, fetch en échec) | La page affiche un état vide explicite : « Aucun relevé — le contrôle de santé n'a jamais écrit ». Jamais « tout va bien ». |
+| `pipeline_health` vide (premier boot **ou** fetch en échec) | La page affiche un état vide explicite : « Aucun relevé n'a pu être lu — soit le contrôle de santé n'a encore rien écrit, soit la lecture a échoué ». Le front ne peut pas distinguer les deux cas : le fetch de `bootTier1` est en `.catch(() => [])`, une erreur réseau produit le même tableau vide qu'une table neuve. Une page qui refuse d'affirmer un état non mesuré ne peut donc pas affirmer « n'a jamais écrit ». Jamais « tout va bien » non plus. |
 | `checked_at` > 48 h | Bandeau de tête en avertissement, **avant** les sections. Les verdicts affichés sont marqués comme datés. |
 | Brique en base absente du YAML | Affichée dans une section « Non classé » en fin de page. Une brique orpheline doit se voir, pas disparaître. |
 | `domain` nul (déploiement partiel) | Même traitement : section « Non classé ». `validate-arch` empêche que ça arrive depuis le repo, pas qu'une vieille ligne survive un run. |
