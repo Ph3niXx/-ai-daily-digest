@@ -862,6 +862,28 @@ Pour `pipeline_health` (ligne ~439), ajouter après `workflow_file:` :
         SUPABASE_SERVICE_KEY tourné.
 ```
 
+**Et, dans la même entrée**, remplacer le commentaire de 3 lignes situé entre
+`status: active` et `notes:` — il commence par `# Pas de bloc \`health\`` et
+devient faux dès que le bloc ci-dessus existe. Sa prémisse tombe, mais son
+intuition reste juste : un surveillant mort ne rapporte pas sa mort. Le
+remplacement dit pourquoi les deux gardes se complètent :
+
+```yaml
+    # Le surveillant s'inscrit dans sa propre table depuis le 2026-08-20, et ça ne
+    # suffit pas : un surveillant mort ne rapporte pas sa mort. Les deux gardes se
+    # complètent. Le bloc `health` ci-dessus attrape la panne INTERMITTENTE — le run
+    # en cours n'a pas encore de conclusion, il est donc écarté par
+    # DECISIVE_CONCLUSIONS et chaque run rapporte le verdict du précédent, si bien
+    # qu'un échec isolé finit par sortir. La panne DÉFINITIVE (token expiré, plus
+    # aucun run) ne laisse personne pour l'écrire : c'est le front qui la voit, en
+    # comparant pipeline_health.checked_at à l'heure courante — cf.
+    # PipelineHealthBanner, et l'onglet Santé qui en fait une ligne visible.
+```
+
+Après cette étape, `grep -n "Pas de bloc" docs/architecture/pipelines.yaml` ne doit
+plus rien renvoyer : les deux occurrences (celle-ci et celle de `backup_supabase`
+juste en dessous) sont remplacées.
+
 Pour `backup_supabase` (ligne ~478), **remplacer** le commentaire `# Pas de bloc health : …` (3 lignes) par :
 
 ```yaml
