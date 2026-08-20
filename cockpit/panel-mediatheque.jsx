@@ -1,9 +1,16 @@
 // ═══════════════════════════════════════════════════════════════
-// PANEL MÉDIATHÈQUE — tracker anime (v1)
+// PANEL MÉDIATHÈQUE — tracker anime / séries / films
 // ─────────────────────────────────────────────
 // Bandeau Sorties (Task 10) · Bibliothèque (cartes franchise, statuts
-// dérivés) · Recherche AniList + fiche préversion/ajout (Task 8) ·
+// dérivés) · Recherche AniList + TMDB, fiche préversion/ajout (Task 8) ·
 // Fiche bibliothèque + progression (Task 9).
+//
+// DEUX ÉTAGES DE PORTÉE, et l'ordre de rendu est ce qui les distingue (ADR-42) :
+// au-dessus des onglets, ce qui regarde toute la bibliothèque (bandeau Sorties,
+// bande « Ce soir ») ; en dessous, ce qui appartient au rayon ouvert (hero,
+// rail, agenda, collection). Avant de déplacer un bloc dans ce fichier, se
+// demander à quel étage il appartient — un composant qui change de côté change
+// de sens.
 // Données : window.MEDIATHEQUE_DATA (T2 brut) — statuts dérivés et libellés
 // calculés par cockpit/lib/mediatheque-view.js (window.mdtView).
 // Spec : docs/superpowers/specs/2026-07-14-mediatheque-anime-tracker-design.md
@@ -300,15 +307,15 @@ function MdtReleasesStrip({ D, onAck }) {
 // qu'il remplace donnait le même poids visuel à un jour vide qu'à un jour
 // chargé et laissait ~120 px de large à des titres de 40 caractères : il
 // fallait lire chaque case pour savoir laquelle portait quelque chose.
-function MdtWeek({ D, tick, types, onOpen }) {
-  // Le filtre de type s'applique via la map de franchises : buildWeek écarte
+function MdtWeek({ D, tick, section, onOpen }) {
+  // Le filtre de section s'applique via la map de franchises : buildWeek écarte
   // déjà toute entrée dont la franchise est absente, on n'a donc pas à
   // dupliquer la règle côté logique pure.
   const franchiseById = useMdtMemo(
     () => new Map(D.franchises
-      .filter((f) => types.includes(f.media_type || "anime"))
+      .filter((f) => window.mdtView.typeOf(f) === section)
       .map((f) => [f.id, f])),
-    [D.franchises, types, tick]);
+    [D.franchises, section, tick]);
   const week = useMdtMemo(
     () => window.mdtView.buildWeek(D.entries, franchiseById, Date.now()),
     [D.entries, franchiseById, tick]);
@@ -470,22 +477,56 @@ const MDT_ROLE_LABEL = {
   discover: "Sortir du lot",
 };
 
-// ── Filtre par type de média ───────────────────────────────────
-// « Anime » seul par défaut : décision produit, ne pas noyer les franchises
-// existantes sous les films au premier chargement.
-const MDT_TYPE_KEY = "mdt.typeFilter";
-const MDT_TYPES = [
-  { value: "anime", label: "Anime" },
-  { value: "tv", label: "Séries" },
-  { value: "movie", label: "Films" },
+// ── Sections ───────────────────────────────────────────────────
+// Une section = un `media_type`, et cette table est la seule chose à toucher
+// pour en ajouter une (manga, livre…). Elle a remplacé les chips de type
+// multi-sélection : ceux-ci vivaient dans l'en-tête de « Ma collection » avec
+// « Anime » seul coché par défaut, si bien que les séries et les films — déjà
+// supportés de bout en bout depuis ADR-29 — n'étaient jamais visibles.
+//
+// `japanese` n'est pas un réglage esthétique : pipelines/jp_vocab_sync.py
+// filtre `media_type == "anime"`, il n'existe aucun mot pour une franchise
+// TMDB. La bande serait structurellement vide ailleurs.
+const MDT_SECTION_KEY = "mdt.section";
+const MDT_SECTIONS = [
+  { id: "anime", label: "Anime",  kicker: "Personnel · anime",
+    japanese: true,  emptyHint: "cherche un anime ci-dessus pour commencer",
+    searchLabel: "Rechercher un anime" },
+  { id: "tv",    label: "Séries", kicker: "Personnel · séries",
+    japanese: false, emptyHint: "cherche une série ci-dessus pour commencer",
+    searchLabel: "Rechercher une série" },
+  { id: "movie", label: "Films",  kicker: "Personnel · films",
+    japanese: false, emptyHint: "cherche un film ci-dessus pour commencer",
+    searchLabel: "Rechercher un film" },
 ];
+const MDT_SECTION_IDS = MDT_SECTIONS.map((s) => s.id);
 
-function mdtReadTypes() {
+function mdtSectionOf(id) {
+  return MDT_SECTIONS.find((s) => s.id === id) || MDT_SECTIONS[0];
+}
+
+function mdtReadSection() {
   try {
-    const raw = JSON.parse(localStorage.getItem(MDT_TYPE_KEY) || "null");
-    if (Array.isArray(raw) && raw.length) return raw;
+    const raw = localStorage.getItem(MDT_SECTION_KEY);
+    if (raw && MDT_SECTION_IDS.includes(raw)) return raw;
   } catch (_) { /* clé corrompue : on repart du défaut */ }
-  return ["anime"];
+  return "anime";
+}
+
+// Le compteur sur l'onglet rend la section vide lisible AVANT le clic : sans
+// lui, « Films » promet un rayon et livre un écran vide.
+function MdtSectionTabs({ section, counts, onSelect }) {
+  return (
+    <div className="mdt-sections" role="tablist" aria-label="Sections de la médiathèque">
+      {MDT_SECTIONS.map((s) => (
+        <button key={s.id} role="tab" className={`mdt-section-tab ${section === s.id ? "is-active" : ""}`}
+          aria-selected={section === s.id} onClick={() => onSelect(s.id)}>
+          {s.label}
+          <span className="mdt-section-tab-count">{counts[s.id] || 0}</span>
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function mdtBudgetLabel(budget) {
@@ -688,10 +729,14 @@ function MdtCard({ f, entries, st, cur, progressById, onOpen }) {
   );
 }
 
-// Toute la bibliothèque (actives incluses) : c'est la seule vue exhaustive.
-// Repliée par défaut — 36 des 44 franchises sont « Vu » et n'appellent aucune action.
+// Tout le rayon ouvert (actifs inclus) : c'est la seule vue exhaustive d'une
+// section. Repliée par défaut — l'essentiel des franchises est « Vu » et
+// n'appelle aucune action. `total` est borné à la SECTION : un « 12 / 47 » sur
+// un rayon qui n'en contient que 12 se lirait comme un filtre actif.
+// Les chips de type ont quitté cet en-tête pour devenir les onglets du panel
+// (ADR-42) ; ne restent ici que le statut et le tri, qui sont propres au rayon.
 function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusFilter,
-                         types, onToggleType, sort, onSort, progressById, onOpen, queryActive, query }) {
+                         sort, onSort, progressById, onOpen, queryActive, query, emptyHint }) {
   return (
     <section className="mdt-section" aria-label="Ma collection">
       <div className="mdt-section-head">
@@ -701,15 +746,6 @@ function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusF
           <span className="mdt-section-title">Ma collection</span>
           <span className="mdt-section-count">{visible.length}{visible.length !== total ? ` / ${total}` : ""}</span>
         </button>
-        {open && !queryActive && (
-          <div className="mdt-filters" role="group" aria-label="Filtrer par type de média">
-            {MDT_TYPES.map((t) => (
-              <button key={t.value} className={`mdt-chip mdt-typechip ${types.includes(t.value) ? "is-active" : ""}`}
-                aria-pressed={types.includes(t.value)}
-                onClick={() => onToggleType(t.value)}>{t.label}</button>
-            ))}
-          </div>
-        )}
         {open && !queryActive && (
           <div className="mdt-filters" role="group" aria-label="Filtrer par statut">
             {[["all", "Tous"], ["to_watch", "À voir"], ["watching", "En cours"], ["seen", "Vu"], ["shelved", "Mis de côté"]].map(([id, label]) => (
@@ -730,9 +766,9 @@ function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusF
         visible.length === 0 ? (
           <div className="mdt-empty">
             {total === 0
-              ? "Ta bibliothèque est vide — cherche un anime ci-dessus pour commencer."
+              ? `Rien dans cette section — ${emptyHint}.`
               : queryActive
-                ? `Aucun titre de ta bibliothèque ne correspond à « ${query} » — bascule sur AniList pour l'ajouter.`
+                ? `Aucun titre de ta bibliothèque ne correspond à « ${query} » — bascule sur « En ligne » pour l'ajouter.`
                 : "Aucune franchise ne correspond à ce filtre."}
           </div>
         ) : (
@@ -792,15 +828,18 @@ function PanelMediatheque({ data, onNavigate }) {
   const queryActive = q.length >= 1;      // filtrage local instantané
   const searching = q.length >= 3;        // seuil d'appel AniList (inchangé)
   const [results, setResults] = useMdtState(null);   // null = idle, [] = zéro résultat
-  const [types, setTypes] = useMdtState(mdtReadTypes);
+  const [section, setSection] = useMdtState(mdtReadSection);
+  const sectionDef = mdtSectionOf(section);
   // Même pattern que lastfm_api_key (panel-musique.jsx) : clé plate dans
   // user_profile, lue au Tier 1. Absente => la recherche n'interroge qu'AniList.
   const tmdbKey = ((window.PROFILE_DATA && window.PROFILE_DATA._values) || {}).tmdb_api_key || null;
   const [searchErr, setSearchErr] = useMdtState(null);
   const inSearchView = queryActive && view === "search"; // corps = résultats AniList ; sinon = bibliothèque
-  // Bibliothèque vide : la collection est forcée ouverte, sinon son en-tête ne
-  // cache que du vide et son message d'accueil reste inatteignable.
-  const libraryEmpty = D.franchises.length === 0;
+  // Section vide : la collection est forcée ouverte, sinon son en-tête ne cache
+  // que du vide et son message d'accueil reste inatteignable. Le critère est
+  // devenu la SECTION et non la bibliothèque entière — sur « Séries » à zéro
+  // titre, un pli fermé au milieu d'une page vide ne se lit pas comme un pli.
+  // Déclaré plus bas, après `sectionCards` (voir l'avertissement Babel).
 
   const prevQ = useMdtRef("");
   // Vue par défaut : ta bibliothèque d'abord. On ne bascule sur AniList que si
@@ -916,16 +955,25 @@ function PanelMediatheque({ data, onNavigate }) {
     });
   }, [D.franchises, entriesByFranchise, progressById, tick]);
 
-  // Les chips gouvernent la NAVIGATION (collection, rail, agenda), jamais la
-  // décision : `pickTonight` lit `cards`, pas `typedCards`. Filtrer « Ce soir »
-  // sur l'anime rendrait runtime_minutes et le budget « 2 h+ » inutiles,
-  // puisqu'un épisode d'anime dure 24 minutes. On filtre quand on explore, pas
-  // quand on demande quoi regarder.
-  const typedCards = useMdtMemo(
-    () => cards.filter((c) => types.includes(c.f.media_type || "anime")),
-    [cards, types]);
+  // La section gouverne la NAVIGATION (hero, rail, agenda, collection), jamais
+  // la décision : `pickTonight` lit `cards`, pas `sectionCards`. Restreindre
+  // « Ce soir » à l'anime rendrait runtime_minutes et le budget « 2 h+ »
+  // inutiles, puisqu'un épisode d'anime dure 24 minutes — et la question du
+  // soir est « qu'est-ce que je regarde », pas « quel anime ». C'est pour ça
+  // que la bande est rendue AU-DESSUS des onglets : sa portée est la
+  // bibliothèque entière, et sa place doit le dire.
+  const sectionCards = useMdtMemo(
+    () => window.mdtView.cardsOfSection(cards, section),
+    [cards, section]);
 
-  // ⚠️ typedCards doit rester DÉCLARÉ AVANT `visible`, qui le consomme.
+  const sectionCounts = useMdtMemo(
+    () => window.mdtView.countBySection(cards, MDT_SECTION_IDS),
+    [cards]);
+
+  // Voir plus haut : le pli forcé se décide sur la section, pas sur D.franchises.
+  const sectionEmpty = sectionCards.length === 0;
+
+  // ⚠️ sectionCards doit rester DÉCLARÉ AVANT `visible`, qui le consomme.
   // Babel standalone transpile `const` en `var` : une utilisation trop tôt ne
   // lève pas d'erreur de zone morte mais donne `undefined.filter`, et le panel
   // entier tombe dans l'error boundary. Bug vécu en prod le 2026-07-25.
@@ -935,11 +983,14 @@ function PanelMediatheque({ data, onNavigate }) {
     [cards, q, queryActive]);
 
   const visible = useMdtMemo(() => {
-    // Une recherche active prime sur les chips : elle porte sur TOUTE la
-    // bibliothèque, mises de côté comprises (chercher doit retrouver ce qu'on a rangé).
+    // Une recherche active prime sur la section : elle porte sur TOUTE la
+    // bibliothèque, mises de côté comprises (chercher doit retrouver ce qu'on a
+    // rangé — et ne pas dépendre de l'onglet où on se trouvait). C'est aussi
+    // pourquoi les onglets se masquent tant qu'une requête est en cours : ils
+    // annonceraient un périmètre que la liste ne respecte pas.
     let list = localMatches;
     if (!queryActive) {
-      list = typedCards;
+      list = sectionCards;
       if (statusFilter === "shelved") {
         list = list.filter((c) => c.f.shelved);
       } else {
@@ -955,16 +1006,22 @@ function PanelMediatheque({ data, onNavigate }) {
       alpha: (a, b) => (a.f.title_english || a.f.title_romaji || "").localeCompare(b.f.title_english || b.f.title_romaji || ""),
     };
     return [...list].sort(bySort[sort] || bySort.activity);
-  }, [typedCards, localMatches, queryActive, statusFilter, sort]);
+  }, [sectionCards, localMatches, queryActive, statusFilter, sort]);
 
   // Le gate de rendu ({!inSearchView && …}) porte seul la visibilité ; on calcule
   // toujours le vrai pick pour éviter que le hero d'accueil vide s'affiche par-dessus
   // une grille pleine quand on revient sur « Ma bibliothèque » pendant une recherche.
-  const hero = useMdtMemo(() => pickHero(cards), [cards]);
+  // Le hero est PROPRE À LA SECTION : c'est la mise en avant du rayon qu'on
+  // regarde, pas de la bibliothèque entière — sinon ouvrir « Séries » afficherait
+  // un anime en tête d'écran.
+  const hero = useMdtMemo(() => pickHero(sectionCards), [sectionCards]);
 
   // ── « Ce soir » ────────────────────────────────────────────
   // De 18 h à 2 h, la bande remplace le hero. Le reste de la journée, rien
   // n'est calculé : `evening` est faux et `tonight` reste vide.
+  // Elle reste UNIQUE et globale même avec les sections : aucun hero n'est
+  // rendu nulle part entre 18 h et 2 h. Deux surfaces de mise en avant à 22 h,
+  // c'en est une de trop — les séparer de 200 px ne les réconcilie pas.
   const [budget, setBudget] = useMdtState(() => mdtReadBudget(Date.now()));
   const evening = useMdtMemo(() => window.mdtView.isEvening(Date.now()), [tick]);
   const dayLoad = D.dayLoad || null;
@@ -983,14 +1040,25 @@ function PanelMediatheque({ data, onNavigate }) {
   // Les mots suivent la série que la page met déjà en avant : la première
   // proposition de « Ce soir » le soir, le hero en journée. On ne crée pas
   // une troisième sélection concurrente.
+  //
+  // La bande ne vit QUE dans la section Anime (`sectionDef.japanese`) :
+  // pipelines/jp_vocab_sync.py filtre `media_type == "anime"`, il n'existe
+  // aucun mot pour une franchise TMDB. La rendre ailleurs ne produirait pas
+  // une bande pauvre, mais une bande vide à tous les coups.
+  // Le soir, « Ce soir » est global : sa première proposition peut être une
+  // série. On prend alors la première proposition ANIME, et à défaut le hero
+  // de la section — plutôt que de laisser la bande disparaître un soir sur deux.
   const jpWords = D.jpWords || [];
   const jpSeenByWord = useMdtMemo(
     () => new Map((D.jpSeen || []).map((r) => [r.word, r])),
     [D.jpSeen, tick]);
   const jpFranchise = useMdtMemo(() => {
-    const pick = evening ? tonight[0] : hero;
+    if (!sectionDef.japanese) return null;
+    const pick = evening
+      ? (tonight.find((p) => window.mdtView.typeOf(p.card.f) === "anime") || null)
+      : hero;
     return (pick && pick.card && pick.card.f) || null;
-  }, [evening, tonight, hero]);
+  }, [sectionDef, evening, tonight, hero]);
 
   // Dénominateur de la sonde de survie. Sans lui, « 0 marquage » ne distingue
   // pas « jamais affiché » de « affiché et ignoré » — et le critère d'arrêt
@@ -1007,16 +1075,16 @@ function PanelMediatheque({ data, onNavigate }) {
       { words: Math.min(fresh, MDT_JP_MAX), evening });
   }, [jpFranchise, jpWords, jpSeenByWord, evening]);
 
-  function toggleType(value) {
-    // Jamais zéro type actif : une collection vide sans raison visible se lit
-    // comme un bug. Décocher le dernier type le laisse actif.
-    const next = types.includes(value)
-      ? (types.length > 1 ? types.filter((t) => t !== value) : types)
-      : [...types, value];
-    if (next === types) return;
-    setTypes(next);
-    try { localStorage.setItem(MDT_TYPE_KEY, JSON.stringify(next)); } catch (_) {}
-    mdtTrack("mediatheque_type_filter", { types: next, count: next.length });
+  // Une seule section active, toujours : contrairement aux chips qu'elle
+  // remplace, il n'existe pas d'état « rien de coché » à garder contre
+  // l'utilisateur. Persistée pour retomber sur le même rayon au prochain
+  // chargement — y compris depuis la PWA, qui monte le même panel.
+  function pickSection(id) {
+    if (id === section || !MDT_SECTION_IDS.includes(id)) return;
+    setSection(id);
+    setStatusFilter("all");   // « Mis de côté » d'un rayon n'a pas de sens dans l'autre
+    try { localStorage.setItem(MDT_SECTION_KEY, id); } catch (_) {}
+    mdtTrack("mediatheque_section", { section: id, count: sectionCounts[id] || 0 });
   }
 
   function pickBudget(value) {
@@ -1038,10 +1106,10 @@ function PanelMediatheque({ data, onNavigate }) {
   // Un même titre ne doit jamais apparaître deux fois : le rail retire ce que
   // la page met déjà en avant — le hero en journée, « Ce soir » après 18 h.
   const railCards = useMdtMemo(
-    () => window.mdtView.pickRail(typedCards, evening
+    () => window.mdtView.pickRail(sectionCards, evening
       ? tonight.map((p) => p.card.f.id)
       : (hero && hero.card ? [hero.card.f.id] : [])),
-    [typedCards, hero, tonight, evening]);
+    [sectionCards, hero, tonight, evening]);
 
   // `res` est une ligne de résultat normalisée ({src, kind, id, …}). La fiche
   // de prévisualisation porte désormais sa source pour qu'addFranchise sache
@@ -1088,6 +1156,16 @@ function PanelMediatheque({ data, onNavigate }) {
       window.MEDIATHEQUE_DATA.franchises.unshift(fr);
       window.MEDIATHEQUE_DATA.entries.push(...savedEntries);
       setTick((t) => t + 1);
+      // On atterrit dans la section du titre ajouté. Sans ça, ajouter une série
+      // depuis la recherche (globale) la ferait disparaître à la fermeture de la
+      // fiche : elle serait bien en base, mais dans un onglet qu'on ne regarde
+      // pas — indiscernable d'un ajout raté.
+      const addedSection = window.mdtView.typeOf(fr);
+      if (addedSection !== section && MDT_SECTION_IDS.includes(addedSection)) {
+        setSection(addedSection);
+        setStatusFilter("all");
+        try { localStorage.setItem(MDT_SECTION_KEY, addedSection); } catch (_) {}
+      }
       setFiche({ mode: "library", franchiseId: fr.id });
       mdtTrack("mediatheque_add", {
         franchise_root_id: rootId, entries: savedEntries.length, source: frRow.source,
@@ -1251,9 +1329,11 @@ function PanelMediatheque({ data, onNavigate }) {
 
   return (
     <div className="panel-mediatheque">
-      <div className="mdt-kicker">Personnel · anime</div>
+      <div className="mdt-kicker">{sectionDef.kicker}</div>
       <h1 className="mdt-title">Médiathèque</h1>
 
+      {/* Surfaces GLOBALES, au-dessus des onglets : sorties toutes sections
+          confondues, puis la décision du soir. Leur place dit leur portée. */}
       <MdtReleasesStrip D={D} onAck={ackRelease} />
 
       {/* De 18 h à 2 h la décision prime sur la mise en avant : deux surfaces
@@ -1263,6 +1343,12 @@ function PanelMediatheque({ data, onNavigate }) {
           budget={budget} onBudget={pickBudget} progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           onProgress={writeProgress} />
+      )}
+
+      {/* Masqués pendant une recherche : celle-ci porte sur toute la
+          bibliothèque, des onglets visibles annonceraient un périmètre faux. */}
+      {!queryActive && (
+        <MdtSectionTabs section={section} counts={sectionCounts} onSelect={pickSection} />
       )}
 
       {!queryActive && !evening && (
@@ -1285,23 +1371,25 @@ function PanelMediatheque({ data, onNavigate }) {
       )}
 
       {!queryActive && (
-        <MdtWeek D={D} tick={tick} types={types}
+        <MdtWeek D={D} tick={tick} section={section}
           onOpen={(id) => setFiche({ mode: "library", franchiseId: id })} />
       )}
 
+      {/* Le champ, lui, reste GLOBAL : il interroge la bibliothèque entière et
+          les deux sources en ligne quelle que soit la section ouverte. */}
       <div className="mdt-toolbar">
         <input
           className="mdt-search"
           type="search"
-          placeholder="Rechercher — ta bibliothèque, puis AniList…"
+          placeholder="Rechercher — ta bibliothèque, puis AniList et TMDB…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          aria-label="Rechercher un anime"
+          aria-label={sectionDef.searchLabel}
         />
       </div>
 
       {queryActive && (
-        <div className="mdt-viewtoggle" role="group" aria-label="Basculer entre ma bibliothèque et les résultats AniList">
+        <div className="mdt-viewtoggle" role="group" aria-label="Basculer entre ma bibliothèque et les résultats en ligne">
           <button className={`mdt-viewtoggle-btn ${view === "library" ? "is-active" : ""}`}
             aria-pressed={view === "library"} onClick={() => setView("library")}>
             Ma bibliothèque · {localMatches.length}
@@ -1347,15 +1435,15 @@ function PanelMediatheque({ data, onNavigate }) {
         )
       ) : (
         <MdtCollection
-          visible={visible} total={D.franchises.length}
-          open={collectionOpen || queryActive || libraryEmpty}
+          visible={visible} total={sectionCards.length}
+          open={collectionOpen || queryActive || sectionEmpty}
           onToggle={toggleCollection}
           statusFilter={statusFilter} onStatusFilter={setStatusFilter}
-          types={types} onToggleType={toggleType}
           sort={sort} onSort={setSort}
           progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
-          queryActive={queryActive} query={q} />
+          queryActive={queryActive} query={q}
+          emptyHint={sectionDef.emptyHint} />
       )}
 
       {fiche && (

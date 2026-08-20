@@ -127,6 +127,32 @@
       .some((t) => t && normalize(t).includes(n));
   }
 
+  // ── Sections (Anime / Séries / Films) ───────────────────────
+  // Une section = un media_type. `media_type` est nullable en base (les
+  // franchises antérieures à la migration TMDB n'en portent pas) et vaut alors
+  // « anime » : c'est le défaut historique, pas une valeur inconnue.
+  // Contrat : le filtrage de section ne regarde QUE le type — il ne juge ni du
+  // statut ni des mises de côté, dont les chips de la collection ont la charge.
+  function typeOf(f) { return (f && f.media_type) || "anime"; }
+
+  function cardsOfSection(cards, section) {
+    return (cards || []).filter((c) => typeOf(c.f) === section);
+  }
+
+  // Compteur d'onglet : ce qu'on annonce sur la pastille. Les mises de côté en
+  // sont exclues — les afficher ferait mentir « Séries · 4 » sur une section
+  // qui n'en montre que 2 une fois ouverte.
+  function countBySection(cards, sections) {
+    const out = {};
+    (sections || []).forEach((s) => { out[s] = 0; });
+    (cards || []).forEach((c) => {
+      if (c.f.shelved) return;
+      const t = typeOf(c.f);
+      if (t in out) out[t] += 1;
+    });
+    return out;
+  }
+
   // ── Rail « Continuer à regarder » ───────────────────────────
   // Les franchises où il reste des épisodes SORTIS non vus, privées de celles
   // déjà mises en avant plus haut dans la page : le hero en journée (pickHero
@@ -379,6 +405,7 @@
     released, kindTag, nextEpLabel, curLabel, status, currentEntryOf,
     nextAiringOf, pickHero, normalize, matchesQuery, pickRail, buildWeek,
     isEvening, pickTonight, tonightHeadline, fitsBudget, airedToday,
+    typeOf, cardsOfSection, countBySection,
   };
   if (typeof window !== "undefined") window.mdtView = Object.assign(window.mdtView || {}, api);
   if (typeof module !== "undefined" && module.exports) module.exports = api;

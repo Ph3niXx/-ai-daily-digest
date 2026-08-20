@@ -404,5 +404,64 @@ check("invariant: tonight ∩ rail = vide",
 check("invariant: le rail garde bien l'autre franchise",
   RAIL_OUT.map((c) => c.f.id), ["rb"]);
 
+// ── Sections (cardsOfSection / countBySection / typeOf) ───────
+// Le piege : media_type est NULLABLE. Les 47 franchises anterieures a la
+// migration TMDB n'en portent pas et doivent tomber dans « anime », sinon la
+// section par defaut s'ouvre vide sur une bibliotheque pleine.
+const secCard = (id, mediaType, shelved) => ({
+  f: { id, media_type: mediaType, shelved: !!shelved, title_english: id },
+  entries: [], st: { id: "watching" }, lastTouch: 1,
+});
+const SEC_CARDS = [
+  secCard("frieren", "anime"),
+  secCard("naruto", null),                 // legacy : pas de media_type
+  secCard("severance", "tv"),
+  secCard("dune", "movie"),
+  secCard("shelved-anime", "anime", true),
+  secCard("shelved-tv", "tv", true),
+];
+const SECTION_IDS = ["anime", "tv", "movie"];
+
+check("typeOf: media_type absent => anime (defaut historique)",
+  V.typeOf({ id: "x" }), "anime");
+check("typeOf: media_type null => anime",
+  V.typeOf({ id: "x", media_type: null }), "anime");
+check("typeOf: media_type explicite respecte",
+  V.typeOf({ id: "x", media_type: "tv" }), "tv");
+
+check("cardsOfSection: anime ramasse les legacy sans media_type",
+  V.cardsOfSection(SEC_CARDS, "anime").map((c) => c.f.id),
+  ["frieren", "naruto", "shelved-anime"]);
+check("cardsOfSection: tv n'attrape que les series",
+  V.cardsOfSection(SEC_CARDS, "tv").map((c) => c.f.id), ["severance", "shelved-tv"]);
+check("cardsOfSection: movie",
+  V.cardsOfSection(SEC_CARDS, "movie").map((c) => c.f.id), ["dune"]);
+check("cardsOfSection: section inconnue => vide, jamais un repli silencieux sur anime",
+  V.cardsOfSection(SEC_CARDS, "manga"), []);
+check("cardsOfSection: liste vide toleree", V.cardsOfSection([], "anime"), []);
+// Le filtrage de section ne juge NI le statut NI les mises de cote : ces deux
+// regles appartiennent aux chips de la collection. Une section qui les
+// appliquerait ferait disparaitre le chip « Mis de cote » de son propre rayon.
+check("cardsOfSection: garde les mises de cote (c'est le chip qui tranche)",
+  V.cardsOfSection(SEC_CARDS, "tv").filter((c) => c.f.shelved).map((c) => c.f.id),
+  ["shelved-tv"]);
+
+check("countBySection: compteurs d'onglet, mises de cote exclues",
+  V.countBySection(SEC_CARDS, SECTION_IDS), { anime: 2, tv: 1, movie: 1 });
+check("countBySection: une section sans titre affiche 0, pas undefined",
+  V.countBySection([secCard("frieren", "anime")], SECTION_IDS),
+  { anime: 1, tv: 0, movie: 0 });
+check("countBySection: un type hors sections declarees n'invente pas de cle",
+  V.countBySection([secCard("berserk", "manga")], SECTION_IDS),
+  { anime: 0, tv: 0, movie: 0 });
+
+// Invariant de partition : chaque carte tombe dans exactement une section
+// declaree (ou aucune, si son type n'est pas encore une section). Sans ca, une
+// franchise deviendrait invisible partout — le mode d'echec le plus couteux ici,
+// puisqu'elle reste en base et parait perdue.
+check("invariant: les sections partitionnent la bibliotheque, aucune carte perdue",
+  SECTION_IDS.reduce((n, s) => n + V.cardsOfSection(SEC_CARDS, s).length, 0),
+  SEC_CARDS.length);
+
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);

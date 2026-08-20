@@ -28,7 +28,7 @@ tables:
 
 panels:
   - id: mediatheque
-    detail: "Panel Médiathèque — bandeau Sorties, agenda des diffusions de la semaine, rail « Continuer à regarder », collection repliée (statuts dérivés), recherche bibliothèque + AniList, fiche franchise avec steppers"
+    detail: "Panel Médiathèque — surfaces globales (bandeau Sorties, bande « Ce soir »), puis onglets de section Anime / Séries / Films (ADR-42, un onglet = un media_type) portant chacun hero, rail « Continuer à regarder », agenda de la semaine et collection repliée (statuts dérivés) ; recherche transverse bibliothèque + AniList + TMDB, fiche franchise avec steppers"
   - id: mediatheque-pwa
     detail: "Page d'entree mobile dediee (mediatheque.html + boot-mediatheque.js) — meme panel, sans sidebar ni Tier 1 ; 2 scripts Babel au lieu de 30"
   - id: brief
