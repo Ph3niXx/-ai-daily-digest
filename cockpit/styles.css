@@ -4875,6 +4875,14 @@ select:focus-visible {
 }
 .phb-link.is-empty { pointer-events: none; }
 
+.phb-all {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: var(--space-2);
+  padding: 0; background: none; border: none; cursor: pointer;
+  font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em;
+  color: var(--accent);
+}
+.phb-all:hover { text-decoration: underline; }
+
 @media (max-width: 720px) {
   .phb { padding: var(--space-4); }
   .phb-cause { display: none; }

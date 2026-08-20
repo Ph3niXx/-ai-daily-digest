@@ -1235,7 +1235,7 @@
       challenges: [],  // Tier 2
       media_releases: mediaReleases,  // encart Médiathèque du Brief (T1 léger)
       game_releases: gameReleases,    // encart Jeux du Brief (T1 leger)
-      pipeline_health: pipelineHealth || [],  // uniquement les pipelines dégradés
+      pipeline_health: pipelineHealth || [],  // TOUTES les briques, sains compris (cf. le commentaire du fetch)
       article_feedback: articleFeedback || [],  // votes déjà émis, pour l'état des boutons
     };
 

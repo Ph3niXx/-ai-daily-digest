@@ -375,58 +375,25 @@ function StServiceBlock({ s, onEdit }) {
   );
 }
 
-// ── Santé des pipelines ─────────────────────────────
-// Vue d'ensemble : le bandeau global (cf. app.jsx) n'alerte que sur l'onglet
-// concerné, donc sans cette section il n'existe aucun endroit où lire l'état
-// complet. Alimenté par pipeline_health (Tier 1), écrit par le workflow
-// d'observation externe pipelines/pipeline_health.py.
-function StPipelineHealth() {
+// ── Renvoi vers Santé ────────────────────────
+// La liste complète des pipelines vivait ici. Elle vit maintenant dans son
+// onglet, groupe Coulisses : deux surfaces qui disent la même chose finissent
+// par se contredire, et Stacks & Limits parle d'argent et de quotas.
+function StHealthLink({ onNavigate }) {
   const rows = (window.COCKPIT_DATA && window.COCKPIT_DATA.pipeline_health) || [];
   if (!rows.length) return null;
-
-  const RANK = { failing: 0, stale: 1, unknown: 2, ok: 3 };
-  const sorted = [...rows].sort((a, b) =>
-    (RANK[a.status] ?? 9) - (RANK[b.status] ?? 9) || a.pipeline_id.localeCompare(b.pipeline_id));
-
   const degraded = rows.filter(r => r.status === "failing" || r.status === "stale").length;
-  const lastCheck = rows.reduce((max, r) => {
-    const t = r.checked_at ? new Date(r.checked_at).getTime() : 0;
-    return t > max ? t : max;
-  }, 0);
-
-  const LABEL = { ok: "ok", failing: "en panne", stale: "figé", unknown: "inconnu" };
-  const fmtDate = (iso) => iso ? new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) : "—";
-
   return (
-    <section className="st-ph">
-      <div className="st-ph-head">
-        <h2 className="st-ph-title">Pipelines</h2>
-        <span className="st-ph-sub">
-          {degraded === 0
-            ? `${rows.length} pipelines, tous au vert`
-            : `${degraded} pipeline${degraded > 1 ? "s" : ""} dégradé${degraded > 1 ? "s" : ""} sur ${rows.length}`}
-          {lastCheck > 0 && ` · vérifié le ${fmtDate(new Date(lastCheck).toISOString())}`}
-        </span>
-      </div>
-      <div className="st-ph-list">
-        {sorted.map(r => (
-          <div key={r.pipeline_id} className={`st-ph-row is-${r.status}`}>
-            <span className="st-ph-dot" />
-            <span className="st-ph-name">{r.label}</span>
-            <span className="st-ph-state">{LABEL[r.status] || r.status}</span>
-            <span className="st-ph-detail">
-              {r.last_error || (r.data_last_seen
-                ? `donnée à jour · ${fmtDate(r.data_last_seen)}`
-                : `dernier run réussi · ${fmtDate(r.last_success_at)}`)}
-            </span>
-            {r.last_run_url && (
-              <a className="st-ph-link" href={r.last_run_url} target="_blank" rel="noopener noreferrer"
-                 aria-label={`Voir le dernier run de ${r.label}`}>↗</a>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
+    <button className="st-health-link" onClick={() => onNavigate && onNavigate("sante")}>
+      <Icon name="plug" size={14} stroke={1.75} />
+      <span>
+        {degraded === 0
+          ? `Les ${rows.length} sources du cockpit sont au vert`
+          : `${degraded} source${degraded > 1 ? "s" : ""} dégradée${degraded > 1 ? "s" : ""} sur ${rows.length}`}
+      </span>
+      <span className="st-health-link-cta">voir Santé</span>
+      <Icon name="arrow_right" size={13} stroke={2} />
+    </button>
   );
 }
 
@@ -645,7 +612,7 @@ function PanelStacks({ data, onNavigate }) {
         Objectif : ne jamais tomber en panne silencieuse parce qu'un quota a claqué la nuit.
       </div>
 
-      <StPipelineHealth />
+      <StHealthLink onNavigate={onNavigate} />
 
 
       {/* FILTERS */}

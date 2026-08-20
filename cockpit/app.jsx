@@ -125,8 +125,14 @@ function Stub({ id, theme, onBack }) {
 // phrase est dite une fois en tête ; les lignes ne gardent que ce qui diffère,
 // aligné en colonnes pour que l'œil compare verticalement. L'alarme vit dans
 // le titre (compteur en accent), les lignes restent calmes.
-function PipelineHealthBanner({ panelId, rows }) {
+function PipelineHealthBanner({ panelId, rows, onNavigate }) {
   const all = rows || [];
+  // Figé une seule fois pour tout le rendu du bandeau : deux appels à Date.now()
+  // pourraient sinon tomber de part et d'autre d'une frontière d'heure et rendre
+  // le tri instable. Âge/formulation/seuil viennent de sante-view.js — même
+  // convention que l'onglet Santé, une seule implémentation de la date.
+  const now = Date.now();
+  const sv = window.santeView;
 
   // Le Brief est le point de passage quotidien : il porte TOUTES les pannes,
   // pas seulement celles de son domaine. Ailleurs, on garde le filtrage
@@ -151,7 +157,7 @@ function PipelineHealthBanner({ panelId, rows }) {
     return t > max ? t : max;
   }, 0);
   const checkStale = mine.length > 0 && lastCheck > 0 &&
-    (Date.now() - lastCheck) > 48 * 3600 * 1000;
+    (now - lastCheck) > sv.CHECK_STALE_MS;
 
   if (!hits.length && !checkStale) return null;
 
@@ -159,23 +165,11 @@ function PipelineHealthBanner({ panelId, rows }) {
   // (la panne la plus fraîche en haut — c'est la seule encore actionnable,
   // les vieilles sont des décisions déjà prises) et colorer (une panne de
   // 2 jours est une nouvelle, une panne de 118 jours est du décor).
-  const ageDays = (row) => {
-    const ref = row.data_last_seen || row.last_success_at;
-    if (!ref) return null;
-    return (Date.now() - new Date(ref).getTime()) / 86400000;
-  };
-
-  const fmtAge = (row) => {
-    const d = ageDays(row);
-    if (d === null) return null;
-    if (d >= 2) return `${Math.floor(d)} j`;
-    return `${Math.max(1, Math.floor(d * 24))} h`;
-  };
-
+  //
   // Le plus frais d'abord. La colonne d'âges se lit alors comme un dégradé
   // (2 j / 2 j / 37 j / 50 j / 117 j) et non comme six phrases identiques.
   const sorted = hits.slice().sort((a, b) => {
-    const da = ageDays(a), db = ageDays(b);
+    const da = sv.ageDays(a, now), db = sv.ageDays(b, now);
     if (da === null || db === null) return (da === null) - (db === null);
     // Sur l'âge AFFICHÉ, pas sur les millisecondes : deux lignes qui montrent
     // toutes deux « 2 j » doivent s'ordonner par gravité, pas par une
@@ -213,7 +207,7 @@ function PipelineHealthBanner({ panelId, rows }) {
       {n > 0 && (
         <ul className="phb-list">
           {sorted.map(row => {
-            const d = ageDays(row);
+            const d = sv.ageDays(row, now);
             const fresh = d !== null && d < 7;
             return (
               <li key={row.pipeline_id} className={`phb-row is-${row.status}${fresh ? " is-fresh" : ""}`}>
@@ -222,7 +216,7 @@ function PipelineHealthBanner({ panelId, rows }) {
                 <span className="phb-cause">
                   {row.status === "failing" ? "sync en échec" : "run à vide"}
                 </span>
-                <span className="phb-age">{fmtAge(row) || "—"}</span>
+                <span className="phb-age">{sv.fmtAge(row, now) || "—"}</span>
                 {row.last_run_url ? (
                   <a
                     className="phb-link"
@@ -241,6 +235,12 @@ function PipelineHealthBanner({ panelId, rows }) {
             );
           })}
         </ul>
+      )}
+
+      {onNavigate && (
+        <button className="phb-all" onClick={() => onNavigate("sante")}>
+          Tout voir <Icon name="arrow_right" size={12} stroke={2} />
+        </button>
       )}
     </aside>
   );
@@ -688,7 +688,7 @@ function App() {
       )}
       <Sidebar theme={theme} activeId={activePanel} onSelect={handleNavigate} data={data} onThemeChange={(id) => { try { localStorage.setItem("cockpit-theme-explicit", "1"); } catch {} setThemeId(id); }} mobileOpen={sbMobileOpen} onMobileClose={() => setSbMobileOpen(false)} />
       <main className="main" id="main-content" tabIndex="-1">
-        <PipelineHealthBanner panelId={activePanel} rows={data && data.pipeline_health} />
+        <PipelineHealthBanner panelId={activePanel} rows={data && data.pipeline_health} onNavigate={handleNavigate} />
         <PanelErrorBoundary panelId={activePanel}>{content}</PanelErrorBoundary>
       </main>
       <ShortcutsOverlay open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
