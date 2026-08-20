@@ -468,8 +468,8 @@
     }
   ],
   "cockpit_tabs": {
-    "summary": "Catalogue des 30 onglets du cockpit, leur rôle, leurs sources de données et leur cadence de mise à jour.",
-    "updated_at": "2026-07-14",
+    "summary": "Catalogue des 31 onglets du cockpit, leur rôle, leurs sources de données et leur cadence de mise à jour.",
+    "updated_at": "2026-08-20",
     "groups": [
       {
         "id": "aujourdhui",
