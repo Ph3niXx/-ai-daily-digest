@@ -4879,7 +4879,7 @@ select:focus-visible {
   display: inline-flex; align-items: center; gap: 4px; margin-top: var(--space-2);
   padding: 0; background: none; border: none; cursor: pointer;
   font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .04em;
-  color: var(--accent);
+  color: var(--brand);
 }
 .phb-all:hover { text-decoration: underline; }
 

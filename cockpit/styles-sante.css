@@ -14,7 +14,7 @@
 
 /* ── Verdict global ─────────────────────────────────────── */
 .sa-verdict {
-  border: 1px solid var(--line); border-radius: var(--radius-md);
+  border: 1px solid var(--bd); border-radius: var(--radius);
   padding: var(--space-4); margin-bottom: var(--space-6);
 }
 .sa-verdict.is-alert { border-color: var(--alert); background: var(--alert-tint); }
@@ -31,13 +31,13 @@
 .sa-verdict-warn { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--alert); }
 
 /* ── Section ────────────────────────────────────────────── */
-.sa-section { border-top: 1px solid var(--line); }
+.sa-section { border-top: 1px solid var(--bd); }
 .sa-section-head {
   display: flex; align-items: center; gap: var(--space-2); width: 100%;
   padding: var(--space-3) 0; background: none; border: none; cursor: pointer;
   text-align: left; color: inherit;
 }
-.sa-section-title { font-size: var(--text-base); font-weight: 600; color: var(--tx); margin: 0; }
+.sa-section-title { font-size: var(--text-md); font-weight: 600; color: var(--tx); margin: 0; }
 .sa-section-state {
   margin-left: auto; font-size: var(--text-xs); color: var(--tx3);
   text-transform: uppercase; letter-spacing: .04em;
@@ -51,7 +51,7 @@
 
 /* ── Ligne ──────────────────────────────────────────────── */
 .sa-row { padding: var(--space-2) 0; }
-.sa-row + .sa-row { border-top: 1px solid var(--line-soft, var(--line)); }
+.sa-row + .sa-row { border-top: 1px solid var(--bd2, var(--bd)); }
 .sa-row-head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
 .sa-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--positive); }
 .sa-row.is-failing .sa-dot { background: var(--alert); }
@@ -77,7 +77,7 @@
 .sa-cause  { color: var(--tx2); }
 .sa-effect { color: var(--tx2); }
 .sa-fix    { color: var(--tx); }
-.sa-fix-arrow { color: var(--accent); font-weight: 600; }
+.sa-fix-arrow { color: var(--brand); font-weight: 600; }
 
 @media (max-width: 720px) {
   .sa-row-head { flex-wrap: wrap; }
