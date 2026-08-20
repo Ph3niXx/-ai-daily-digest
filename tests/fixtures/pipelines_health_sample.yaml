@@ -1,0 +1,36 @@
+# Fixture de test pour pipelines/pipeline_health.py::load_pipelines().
+# Volontairement minimale : on teste le chargement du contrat, pas le vrai
+# catalogue (qui bouge à chaque PR et rendrait le test fragile).
+pipelines:
+  - id: actif_avec_health
+    name: "Pipeline actif surveillé"
+    workflow_file: ".github/workflows/tests.yml"
+    status: active
+    health:
+      domain: veille_ia
+      panels: [brief]
+      table: articles
+      date_column: fetch_date
+      max_age_hours: 30
+
+  - id: actif_sans_health
+    name: "Pipeline actif non surveillé"
+    status: active
+
+  - id: archive_avec_health
+    name: "Pipeline archivé"
+    status: archived
+    health:
+      domain: perso
+      panels: [perf]
+
+external_routines:
+  - id: routine_distante
+    name: "Routine distante surveillée"
+    status: active
+    health:
+      domain: business
+      panels: [jobs]
+      table: job_scans
+      date_column: scan_date
+      max_age_hours: 96

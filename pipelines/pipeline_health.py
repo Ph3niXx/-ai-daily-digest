@@ -89,16 +89,22 @@ def parse_ts(raw):
 
 
 def load_pipelines():
-    """Return the pipelines declaring a `health` contract."""
+    """Return the active pipelines and remote routines declaring a `health` contract.
+
+    Les routines distantes vivent sous `external_routines:` — elles n'ont pas
+    de `workflow_file` et sont marquées `remote: True` pour que le contrôle
+    saute l'appel GitHub et juge sur la seule fraîcheur.
+    """
     with open(PIPELINES_YAML, "r", encoding="utf-8") as fh:
         data = yaml.safe_load(fh)
     out = []
-    for p in data.get("pipelines") or []:
-        if not isinstance(p, dict) or not p.get("health"):
-            continue
-        if p.get("status") != "active":
-            continue
-        out.append(p)
+    for key, remote in (("pipelines", False), ("external_routines", True)):
+        for p in data.get(key) or []:
+            if not isinstance(p, dict) or not p.get("health"):
+                continue
+            if p.get("status") != "active":
+                continue
+            out.append({**p, "remote": remote})
     return out
 
 
@@ -177,17 +183,47 @@ def supabase_headers(service_key):
     }
 
 
-def data_freshness(url, service_key, table, date_column):
-    """Return the most recent value of date_column, or None."""
+def _filter_params(filter_expr):
+    """Convertit un fragment de requête PostgREST en params `requests`.
+
+    'source=eq.anilist'              -> {'source': 'eq.anilist'}
+    'source=in.(tmdb_tv,tmdb_movie)' -> {'source': 'in.(tmdb_tv,tmdb_movie)'}
+
+    Découpage sur le PREMIER '=' seulement : la valeur d'un filtre PostgREST
+    peut en contenir. Un fragment sans '=' est ignoré plutôt que de produire
+    une requête bancale — la sonde vaut mieux large que fausse.
+    """
+    out = {}
+    for part in str(filter_expr or "").split("&"):
+        part = part.strip()
+        if not part or "=" not in part:
+            continue
+        key, value = part.split("=", 1)
+        key = key.strip()
+        if key:
+            out[key] = value.strip()
+    return out
+
+
+def data_freshness(url, service_key, table, date_column, filter_expr=None):
+    """Return the most recent value of date_column, or None.
+
+    `filter_expr` restreint la sonde aux lignes qu'écrit CE pipeline. Sans lui,
+    une table à plusieurs écrivains rend la panne de l'un invisible : le
+    2026-08-20, `anime_tracker_sync` mesurait `media_entries`, que
+    `tmdb_tracker_sync` alimente aussi.
+    """
+    params = {
+        "select": date_column,
+        "order": f"{date_column}.desc.nullslast",
+        "limit": 1,
+    }
+    params.update(_filter_params(filter_expr))
     try:
         resp = requests.get(
             f"{url}/rest/v1/{table}",
             headers=supabase_headers(service_key),
-            params={
-                "select": date_column,
-                "order": f"{date_column}.desc.nullslast",
-                "limit": 1,
-            },
+            params=params,
             timeout=TIMEOUT,
         )
         resp.raise_for_status()
@@ -220,7 +256,7 @@ def upsert_health(url, service_key, rows):
 # Verdict
 # ---------------------------------------------------------------------------
 
-def verdict(run_info, age_hours, max_age_hours):
+def verdict(run_info, age_hours, max_age_hours, remote=False, has_probe=False):
     """Consolidate both signals into one status.
 
     L'échec de run prime sur la péremption : si le pipeline plante, dire
@@ -230,7 +266,19 @@ def verdict(run_info, age_hours, max_age_hours):
     ce qui permet de dater la panne d'un pipeline piloté par l'activité
     (Strava, TFT…) sans le déclarer en panne quand l'utilisateur n'a
     simplement rien fait cette semaine.
+
+    `remote` = routine hors GitHub Actions (claude.ai) : il n'existe aucun run
+    à interroger, donc la fraîcheur est le SEUL signal. Sans elle on ne sait
+    rien, et `unknown` est la réponse honnête — c'est le seul cas où l'absence
+    de run ne doit pas condamner la brique au silence perpétuel.
     """
+    if remote:
+        if not has_probe or age_hours is None:
+            return "unknown"
+        if max_age_hours is not None and age_hours > max_age_hours:
+            return "stale"
+        return "ok"
+
     conclusion = run_info["last_run_conclusion"]
     if conclusion is None:
         return "unknown"
@@ -239,6 +287,47 @@ def verdict(run_info, age_hours, max_age_hours):
     if max_age_hours is not None and age_hours is not None and age_hours > max_age_hours:
         return "stale"
     return "ok"
+
+
+def build_row(pipe, run_info, last_seen, age_hours, status, now):
+    """Compose la ligne upsertée. Extrait de main() pour être testable seul."""
+    health = pipe.get("health") or {}
+    table = health.get("table")
+
+    # `last_error` reste court et lisible : le détail vit dans le run GitHub.
+    last_error = None
+    if status == "failing":
+        n = run_info["consecutive_failures"]
+        # On n'inspecte que RUNS_TO_INSPECT runs : au plafond, on ne sait pas
+        # combien il y en a eu avant. Dire « 15 » serait un chiffre faux.
+        count = f"au moins {n}" if n >= RUNS_TO_INSPECT else str(n)
+        last_error = f"Dernier run : {run_info['last_run_conclusion']} ({count} échec{'s' if n > 1 else ''} d'affilée)"
+    elif status == "stale":
+        if pipe.get("remote"):
+            # Pas de run à incriminer : la seule chose qu'on sache est le silence.
+            last_error = f"Aucune écriture dans {table} depuis {age_hours} h"
+        else:
+            last_error = f"Runs au vert mais {table} n'a rien reçu depuis {age_hours} h"
+
+    return {
+        "pipeline_id": pipe["id"],
+        "label": pipe.get("name") or pipe["id"],
+        "domain": health.get("domain"),
+        "panels": health.get("panels") or [],
+        "remediation": health.get("remediation"),
+        "impact": health.get("impact"),
+        "last_run_at": run_info.get("last_run_at"),
+        "last_run_conclusion": run_info["last_run_conclusion"],
+        "last_run_url": run_info.get("last_run_url"),
+        "last_success_at": run_info.get("last_success_at"),
+        "consecutive_failures": run_info["consecutive_failures"],
+        "last_error": last_error,
+        "data_last_seen": last_seen,
+        "data_age_hours": age_hours,
+        "max_age_hours": health.get("max_age_hours"),
+        "status": status,
+        "checked_at": now,
+    }
 
 
 ALERT_TITLE = "[pipelines] Pipelines dégradés"
@@ -349,47 +438,30 @@ def main():
     for pipe in pipelines:
         pid = pipe["id"]
         health = pipe["health"]
+        remote = pipe.get("remote", False)
 
-        run_info = summarize_runs(github_runs(repo, gh_token, pipe.get("workflow_file", "")))
+        # Une routine distante n'a pas de run GitHub : l'interroger renverrait
+        # systématiquement une liste vide et coûterait un appel API pour rien.
+        run_info = (summarize_runs([]) if remote
+                    else summarize_runs(github_runs(repo, gh_token, pipe.get("workflow_file", ""))))
 
         # Fraîcheur — uniquement si le pipeline est censé écrire à chaque run.
         table = health.get("table")
-        max_age = health.get("max_age_hours")
+        date_column = health.get("date_column")
+        has_probe = bool(table and date_column)
         last_seen = age_hours = None
-        if table and health.get("date_column"):
-            last_seen = data_freshness(supabase_url, service_key, table, health["date_column"])
+        if has_probe:
+            last_seen = data_freshness(supabase_url, service_key, table, date_column,
+                                       health.get("filter"))
             if last_seen:
                 age_hours = round((now - last_seen).total_seconds() / 3600, 1)
 
-        status = verdict(run_info, age_hours, max_age)
+        status = verdict(run_info, age_hours, health.get("max_age_hours"),
+                         remote=remote, has_probe=has_probe)
 
-        # `last_error` reste court et lisible : le détail vit dans le run GitHub.
-        last_error = None
-        if status == "failing":
-            n = run_info["consecutive_failures"]
-            # On n'inspecte que RUNS_TO_INSPECT runs : au plafond, on ne sait pas
-            # combien il y en a eu avant. Dire « 15 » serait un chiffre faux.
-            count = f"au moins {n}" if n >= RUNS_TO_INSPECT else str(n)
-            last_error = f"Dernier run : {run_info['last_run_conclusion']} ({count} échec{'s' if n > 1 else ''} d'affilée)"
-        elif status == "stale":
-            last_error = f"Runs au vert mais {table} n'a rien reçu depuis {age_hours} h"
-
-        rows.append({
-            "pipeline_id": pid,
-            "label": pipe.get("name") or pid,
-            "panels": health.get("panels") or [],
-            "last_run_at": run_info["last_run_at"],
-            "last_run_conclusion": run_info["last_run_conclusion"],
-            "last_run_url": run_info["last_run_url"],
-            "last_success_at": run_info["last_success_at"],
-            "consecutive_failures": run_info["consecutive_failures"],
-            "last_error": last_error,
-            "data_last_seen": last_seen,
-            "data_age_hours": age_hours,
-            "max_age_hours": max_age,
-            "status": status,
-            "checked_at": now,
-        })
+        row = build_row(pipe, run_info, last_seen, age_hours, status, now)
+        rows.append(row)
+        last_error = row["last_error"]
 
         icon = {"ok": "✅", "failing": "🔴", "stale": "🟠", "unknown": "⚪"}[status]
         detail = f" — {last_error}" if last_error else ""
