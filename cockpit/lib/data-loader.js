@@ -1186,7 +1186,8 @@
         const from = new Date(Date.now() - 30 * 86400000).toISOString();
         return q("game_releases", `acknowledged=eq.false&detected_at=gte.${from}&order=detected_at.desc&limit=5`);
       }).catch(() => []),
-      // Santé des pipelines — table minuscule (~13 lignes), lue en T1 parce que
+      // Santé des pipelines — table minuscule (19 lignes, une par brique du
+      // catalogue `health` de docs/architecture/pipelines.yaml), lue en T1 parce que
       // le bandeau doit pouvoir s'afficher sur n'importe quel onglet dès le mount.
       // On charge TOUT, y compris les pipelines sains : sans ça on ne peut pas
       // distinguer « aucun pipeline dégradé » de « le checker lui-même est mort

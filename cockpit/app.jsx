@@ -132,7 +132,13 @@ function PipelineHealthBanner({ panelId, rows, onNavigate }) {
   // le tri instable. Âge/formulation/seuil viennent de sante-view.js — même
   // convention que l'onglet Santé, une seule implémentation de la date.
   const now = Date.now();
-  const sv = window.santeView;
+  // Repli explicite : ce bandeau est rendu HORS de <PanelErrorBoundary>, seul
+  // filet de l'application. Un throw ici démonte l'arbre entier et rend une
+  // page blanche — pas un panel cassé. L'ordre de chargement des <script> le
+  // garantit aujourd'hui ; deux lignes suffisent à ce qu'il ne dépende plus
+  // de lui.
+  const sv = window.santeView || {};
+  if (!sv.ageDays) return null;
 
   // Le Brief est le point de passage quotidien : il porte TOUTES les pannes,
   // pas seulement celles de son domaine. Ailleurs, on garde le filtrage

@@ -523,8 +523,8 @@ pipelines:
       # franchise. Ne rien écrire pendant des semaines est nominal. On mesure
       # pour pouvoir dire « rien depuis N jours », jamais pour sanctionner.
       remediation: >-
-        Vérifier la clé du modèle utilisé pour l'extraction de vocabulaire dans
-        les secrets GitHub, puis relancer jp-vocab-sync.yml.
+        Vérifier le secret GEMINI_API_KEY dans les secrets GitHub du dépôt,
+        puis relancer jp-vocab-sync.yml.
     notes: >
       Tourne après anime_tracker_sync (07:30), seul pipeline pouvant faire apparaître de
       nouvelles franchises. Ne retraite jamais une franchise déjà traitée : les 44 franchises

@@ -47,6 +47,7 @@ check("deux filtres", ph._filter_params("a=eq.1&b=gt.2"), {"a": "eq.1", "b": "gt
 check("aucun filtre", ph._filter_params(None), {})
 check("chaine vide", ph._filter_params(""), {})
 check("fragment sans '=' ignore", ph._filter_params("nimportequoi"), {})
+check("premier '=' seulement", ph._filter_params("col=eq.a=b"), {"col": "eq.a=b"})
 
 
 print("-- data_freshness : le filtre atteint la requete")
