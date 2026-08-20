@@ -88,10 +88,17 @@ Le titre de section porte une pastille et **une phrase d'effet en langage utilis
 dérivée des `panels` des briques dégradées de la section — jamais écrite à la main :
 
 ```
-APPRENTISSAGE                                          ● en panne
-Recommandations, Challenges, Opportunités et Signaux faibles
-sont figés au 28 avril.
+VIE PERSO                                              ● 2 dégradés
+Forme et Musique affichent encore des données figées.
 ```
+
+**Elle n'est portée par le titre que lorsqu'elle agrège plusieurs briques
+dégradées.** Avec une seule — le cas le plus courant : Apprentissage, Business,
+et chaque brique du Socle prise seule — la phrase de section et celle de la
+ligne seraient identiques octet pour octet, à deux lignes d'écart. Sous ce
+seuil, c'est la **ligne** qui la porte, au plus près de sa cause et de son
+remède. Un seul gabarit (`santeView.effectSentence`) fabrique les deux, et un
+seul des deux niveaux le rend : principe 5, une seule surface par vérité.
 
 ## L'anatomie d'une ligne
 
