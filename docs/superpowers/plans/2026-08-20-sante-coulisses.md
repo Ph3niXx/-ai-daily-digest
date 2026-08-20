@@ -411,9 +411,18 @@ finally:
 
 print("-- verdict : le cas local est inchange")
 
-NO_RUN = {"last_run_conclusion": None, "consecutive_failures": 0}
-OK_RUN = {"last_run_conclusion": "success", "consecutive_failures": 0}
-KO_RUN = {"last_run_conclusion": "failure", "consecutive_failures": 3}
+# Cinq clés, comme tout ce que `summarize_runs()` renvoie — y compris sur une
+# liste de runs vide. Des fixtures partielles ne représenteraient aucun appel
+# réel, et `build_row` accède aux cinq en strict pour que le contrat reste
+# bruyant plutôt que d'écrire des NULL silencieux.
+NO_RUN = {"last_run_at": None, "last_run_conclusion": None, "last_run_url": None,
+          "last_success_at": None, "consecutive_failures": 0}
+OK_RUN = {"last_run_at": "2026-08-20T06:02:00+00:00", "last_run_conclusion": "success",
+          "last_run_url": "https://github.test/run/1",
+          "last_success_at": "2026-08-20T06:02:00+00:00", "consecutive_failures": 0}
+KO_RUN = {"last_run_at": "2026-08-20T06:04:00+00:00", "last_run_conclusion": "failure",
+          "last_run_url": "https://github.test/run/2",
+          "last_success_at": "2026-05-01T06:04:00+00:00", "consecutive_failures": 3}
 
 check("aucun run decisif => unknown", ph.verdict(NO_RUN, None, None), "unknown")
 check("run en echec => failing", ph.verdict(KO_RUN, 1.0, 30), "failing")
