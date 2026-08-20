@@ -12,7 +12,10 @@
 //   2. Brancher le routing dans cockpit/app.jsx (else if activePanel === "x").
 //   3. Charger le composant dans index.html (<script src="cockpit/panel-x.jsx">).
 //   4. Ajouter le spec produit dans docs/specs/tab-<slug>.md (template _template.md).
-//   5. Référencer dans docs/specs/index.json + jarvis/spec.json::cockpit_tabs.
+//   5. Référencer dans docs/specs/index.json + jarvis/spec.json::cockpit_tabs
+//      (8 clés obligatoires par onglet ; validate-spec.yml bloquant ; vérif :
+//      PYTHONIOENCODING=utf-8 python scripts/validate_spec.py — sans cette
+//      variable le script plante en cp1252 AVANT d'imprimer son échec).
 //   6. Déclarer le panel dans docs/architecture/dependencies.yaml::panels[].
 //   7. Resync KNOWN_SECTIONS dans jarvis/scripts/extract_signals.py
 //      (lint-known-sections.yml bloquant ; vérif : python scripts/lint_known_sections.py).

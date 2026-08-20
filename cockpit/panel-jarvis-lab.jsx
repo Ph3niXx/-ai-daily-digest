@@ -246,7 +246,10 @@ function JLCockpitTabCard({ tab, onFocusSpec, onNavigate }) {
       </div>
       <p className="jl-tab-desc">{tab.description}</p>
       <div className="jl-tab-sources">
-        {tab.data_sources.map((ds, i) => (
+        {/* Un catalogue documentaire ne doit jamais pouvoir tuer un panel :
+            une entrée de spec.json incomplète s'affiche sans sources, elle ne
+            lève pas de TypeError qui vide l'écran. */}
+        {(tab.data_sources || []).map((ds, i) => (
           <span key={i} className="jl-tab-source">{ds}</span>
         ))}
       </div>

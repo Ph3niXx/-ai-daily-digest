@@ -784,7 +784,10 @@
             "label": "Santé",
             "icon": "plug",
             "description": "État de la machinerie du cockpit par domaine : ce qui tourne, ce qui est cassé, depuis quand, ce que ça coûte et le geste qui répare.",
-            "panel_file": "cockpit/panel-sante.jsx"
+            "panel_file": "cockpit/panel-sante.jsx",
+            "data_sources": ["pipeline_health"],
+            "frequency": "daily",
+            "update_details": "Table écrite par pipelines/pipeline_health.py (cron quotidien 09:00 UTC), lue en entier par le Tier 1 — le panel ne fait aucun fetch"
           },
           {
             "id": "stacks",
@@ -800,7 +803,7 @@
             "id": "jarvis-lab",
             "label": "Jarvis Lab",
             "icon": "chart",
-            "description": "Vue méta du cockpit en 3 sections : (1) roadmap P1-P7 + grille features filtrable + drawer, (2) catalogue des 25 onglets cliquable (corps → scroll vers spec, bouton 'Ouvrir ↗' → navigation), (3) specs détaillées rendu markdown (sidebar par scope + TOC H2 collante). Alimenté par jarvis/spec.json + docs/specs/*.md.",
+            "description": "Vue méta du cockpit en 3 sections : (1) roadmap P1-P7 + grille features filtrable + drawer, (2) catalogue des 31 onglets cliquable (corps → scroll vers spec, bouton 'Ouvrir ↗' → navigation), (3) specs détaillées rendu markdown (sidebar par scope + TOC H2 collante). Alimenté par jarvis/spec.json + docs/specs/*.md.",
             "panel_file": "cockpit/panel-jarvis-lab.jsx",
             "data_sources": ["jarvis/spec.json", "docs/specs/index.json", "docs/specs/tab-*.md"],
             "frequency": "manual",
