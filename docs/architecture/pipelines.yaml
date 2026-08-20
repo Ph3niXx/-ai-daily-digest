@@ -566,9 +566,15 @@ pipelines:
     avg_duration_s: 20
     budget_usd: 0
     status: active
-    # Pas de bloc `health` : un surveillant qui se surveille lui-même ne détecte
-    # pas sa propre mort. C'est le front qui garde ce flanc, en comparant
-    # pipeline_health.checked_at à l'heure courante (cf. PipelineHealthBanner).
+    # Le surveillant s'inscrit dans sa propre table depuis le 2026-08-20, et ça ne
+    # suffit pas : un surveillant mort ne rapporte pas sa mort. Les deux gardes se
+    # complètent. Le bloc `health` ci-dessus attrape la panne INTERMITTENTE — le run
+    # en cours n'a pas encore de conclusion, il est donc écarté par
+    # DECISIVE_CONCLUSIONS et chaque run rapporte le verdict du précédent, si bien
+    # qu'un échec isolé finit par sortir. La panne DÉFINITIVE (token expiré, plus
+    # aucun run) ne laisse personne pour l'écrire : c'est le front qui la voit, en
+    # comparant pipeline_health.checked_at à l'heure courante — cf.
+    # PipelineHealthBanner, et l'onglet Santé qui en fait une ligne visible.
     notes: >-
       Tourne à 09:00 UTC, après le dernier cron du matin (07:45), donc sur un état
       stabilisé. Sort en code 0 même quand des pipelines sont dégradés : il rapporte
