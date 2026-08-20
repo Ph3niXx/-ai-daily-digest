@@ -57,6 +57,7 @@ window.COCKPIT_NAV = [
     { id: "mediatheque", label: "Médiathèque", icon: "tv" },
   ]},
   { group: "Système", items: [
+    { id: "sante", label: "Santé", icon: "plug" },
     { id: "stacks", label: "Stacks & Limits", icon: "wallet" },
     { id: "history", label: "Historique", icon: "clock" },
   ]},

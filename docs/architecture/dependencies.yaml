@@ -226,6 +226,11 @@ panels:
     reads: [media_franchises, media_entries, media_progress, media_releases, activity_briefs, jp_words, jp_seen]  # activity_briefs = 1 ligne (jour courant), stats.meetings, pour la seule accroche de « Ce soir » ; jp_* = bande « Avant l'épisode »
     writes: [media_franchises, media_entries, media_progress, media_releases, jp_seen, usage_events]  # ajout/progression/ack ; entries créées à l'ajout puis pipeline-owned ; jp_seen = marquage « je connais »
 
+  - id: sante
+    file: cockpit/panel-sante.jsx
+    reads: [pipeline_health]   # Tier 1, chargée en entier par bootTier1 — aucun fetch propre
+    writes: []
+
   - id: stacks
     file: cockpit/panel-stacks.jsx
     reads: [weekly_analysis, articles, user_profile]

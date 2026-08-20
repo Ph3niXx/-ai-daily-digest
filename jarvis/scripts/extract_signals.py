@@ -34,8 +34,8 @@ KNOWN_SECTIONS = {
     "anime", "brief", "challenges", "claude", "evening", "gaming",
     "gaming_news", "history", "ideas", "jarvis", "jarvis-lab", "jobs",
     "mediatheque", "music", "news", "opps", "perf", "profile", "radar",
-    "recos", "review", "search", "signals", "sport", "stacks", "top",
-    "updates", "veille-outils", "week", "wiki",
+    "recos", "review", "sante", "search", "signals", "sport", "stacks",
+    "top", "updates", "veille-outils", "week", "wiki",
 }
 
 TZ = timezone(timedelta(hours=2))

@@ -1,0 +1,85 @@
+/* Onglet Santé — reprend le vocabulaire visuel de la liste Pipelines de
+   Stacks & Limits (pastilles, couleurs de statut) pour que l'utilisateur ne
+   réapprenne rien. */
+
+.sa-panel { padding: var(--space-6) 0 var(--space-8); }
+
+.sa-hero { margin-bottom: var(--space-6); }
+.sa-hero-eyebrow {
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .08em;
+  color: var(--tx3); margin-bottom: var(--space-2);
+}
+.sa-hero-title { font-size: var(--text-2xl); color: var(--tx); margin: 0 0 var(--space-2); }
+.sa-hero-sub { font-size: var(--text-sm); color: var(--tx2); margin: 0; max-width: 62ch; }
+
+/* ── Verdict global ─────────────────────────────────────── */
+.sa-verdict {
+  border: 1px solid var(--line); border-radius: var(--radius-md);
+  padding: var(--space-4); margin-bottom: var(--space-6);
+}
+.sa-verdict.is-alert { border-color: var(--alert); background: var(--alert-tint); }
+.sa-verdict.is-warn  { border-color: var(--neutral); background: var(--neutral-tint); }
+.sa-verdict.is-empty { border-style: dashed; }
+.sa-verdict-head { display: flex; align-items: center; gap: var(--space-2); }
+.sa-verdict-kicker {
+  font-size: var(--text-xs); text-transform: uppercase; letter-spacing: .06em;
+  font-weight: 600; color: var(--tx);
+}
+.sa-verdict.is-alert .sa-verdict-kicker { color: var(--alert); }
+.sa-verdict-count { margin-left: auto; font-size: var(--text-xs); color: var(--tx3); }
+.sa-verdict-lede { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--tx2); }
+.sa-verdict-warn { margin: var(--space-2) 0 0; font-size: var(--text-sm); color: var(--alert); }
+
+/* ── Section ────────────────────────────────────────────── */
+.sa-section { border-top: 1px solid var(--line); }
+.sa-section-head {
+  display: flex; align-items: center; gap: var(--space-2); width: 100%;
+  padding: var(--space-3) 0; background: none; border: none; cursor: pointer;
+  text-align: left; color: inherit;
+}
+.sa-section-title { font-size: var(--text-base); font-weight: 600; color: var(--tx); margin: 0; }
+.sa-section-state {
+  margin-left: auto; font-size: var(--text-xs); color: var(--tx3);
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.sa-section.is-degraded .sa-section-state { color: var(--alert); font-weight: 600; }
+.sa-section-summary {
+  margin: 0 0 var(--space-3); padding-left: calc(14px + var(--space-2));
+  font-size: var(--text-sm); color: var(--tx2); max-width: 68ch;
+}
+.sa-section-body { padding: 0 0 var(--space-4) calc(14px + var(--space-2)); }
+
+/* ── Ligne ──────────────────────────────────────────────── */
+.sa-row { padding: var(--space-2) 0; }
+.sa-row + .sa-row { border-top: 1px solid var(--line-soft, var(--line)); }
+.sa-row-head { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.sa-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--positive); }
+.sa-row.is-failing .sa-dot { background: var(--alert); }
+.sa-row.is-stale   .sa-dot { background: var(--neutral); }
+.sa-row.is-resting .sa-dot,
+.sa-row.is-unknown_freshness .sa-dot,
+.sa-row.is-unknown .sa-dot { background: var(--tx3); }
+.sa-name { color: var(--tx); font-weight: 500; }
+.sa-state {
+  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .04em; color: var(--tx2);
+}
+.sa-row.is-failing .sa-state { color: var(--alert); font-weight: 600; }
+.sa-row.is-stale   .sa-state { color: var(--neutral); font-weight: 600; }
+.sa-age { margin-left: auto; font-size: var(--text-xs); color: var(--tx3); font-variant-numeric: tabular-nums; }
+.sa-link { flex: none; color: var(--tx3); text-decoration: none; }
+.sa-link:hover { color: var(--tx); }
+.sa-link.is-empty { width: 13px; }
+
+.sa-cause, .sa-effect, .sa-fix {
+  margin: var(--space-1) 0 0; padding-left: calc(7px + var(--space-2));
+  font-size: var(--text-sm); max-width: 68ch;
+}
+.sa-cause  { color: var(--tx2); }
+.sa-effect { color: var(--tx2); }
+.sa-fix    { color: var(--tx); }
+.sa-fix-arrow { color: var(--accent); font-weight: 600; }
+
+@media (max-width: 720px) {
+  .sa-row-head { flex-wrap: wrap; }
+  .sa-age { margin-left: 0; width: 100%; }
+}

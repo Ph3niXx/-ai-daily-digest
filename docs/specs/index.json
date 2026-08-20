@@ -300,6 +300,16 @@
       "scope": "mixte",
       "status": "documented",
       "last_updated": "2026-07-26"
+    },
+    {
+      "slug": "sante",
+      "title": "Santé",
+      "order": 31,
+      "group": "Coulisses",
+      "dom_id": "sante",
+      "scope": "mixte",
+      "status": "documented",
+      "last_updated": "2026-08-20"
     }
   ]
 }
