@@ -89,9 +89,14 @@ finally:
 
 print("-- verdict : le cas local est inchange")
 
-NO_RUN = {"last_run_conclusion": None, "consecutive_failures": 0}
-OK_RUN = {"last_run_conclusion": "success", "consecutive_failures": 0}
-KO_RUN = {"last_run_conclusion": "failure", "consecutive_failures": 3}
+NO_RUN = {"last_run_at": None, "last_run_conclusion": None, "last_run_url": None,
+          "last_success_at": None, "consecutive_failures": 0}
+OK_RUN = {"last_run_at": "2026-08-20T06:02:00+00:00", "last_run_conclusion": "success",
+          "last_run_url": "https://github.test/run/1",
+          "last_success_at": "2026-08-20T06:02:00+00:00", "consecutive_failures": 0}
+KO_RUN = {"last_run_at": "2026-08-20T06:04:00+00:00", "last_run_conclusion": "failure",
+          "last_run_url": "https://github.test/run/2",
+          "last_success_at": "2026-05-01T06:04:00+00:00", "consecutive_failures": 3}
 
 check("aucun run decisif => unknown", ph.verdict(NO_RUN, None, None), "unknown")
 check("run en echec => failing", ph.verdict(KO_RUN, 1.0, 30), "failing")
@@ -160,6 +165,24 @@ row2 = ph.build_row(
 check("remediation absente => None", row2["remediation"], None)
 check("cause d'une routine distante figee",
       row2["last_error"], "Aucune écriture dans job_scans depuis 200.0 h")
+
+
+print("-- build_row : les cinq champs d'execution transitent integralement")
+
+# Verrou de contrat : summarize_runs() renvoie TOUJOURS ces cinq clés (y
+# compris sur une liste de runs vide), donc build_row les recopie par accès
+# direct plutôt que .get() — un run_info malformé doit lever bruyamment,
+# jamais écrire un NULL silencieux en base. KO_RUN porte une valeur distincte
+# par champ pour que ce test ne puisse pas passer par coïncidence.
+row3 = ph.build_row(
+    {"id": "y", "name": "Y", "remote": False, "health": {"domain": "socle", "panels": []}},
+    KO_RUN, last_seen=None, age_hours=None, status="failing", now="NOW",
+)
+check("last_run_at recopie", row3["last_run_at"], KO_RUN["last_run_at"])
+check("last_run_conclusion recopie", row3["last_run_conclusion"], KO_RUN["last_run_conclusion"])
+check("last_run_url recopie", row3["last_run_url"], KO_RUN["last_run_url"])
+check("last_success_at recopie", row3["last_success_at"], KO_RUN["last_success_at"])
+check("consecutive_failures recopie", row3["consecutive_failures"], KO_RUN["consecutive_failures"])
 
 
 print()
