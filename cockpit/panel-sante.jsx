@@ -11,9 +11,12 @@
 const { useState: useSaState } = React;
 
 // Une section au vert se replie sur son titre : un jour normal, la page tient
-// en sept lignes. Mais une section qui DEVIENT dégradée s'ouvre, quel que soit
-// ce que l'utilisateur avait replié — sinon on peut fermer une panne et ne
-// plus jamais la revoir.
+// en sept lignes. Une section dégradée s'ouvre AU MONTAGE quel que soit l'état
+// mémorisé — sinon on peut fermer une panne et ne plus jamais la revoir. Mais
+// seulement au montage : après quoi le pli de l'utilisateur fait autorité pour
+// le reste de la session. Un chevron qui ne répond pas est un bouton cassé, et
+// « la mémoire ne doit pas cacher une panne » ne veut pas dire « on ne peut
+// plus jamais replier ». La panne se rouvre d'elle-même à la visite suivante.
 const SA_OPEN_KEY = "cockpit-sante-open";
 
 function saReadOpen() {
@@ -25,9 +28,17 @@ function saWriteOpen(state) {
 }
 
 function SaVerdict({ verdict }) {
-  const fmtDate = (ms) => new Date(ms).toLocaleDateString("fr-FR", { day: "numeric", month: "long" });
+  // L'heure, pas seulement le jour : entre 24 h et 48 h, « le 19 août » ne dit
+  // pas si le contrôle du jour a tourné. Sur une page dont le sujet est la
+  // fraîcheur, c'est précisément la question.
+  const fmtDate = (ms) => new Date(ms).toLocaleString("fr-FR", {
+    day: "numeric", month: "long", hour: "2-digit", minute: "2-digit",
+  });
 
   if (verdict.empty) {
+    // « n'a jamais écrit » serait une affirmation invérifiable ici : le fetch
+    // de bootTier1 est en `.catch(() => [])`, un échec réseau produit le même
+    // tableau vide qu'une table neuve. On dit ce qu'on sait.
     return (
       <aside className="sa-verdict is-empty" role="status">
         <div className="sa-verdict-head">
@@ -35,8 +46,9 @@ function SaVerdict({ verdict }) {
           <span className="sa-verdict-kicker">Aucun relevé</span>
         </div>
         <p className="sa-verdict-lede">
-          Le contrôle de santé n'a jamais écrit dans la base. Rien ne permet de dire
-          que tout va bien — ni le contraire.
+          Aucun relevé n'a pu être lu — soit le contrôle de santé n'a encore rien
+          écrit, soit la lecture a échoué. Rien ne permet de dire que tout va bien
+          — ni le contraire.
         </p>
       </aside>
     );
@@ -54,7 +66,11 @@ function SaVerdict({ verdict }) {
               `${verdict.failing && verdict.stale ? ", " : ""}` +
               `${verdict.stale ? `${verdict.stale} figé${verdict.stale > 1 ? "s" : ""}` : ""}`}
         </span>
-        <span className="sa-verdict-count">{verdict.total} briques surveillées</span>
+        <span className="sa-verdict-count">
+          {verdict.unmeasured > 0
+            ? `${verdict.measured} mesurées sur ${verdict.total}`
+            : `${verdict.total} briques surveillées`}
+        </span>
       </div>
       {verdict.checkStale && (
         <p className="sa-verdict-warn">
@@ -65,16 +81,28 @@ function SaVerdict({ verdict }) {
       {!verdict.checkStale && verdict.lastCheck && (
         <p className="sa-verdict-lede">Dernier contrôle le {fmtDate(verdict.lastCheck)}.</p>
       )}
+      {/* Principe 4 : « Tout tourne » ne doit pas s'étendre aux briques dont la
+          fraîcheur n'est mesurée par personne. Leur vert ne prouve rien — c'est
+          très exactement l'angle mort que cet onglet existe pour supprimer. */}
+      {verdict.unmeasured > 0 && (
+        <p className="sa-verdict-lede">
+          {verdict.unmeasured === 1
+            ? "Une brique n'est mesurée sur aucune fraîcheur : son vert ne prouve rien."
+            : `${verdict.unmeasured} briques ne sont mesurées sur aucune fraîcheur : leur vert ne prouve rien.`}
+        </p>
+      )}
     </aside>
   );
 }
 
-function SaRow({ row, nav, now }) {
+function SaRow({ row, nav, now, sectionDegraded }) {
   const V = window.santeView;
   const render = V.renderOf(row);
   const degraded = V.isDegraded(row);
   const age = V.fmtAge(row, now);
-  const effectLabels = V.panelLabels(row.panels, nav);
+  // Gabarit unique, partagé avec la phrase de section : la ligne ne la porte
+  // que lorsque la section ne l'agrège pas (cf. sante-view.js::rowSummary).
+  const effect = V.rowSummary(row, nav, sectionDegraded);
 
   return (
     <div className={`sa-row is-${render}`}>
@@ -97,13 +125,7 @@ function SaRow({ row, nav, now }) {
       {degraded && row.last_error && (
         <p className="sa-cause">{row.last_error}</p>
       )}
-      {degraded && (effectLabels.length > 0 || row.impact) && (
-        <p className="sa-effect">
-          {effectLabels.length > 0
-            ? `${V.joinFr(effectLabels)} ${effectLabels.length > 1 ? "affichent" : "affiche"} encore des données figées.`
-            : row.impact}
-        </p>
-      )}
+      {effect && <p className="sa-effect">{effect}</p>}
       {degraded && row.remediation && (
         <p className="sa-fix"><span className="sa-fix-arrow" aria-hidden="true">→</span> {row.remediation}</p>
       )}
@@ -114,24 +136,25 @@ function SaRow({ row, nav, now }) {
 function SaSection({ section, nav, now, open, onToggle }) {
   const V = window.santeView;
   const summary = V.sectionSummary(section.rows, nav);
-  const resting = section.rows.filter(r => V.renderOf(r) === "resting").length;
+  // Une seule chaîne pour l'œil et pour le lecteur d'écran : deux formulations
+  // divergent dès qu'on en modifie une, et c'est l'aria qui perd.
+  const state = V.sectionStateLabel(section);
 
   return (
-    <section className={`sa-section ${open ? "is-open" : ""} ${section.degraded ? "is-degraded" : ""}`}>
+    <section className={`sa-section ${section.degraded ? "is-degraded" : ""}`}>
       <button className="sa-section-head" onClick={onToggle}
-              aria-expanded={open} aria-label={`${section.label} — ${section.degraded ? "dégradé" : "tout va bien"}`}>
+              aria-expanded={open} aria-label={`${section.label} — ${state}`}>
         <Icon name={open ? "chevron_down" : "chevron_right"} size={14} stroke={2} />
         <h2 className="sa-section-title">{section.label}</h2>
-        <span className="sa-section-state">
-          {section.degraded > 0
-            ? `${section.degraded} dégradé${section.degraded > 1 ? "s" : ""}`
-            : (resting > 0 ? `${section.rows.length} briques · ${resting} au repos` : "tout va bien")}
-        </span>
+        <span className="sa-section-state">{state}</span>
       </button>
       {summary && <p className="sa-section-summary">{summary}</p>}
       {open && (
         <div className="sa-section-body">
-          {section.rows.map(r => <SaRow key={r.pipeline_id} row={r} nav={nav} now={now} />)}
+          {section.rows.map(r => (
+            <SaRow key={r.pipeline_id} row={r} nav={nav} now={now}
+                   sectionDegraded={section.degraded} />
+          ))}
         </div>
       )}
     </section>
@@ -148,18 +171,26 @@ function PanelSante({ data, onNavigate }) {
   const verdict = V.globalVerdict(rows, now);
   const sections = V.groupByDomain(rows);
 
-  const [stored, setStored] = useSaState(saReadOpen);
+  // Amorçage au montage seulement : une section dégradée s'ouvre quoi qu'ait
+  // replié l'utilisateur, puis son basculement fait autorité pour le reste de
+  // la session. La panne se rouvrira à la prochaine visite — elle ne peut donc
+  // pas être enterrée — et le chevron répond.
+  const [open, setOpen] = useSaState(() => {
+    const stored = saReadOpen();
+    const init = {};
+    for (const s of sections) init[s.key] = s.degraded > 0 || stored[s.key] === true;
+    return init;
+  });
+  // On ne persiste que le geste de l'utilisateur, jamais l'ouverture d'office :
+  // sinon une section réparée resterait dépliée pour toujours.
   const toggle = (key) => {
-    const next = Object.assign({}, stored, { [key]: !isOpen(key) });
-    setStored(next);
-    saWriteOpen(next);
+    const next = open[key] !== true;
+    setOpen(Object.assign({}, open, { [key]: next }));
+    const stored = saReadOpen();
+    stored[key] = next;
+    saWriteOpen(stored);
   };
-  // Une section dégradée est ouverte, point. La mémoire ne sert qu'aux saines.
-  function isOpen(key) {
-    const section = sections.find(s => s.key === key);
-    if (section && section.degraded > 0) return true;
-    return stored[key] === true;
-  }
+  const isOpen = (key) => open[key] === true;
 
   return (
     <div className="sa-panel">

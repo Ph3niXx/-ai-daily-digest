@@ -102,25 +102,67 @@
     return a.slice(0, -1).join(", ") + " et " + a[a.length - 1];
   }
 
+  // UN SEUL gabarit pour la phrase d'effet, appelé par la section ET par la
+  // ligne. Il en existait deux copies — une ici, une dans le JSX non testé :
+  // le jour où l'une bouge, l'autre dérive en silence.
+  function effectSentence(labels) {
+    const a = (labels || []).filter(Boolean);
+    if (!a.length) return null;
+    return joinFr(a) + (a.length > 1 ? " affichent" : " affiche") +
+           " encore des données figées.";
+  }
+
   // Ce que les pannes d'une section coûtent, en noms d'onglets. Jamais écrite
   // à la main : elle suit les `panels` du contrat, donc elle reste vraie quand
   // le contrat change.
+  //
+  // Elle ne sort QUE si elle agrège réellement plusieurs briques. Avec une
+  // seule brique dégradée — le cas le plus courant — elle serait octet pour
+  // octet la phrase de la ligne, deux lignes plus bas. Principe 5 : une seule
+  // surface par vérité. Sous ce seuil, c'est `rowSummary` qui la porte, au plus
+  // près de sa cause et de son remède.
   function sectionSummary(rows, nav) {
     const bad = (rows || []).filter(isDegraded);
-    if (!bad.length) return null;
+    if (bad.length < 2) return null;
     const labels = [];
     for (const r of bad) {
       for (const l of panelLabels(r.panels, nav)) {
         if (labels.indexOf(l) === -1) labels.push(l);
       }
     }
-    if (labels.length) {
-      return joinFr(labels) + (labels.length > 1 ? " affichent" : " affiche") +
-             " encore des données figées.";
-    }
+    const sentence = effectSentence(labels);
+    if (sentence) return sentence;
     // Briques du Socle : aucun onglet à citer, l'effet est déclaré.
     const impacts = bad.map(function (r) { return r.impact; }).filter(Boolean);
     return impacts.length ? impacts.join(" ") : null;
+  }
+
+  // Le pendant de `sectionSummary` au niveau de la ligne. Les deux sont
+  // exclusifs par construction : la phrase s'affiche une fois par section,
+  // jamais zéro, jamais deux.
+  function rowSummary(row, nav, sectionDegraded) {
+    if (!isDegraded(row)) return null;
+    if ((sectionDegraded || 0) >= 2) return null;  // la section l'agrège déjà
+    return effectSentence(panelLabels(row && row.panels, nav)) ||
+           ((row && row.impact) || null);
+  }
+
+  // Le compteur du bouton d'une section, réutilisé tel quel comme aria-label :
+  // un lecteur d'écran ne doit pas entendre une dichotomie « dégradé / tout va
+  // bien » que l'œil ne voit pas.
+  //
+  // Principe 4 : les briques non mesurées se comptent comme celles au repos.
+  // Sans ça le Socle, dont les DEUX briques sont sans sonde de fraîcheur,
+  // annoncerait « tout va bien » tous les jours de l'année, replié par défaut.
+  function sectionStateLabel(section) {
+    const s = section || {};
+    if (s.degraded > 0) return s.degraded + " dégradé" + (s.degraded > 1 ? "s" : "");
+    const parts = [];
+    if (s.resting > 0) parts.push(s.resting + " au repos");
+    if (s.unmeasured > 0) parts.push(s.unmeasured + " non mesurée" + (s.unmeasured > 1 ? "s" : ""));
+    if (!parts.length) return "tout va bien";
+    const n = (s.rows || []).length;
+    return n + " brique" + (n > 1 ? "s" : "") + " · " + parts.join(" · ");
   }
 
   function groupByDomain(rows) {
@@ -137,19 +179,34 @@
     }
     // Une brique dont le domaine est inconnu doit se voir, pas disparaître.
     if (orphans.length) out.push({ key: UNCLASSIFIED_KEY, label: "Non classé", rows: orphans });
-    for (const s of out) s.degraded = s.rows.filter(isDegraded).length;
+    for (const s of out) {
+      s.degraded = 0; s.resting = 0; s.unmeasured = 0;
+      for (const r of s.rows) {
+        const render = renderOf(r);
+        if (DEGRADED[render] === true) s.degraded++;
+        else if (render === "resting") s.resting++;
+        else if (render === "unknown" || render === "unknown_freshness") s.unmeasured++;
+      }
+    }
     return out;
   }
 
   // Surveiller le surveillant : si le contrôle n'a pas tourné, la table gèle
   // sur son dernier verdict et un « tout va bien » périmé serait pire que rien.
+  //
+  // `measured` existe pour la même raison que le rendu `unknown_freshness` :
+  // « 19 briques surveillées » attribuait un vert aux trois qui ne sont mesurées
+  // sur aucune fraîcheur (igdb_tracker_sync, backup_supabase, pipeline_health).
+  // Une brique dégradée compte comme mesurée — elle est visible, c'est le
+  // silence vert qu'on refuse, pas l'alarme.
   function globalVerdict(rows, now) {
     const all = rows || [];
-    let failing = 0, stale = 0, lastCheck = 0;
+    let failing = 0, stale = 0, unmeasured = 0, lastCheck = 0;
     for (const r of all) {
       const render = renderOf(r);
       if (render === "failing") failing++;
       else if (render === "stale") stale++;
+      else if (render === "unknown" || render === "unknown_freshness") unmeasured++;
       const t = r && r.checked_at ? new Date(r.checked_at).getTime() : 0;
       if (t > lastCheck) lastCheck = t;
     }
@@ -158,6 +215,8 @@
       failing: failing,
       stale: stale,
       degraded: failing + stale,
+      unmeasured: unmeasured,
+      measured: all.length - unmeasured,
       lastCheck: lastCheck || null,
       checkStale: lastCheck > 0 && (now - lastCheck) > CHECK_STALE_MS,
       empty: all.length === 0,
@@ -168,7 +227,8 @@
     DOMAINS, RENDER_LABELS, CHECK_STALE_MS, UNCLASSIFIED_KEY,
     renderOf, isDegraded, ageDays, fmtAge,
     panelLabelMap, panelLabels, joinFr,
-    sectionSummary, groupByDomain, globalVerdict,
+    effectSentence, sectionSummary, rowSummary, sectionStateLabel,
+    groupByDomain, globalVerdict,
   };
   if (typeof window !== "undefined") window.santeView = Object.assign(window.santeView || {}, api);
   if (typeof module !== "undefined" && module.exports) module.exports = api;

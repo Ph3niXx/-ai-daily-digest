@@ -70,23 +70,54 @@ check("deux", V.joinFr(["A", "B"]), "A et B");
 check("trois", V.joinFr(["A", "B", "C"]), "A, B et C");
 check("vide", V.joinFr([]), "");
 
-// ── sectionSummary : ce que la panne coute, en noms d'onglets ─
+// ── effectSentence : UN gabarit, appele des deux cotes ───────
+// Il en existait deux copies (module + JSX). Le jour ou l'une bouge, l'autre
+// derive en silence.
+check("un onglet => verbe au singulier",
+  V.effectSentence(["Forme"]), "Forme affiche encore des données figées.");
+check("plusieurs onglets => verbe au pluriel",
+  V.effectSentence(["Recommandations", "Challenges"]),
+  "Recommandations et Challenges affichent encore des données figées.");
+check("aucun libelle => aucune phrase", V.effectSentence([]), null);
+
+// ── sectionSummary vs rowSummary : jamais la meme phrase deux fois ─
+// Une section a UNE seule brique degradee - le cas le plus courant - voyait la
+// phrase de section et celle de la ligne s'afficher octet pour octet
+// identiques, a deux lignes d'ecart. Principe 5 : une seule surface par verite.
 const APPR = [
   { pipeline_id: "weekly_analysis", domain: "apprentissage", status: "failing",
     panels: ["recos", "challenges"], data_last_seen: iso(118) },
 ];
-check("phrase d'effet derivee des panels",
-  V.sectionSummary(APPR, NAV),
+check("une seule brique degradee => la section se tait",
+  V.sectionSummary(APPR, NAV), null);
+check("... et c'est la ligne qui parle",
+  V.rowSummary(APPR[0], NAV, 1),
   "Recommandations et Challenges affichent encore des données figées.");
-check("un seul onglet => verbe au singulier",
-  V.sectionSummary([{ status: "stale", panels: ["perf"] }], NAV),
-  "Forme affiche encore des données figées.");
+
+const DEUX_BAD = [
+  { status: "failing", panels: ["perf"] },
+  { status: "stale", panels: ["sport"] },
+];
+check("deux briques degradees => la section agrege",
+  V.sectionSummary(DEUX_BAD, NAV),
+  "Forme et Sport affichent encore des données figées.");
+check("... et les lignes se taisent", V.rowSummary(DEUX_BAD[0], NAV, 2), null);
+
 check("section saine => aucune phrase",
   V.sectionSummary([{ status: "ok", data_last_seen: iso(0.1), max_age_hours: 30, panels: ["brief"] }], NAV),
   null);
-check("sans panels, l'impact declare prend le relais",
-  V.sectionSummary([{ status: "failing", panels: [], impact: "Les sauvegardes sont arrêtées." }], NAV),
+check("ligne saine => aucune phrase",
+  V.rowSummary({ status: "ok", data_last_seen: iso(0.1), max_age_hours: 30, panels: ["brief"] }, NAV, 0),
+  null);
+check("sans panels, l'impact declare prend le relais (ligne)",
+  V.rowSummary({ status: "failing", panels: [], impact: "Les sauvegardes sont arrêtées." }, NAV, 1),
   "Les sauvegardes sont arrêtées.");
+check("sans panels, l'impact declare prend le relais (section)",
+  V.sectionSummary([
+    { status: "failing", panels: [], impact: "Les sauvegardes sont arrêtées." },
+    { status: "stale", panels: [], impact: "Le contrôle a gelé." },
+  ], NAV),
+  "Les sauvegardes sont arrêtées. Le contrôle a gelé.");
 check("les onglets ne sont jamais cites deux fois",
   V.sectionSummary([{ status: "failing", panels: ["perf"] }, { status: "stale", panels: ["perf"] }], NAV),
   "Forme affiche encore des données figées.");
@@ -109,6 +140,25 @@ check("une brique orpheline reste visible",
   sections[3].rows.map(r => r.pipeline_id), ["orphelin"]);
 check("les 7 domaines sont declares", V.DOMAINS.map(d => d.key),
   ["veille_ia", "apprentissage", "veille_satellite", "mediatheque", "perso", "business", "socle"]);
+check("compteur de briques au repos", sections.map(s => s.resting), [0, 0, 0, 0]);
+check("compteur de briques non mesurees", sections.map(s => s.unmeasured), [0, 0, 1, 0]);
+
+// ── sectionStateLabel : un vert non mesure est un mensonge poli ──
+// Le Socle n'a AUCUNE sonde de fraicheur sur ses deux briques : sans ce
+// comptage il annoncerait « tout va bien » tous les jours, replie par defaut.
+check("section dont tout est mesure et frais", V.sectionStateLabel(sections[0]), "tout va bien");
+check("section degradee", V.sectionStateLabel(sections[1]), "1 dégradé");
+check("section non mesuree ne dit JAMAIS tout va bien",
+  V.sectionStateLabel(sections[2]), "1 brique · 1 non mesurée");
+check("deux briques non mesurees (le Socle reel)",
+  V.sectionStateLabel({ rows: [1, 2], degraded: 0, resting: 0, unmeasured: 2 }),
+  "2 briques · 2 non mesurées");
+check("repos et non mesure cohabitent",
+  V.sectionStateLabel({ rows: [1, 2, 3, 4, 5, 6], degraded: 0, resting: 4, unmeasured: 1 }),
+  "6 briques · 4 au repos · 1 non mesurée");
+check("le degrade prime sur tout le reste",
+  V.sectionStateLabel({ rows: [1, 2, 3], degraded: 2, resting: 1, unmeasured: 0 }),
+  "2 dégradés");
 
 // ── globalVerdict : et la surveillance du surveillant ────────
 const FRESH_CHECK = ROWS.map(r => ({ ...r, checked_at: new Date(NOW - 3600000).toISOString() }));
@@ -119,6 +169,18 @@ check("figes", v.stale, 0);
 check("degrades", v.degraded, 1);
 check("le controle est recent", v.checkStale, false);
 check("pas vide", v.empty, false);
+// « N briques surveillees » attribuait un vert aux briques que personne ne
+// mesure. Le verdict doit pouvoir dire « 3 mesurees sur 4 ».
+check("briques non mesurees comptees a part", v.unmeasured, 1);
+check("briques reellement mesurees", v.measured, 3);
+check("mesurees + non mesurees = total", v.measured + v.unmeasured, v.total);
+const ALL_MEASURED = V.globalVerdict(
+  [{ status: "ok", data_last_seen: iso(0.1), max_age_hours: 30, checked_at: iso(0.04) }], NOW);
+check("tout mesure => aucun angle mort", ALL_MEASURED.unmeasured, 0);
+check("une brique au repos reste mesuree",
+  V.globalVerdict([{ status: "ok", data_last_seen: iso(37), max_age_hours: null }], NOW).measured, 1);
+check("une brique en panne compte comme mesuree (elle est visible)",
+  V.globalVerdict([{ status: "failing", data_last_seen: null }], NOW).unmeasured, 0);
 
 const OLD_CHECK = ROWS.map(r => ({ ...r, checked_at: new Date(NOW - 72 * 3600000).toISOString() }));
 check("controle vieux de 72 h => alerte", V.globalVerdict(OLD_CHECK, NOW).checkStale, true);
