@@ -34,6 +34,7 @@ window.COCKPIT_NAV = [
     { id: "gaming_news", label: "Gaming", icon: "wrench" },
     { id: "anime", label: "Anime / Ciné / Séries", icon: "star" },
     { id: "news", label: "Actualités", icon: "paper" },
+    { id: "history", label: "Historique", icon: "clock" },
   ]},
   { group: "Apprentissage", items: [
     { id: "radar", label: "Radar compétences", icon: "target" },
@@ -49,16 +50,19 @@ window.COCKPIT_NAV = [
   ]},
   { group: "Personnel", items: [
     { id: "jarvis", label: "Jarvis", icon: "assistant" },
-    { id: "jarvis-lab", label: "Jarvis Lab", icon: "chart" },
     { id: "profile", label: "Mon profil", icon: "user" },
     { id: "perf", label: "Forme", icon: "activity" },
     { id: "music", label: "Musique", icon: "music" },
     { id: "gaming", label: "Gaming", icon: "gamepad" },
     { id: "mediatheque", label: "Médiathèque", icon: "tv" },
   ]},
-  { group: "Système", items: [
+  // « Coulisses » (ex-« Système ») : la machine, ce qu'elle coûte, ses plans.
+  // Historique en est parti — c'est une archive 60 j de la veille, pas de la
+  // machinerie. Jarvis Lab y est entré — c'est du méta (roadmap, specs,
+  // diagrammes), pas une fonctionnalité personnelle.
+  { group: "Coulisses", items: [
     { id: "sante", label: "Santé", icon: "plug" },
     { id: "stacks", label: "Stacks & Limits", icon: "wallet" },
-    { id: "history", label: "Historique", icon: "clock" },
+    { id: "jarvis-lab", label: "Jarvis Lab", icon: "chart" },
   ]},
 ];
