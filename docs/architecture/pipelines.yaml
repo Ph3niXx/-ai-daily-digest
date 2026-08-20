@@ -60,6 +60,9 @@ pipelines:
       table: articles
       date_column: fetch_date
       max_age_hours: 30
+      remediation: >-
+        Vérifier le quota Gemini (1000 req/jour, tier gratuit) sur
+        aistudio.google.com, puis relancer le workflow daily_digest.
     script: "main.py"
     input_api: "RSS (flux veille IA) + Gemini 2.5 Flash-Lite"
     output_tables:
@@ -96,6 +99,10 @@ pipelines:
       table: learning_recommendations
       date_column: created_at
       max_age_hours: 192   # hebdo + 24 h de marge
+      remediation: >-
+        Recharger le crédit sur console.anthropic.com — un HTTP 400 « credit
+        balance » est la panne historique de ce pipeline — puis relancer
+        weekly_analysis.yml.
     script: "weekly_analysis.py"
     input_api: "Claude Haiku 4.5 (Anthropic API)"
     output_tables:
@@ -132,6 +139,9 @@ pipelines:
       # Mesurée mais pas sanctionnée : ne produit que si l'utilisateur joue.
       table: tft_matches
       date_column: played_at
+      remediation: >-
+        La clé Riot développeur expire toutes les 24 h : en régénérer une sur
+        developer.riotgames.com et mettre à jour le secret GitHub.
     script: "tft_pipeline.py"
     input_api: "Riot Games API (TFT)"
     output_tables:
@@ -157,6 +167,11 @@ pipelines:
       # pas d'activité, pas une panne. Sert seulement à dater le bandeau.
       table: strava_activities
       date_column: start_date
+      remediation: >-
+        Réactiver l'application dans le portail développeur Strava, puis
+        régénérer le refresh token avec scripts/strava_oauth_init.py
+        (cf. docs/strava-setup.md). Le token seul ne suffit pas si l'app est
+        désactivée.
     script: "pipelines/strava_sync.py"
     input_api: "Strava API (OAuth2)"
     output_tables:
@@ -181,6 +196,9 @@ pipelines:
       # Mesurée mais pas sanctionnée : pas de pesée = pas de donnée, pas une panne.
       table: withings_measurements
       date_column: measure_date
+      remediation: >-
+        Régénérer le refresh token avec scripts/withings_oauth_init.py
+        (cf. docs/withings-setup.md) et mettre à jour le secret GitHub.
     script: "pipelines/withings_sync.py"
     input_api: "Withings API (OAuth2)"
     output_tables:
@@ -205,6 +223,9 @@ pipelines:
       # Mesurée mais pas sanctionnée : pas d'écoute = pas de scrobble, pas une panne.
       table: music_scrobbles
       date_column: scrobbled_at
+      remediation: >-
+        Vérifier la clé LASTFM_API_KEY dans les secrets GitHub
+        (cf. docs/lastfm-setup.md).
     script: "pipelines/lastfm_sync.py"
     input_api: "Last.fm API + Gemini (enrich lundi)"
     output_tables:
@@ -233,6 +254,10 @@ pipelines:
       table: steam_games_snapshot   # snapshot quotidien, écrit même sans jeu lancé
       date_column: snapshot_date
       max_age_hours: 30
+      remediation: >-
+        Vérifier la clé STEAM_API_KEY et que le profil Steam est resté public
+        (cf. docs/steam-setup.md) — un profil repassé en privé casse l'API sans
+        message clair.
     script: "pipelines/steam_sync.py"
     input_api: "Steam Web API + Steam Store API"
     output_tables:
@@ -257,6 +282,9 @@ pipelines:
       table: sport_articles
       date_column: fetch_date
       max_age_hours: 30
+      remediation: >-
+        Un flux RSS sport est mort ou a changé d'URL : lire le log du run pour
+        identifier lequel, puis corriger la liste des flux dans le script.
     script: "pipelines/sport_sync.py"
     input_api: "RSS (L'Équipe, RMC Sport, Millenium, Cyclism'Actu…)"
     output_tables:
@@ -277,6 +305,9 @@ pipelines:
       table: gaming_articles
       date_column: fetch_date
       max_age_hours: 30
+      remediation: >-
+        Un flux RSS gaming est mort ou a changé d'URL : lire le log du run pour
+        identifier lequel, puis corriger la liste des flux dans le script.
     script: "pipelines/gaming_sync.py"
     input_api: "RSS (JeuxVideo.com, Gamekult, IGN, Eurogamer, PC Gamer, Dexerto, GamesIndustry.biz…)"
     output_tables:
@@ -297,6 +328,9 @@ pipelines:
       table: anime_articles
       date_column: fetch_date
       max_age_hours: 30
+      remediation: >-
+        Un flux RSS anime est mort, ou l'API Jikan est en rate limit : lire le
+        log du run pour trancher.
     script: "pipelines/anime_sync.py"
     input_api: "RSS (AlloCiné, Première, ANN, Deadline, Variety…) + Jikan API v4 (MyAnimeList)"
     output_tables:
@@ -317,7 +351,13 @@ pipelines:
       panels: [mediatheque]
       table: media_entries
       date_column: updated_at
+      # `media_entries` a DEUX écrivains : ce pipeline et tmdb_tracker_sync.
+      # Sans filtre, une panne AniList est masquée par les écritures TMDB.
+      filter: "source=eq.anilist"
       max_age_hours: 30
+      remediation: >-
+        AniList est en rate limit ou une franchise suivie a été retirée du
+        catalogue : lire le log du run.
     script: "pipelines/anime_tracker_sync.py"
     input_api: "AniList GraphQL (public, sans clé)"
     output_tables:
@@ -340,8 +380,13 @@ pipelines:
     health:
       domain: mediatheque
       panels: [mediatheque]
-      # Pas de contrôle de fraîcheur : sans TMDB_API_KEY le pipeline sort en
-      # [skip] code 0 — un run vert et zéro écriture est ici un cas nominal.
+      table: media_entries
+      date_column: updated_at
+      filter: "source=in.(tmdb_tv,tmdb_movie)"
+      max_age_hours: 30
+      remediation: >-
+        Vérifier la clé TMDB_API_KEY dans les secrets GitHub, puis relancer
+        tmdb-tracker-sync.yml.
     script: "pipelines/tmdb_tracker_sync.py"
     input_api: "TMDB REST v3 (TMDB_API_KEY)"
     output_tables:
@@ -363,11 +408,18 @@ pipelines:
     workflow_file: ".github/workflows/igdb-tracker-sync.yml"
     health:
       domain: perso
-      panels: [brief]
-      # Pas de contrôle de fraîcheur : sans les secrets Twitch le pipeline
-      # sort en [skip] code 0 — un run vert et zéro écriture est nominal.
-      # Et un run sans événement est le cas ordinaire : une licence n'annonce
-      # pas une suite tous les jours.
+      # Gaming consomme game_releases depuis ADR-35/36 (rail « À venir »,
+      # acquittement), au même titre que l'encart Jeux du Brief.
+      panels: [brief, gaming]
+      # Volontairement sans sonde de fraîcheur : depuis le 2026-08-14, le front
+      # écrit lui aussi game_titles / game_releases / game_franchises (ADR-36)
+      # et aucune colonne ne distingue le pipeline de l'utilisateur. Une sonde
+      # serait verte grâce aux écritures du front. L'onglet Santé affiche donc
+      # « fraîcheur inconnue » plutôt qu'un vert qui mentirait.
+      remediation: >-
+        Vérifier les identifiants Twitch/IGDB dans les secrets GitHub — le token
+        IGDB se renouvelle via l'API Twitch et échoue silencieusement si le
+        client secret a tourné.
     script: "pipelines/igdb_tracker_sync.py"
     input_api: "IGDB v4 (TWITCH_CLIENT_ID + TWITCH_CLIENT_SECRET)"
     output_tables:
@@ -399,6 +451,9 @@ pipelines:
       table: news_articles
       date_column: fetch_date
       max_age_hours: 30
+      remediation: >-
+        Un flux RSS actualités est mort ou a changé d'URL : lire le log du run
+        pour identifier lequel.
     script: "pipelines/news_sync.py"
     input_api: "RSS (Le Monde, Le Figaro, FranceInfo, BFM Paris, BBC World, France 24, RFI…)"
     output_tables:
@@ -431,6 +486,9 @@ pipelines:
       table: daily_picks
       date_column: created_at
       max_age_hours: 30
+      remediation: >-
+        Dépend des articles du jour : vérifier d'abord daily_digest. Si la veille
+        tourne, relancer veille-picks.yml.
     notes: >
       Tourne à 06:30 UTC, après daily_digest (06:00) qui remplit `articles`. Pipeline SÉPARÉ de
       main.py délibérément : le digest n'a pas raté un jour en 114 jours et si la sélection casse,
@@ -459,8 +517,14 @@ pipelines:
     health:
       domain: mediatheque
       panels: [mediatheque]
-      # Pas de contrôle de fraîcheur : incrémental par conception, le run
-      # nominal n'écrit rien. Une table qui ne bouge pas est ici l'état normal.
+      table: jp_words
+      date_column: created_at
+      # Pas de max_age_hours : le vocabulaire n'est alimenté qu'à l'ajout d'une
+      # franchise. Ne rien écrire pendant des semaines est nominal. On mesure
+      # pour pouvoir dire « rien depuis N jours », jamais pour sanctionner.
+      remediation: >-
+        Vérifier la clé du modèle utilisé pour l'extraction de vocabulaire dans
+        les secrets GitHub, puis relancer jp-vocab-sync.yml.
     notes: >
       Tourne après anime_tracker_sync (07:30), seul pipeline pouvant faire apparaître de
       nouvelles franchises. Ne retraite jamais une franchise déjà traitée : les 44 franchises
@@ -473,6 +537,15 @@ pipelines:
     cron: "0 9 * * *"
     human_time: "Quotidien 09:00 UTC"
     workflow_file: ".github/workflows/pipeline-health.yml"
+    health:
+      domain: socle
+      panels: []
+      impact: >-
+        Les états affichés partout ailleurs gèlent sur leur dernier verdict connu :
+        un « tout va bien » périmé est pire que pas de verdict du tout.
+      remediation: >-
+        Ouvrir le dernier run : le plus souvent, un GITHUB_TOKEN expiré ou un
+        SUPABASE_SERVICE_KEY tourné.
     script: "pipelines/pipeline_health.py"
     input_api: "API GitHub Actions (lecture des conclusions de run)"
     output_tables:
@@ -541,10 +614,21 @@ pipelines:
     avg_duration_s: 30
     budget_usd: 0
     status: active
-    # Pas de bloc `health` : ce pipeline n'écrit aucune table, donc la fraîcheur
-    # d'une donnée ne peut pas servir de sonde. Il se surveille autrement — le
-    # workflow ouvre une issue GitHub sur `if: failure()`, et le script sort en
-    # code 1 si une seule table échoue ou si le total est vide.
+    # Bloc `health` sans sonde de fraîcheur : ce pipeline n'écrit aucune table,
+    # sa sortie est un artefact de run (ADR-37). C'est le troisième cas du
+    # contrat déclaré en tête de fichier — seul le verdict du run compte. Il
+    # reste surveillé : une sauvegarde qu'aucune surface ne regarde est une
+    # sauvegarde qu'on découvre absente le jour où on en a besoin.
+    health:
+      domain: socle
+      panels: []
+      impact: >-
+        Aucune surface ne le montre. Les saisies que rien ne sait refabriquer
+        (offres, profil, idées, engagements, notes, progression média) ne sont
+        plus copiées.
+      remediation: >-
+        Ouvrir le dernier run et lire quelle table a échoué : le script sort en
+        code 1 dès qu'une seule table manque ou que le total est vide.
     notes: >-
       Périmètre volontairement restreint aux données qu'aucun pipeline ne sait refabriquer
       (saisies utilisateur + sortie de la routine Jobs Radar). Les corpus RSS, scrobbles,
@@ -619,4 +703,16 @@ external_routines:
       - skill_radar
     budget_usd: 0   # couverte par le plan Max (pas de facturation par run)
     status: active
+    health:
+      domain: business
+      panels: [jobs]
+      table: job_scans
+      date_column: scan_date
+      # Cron lun/mer/ven : le plus grand trou nominal est vendredi→lundi, soit
+      # ~72 h. 96 h laisse une marge d'un run raté sans crier au loup.
+      max_age_hours: 96
+      remediation: >-
+        Lire job_scans.tendances->'fetch' (codes HTTP, quota restant) : le quota
+        JSearch est de 200 req/mois et se réinitialise le 27. Puis vérifier la
+        routine trig_01JtTsMm27eTAGxR5po5KmMQ sur claude.ai.
     notes: "Remplace la routine Cowork LinkedIn (ADR-19). 11 requêtes validées (5 IA + 2 EM/delivery, ADR-22 ; requête complète sans suffixe 'in France', ADR-21), dédup logique (employeur+titre normalisé, fallback linkedin_job_id=id JSearch ; ADR-25), scoring rubric /10 + skills on_cv + salaire. v2.1 (ADR-20) : filtre FULLTIME pré-scoring, skills depuis job_highlights, colonne is_remote, logo employeur. v2.2 (ADR-21) : requêtes réorientées IA + job_pref_rules de Jean ; JSearch 403 en cloud (IP datacenter) → fetch local de secours. v2.3 (ADR-22) : Engagement/Delivery Manager = rôle cible (scope tech/IA, exclusion conseil/ESN maintenue), valeur role_category 'em'. v2.4 (ADR-25) : dédup logique (employeur+titre) anti-doublons-syndiqués + sélection d'URL durable (apply_options.is_direct → ATS/officiel → linkedin, rejet des endpoints jsearch.p.rapidapi.com), tracé dans intel.link_source. v2.5 (ADR-26) : ÉTAPE 6 vieillissement = auto-archive des leads 'new' non revus >30j (annonce fermée), gardé contre les échecs de fetch (total_fetche>0), jamais applied/snoozed/décisions user. v2.6 (ADR-27) : fréquence ramenée à 3×/sem (lun/mer/ven) pour tenir sous le quota JSearch 200/mois (4×/sem ≈191 saturait → 429 le 2026-06-26, raw_count 110→0). v2.7 (ADR-31) : 2e panne quota (10→27/07, 3 semaines à raw_count 0, non détectée) → santé du fetch journalisée dans job_scans.tendances->'fetch' (une panne n'est plus indiscernable d'un jour calme), discipline quota (zéro retry, arrêt sur 429, lecture de X-RateLimit dès la 1re requête), 8 requêtes/run en socle+rotation A/B/C par jour_de_l_année mod 3 (couverture 14 requêtes distinctes contre 11, conso ≈104/mois), ÉTAPE 6 comptée en scans réussis et non en jours calendaires (la panne aurait auto-archivé 38 leads vivants), ÉTAPE 7 recalibrage hebdo de user_profile.job_pref_observed (lundi, seuil ≥3 nouveaux verdicts ; job_pref_rules jamais touché), intel.source_query pour mesurer le rendement par requête, intel.link_source reverrouillé sur son vocabulaire fermé. v2.8 (ADR-32, migration sql/026) : fin des offres mortes qui ressortent — la dédup passe par la colonne générée indexée jobs.logical_key (fonction IMMUTABLE jobs_logical_key, source unique partagée avec le trigger) et n'a PLUS de fenêtre temporelle (les 45j rataient Postman d'un jour) ; le trigger jobs_inherit_user_status hérite closed_at sans péremption et applied, et exclut les auto-archivages via le marqueur user_notes ; la routine ne recalcule plus la clé et ne ressuscite jamais une offre déjà jugée. v2.9 (ADR-33) : la calibration tournait (27/27 offres avec clé calibrage) mais ne mordait pas — un TPM Défense chez Cohere portait « résonne avec rejet Mistral TPM. Score ajusté » et sortait à 8.0 en new. user_profile.job_pref_observed devient une TABLE DE PÉNALITÉS CHIFFRÉES dérivée des 17 verdicts (tous commentés), avec VETO sur expertise verticale absente ; l'ÉTAPE 3 l'applique en cumulant et doit nommer chaque montant dans rubric_justif.calibrage ; l'ÉTAPE 7 doit préserver ce format. Intel warm + reco CV abandonnés. Clé RapidAPI inline dans le prompt (pas un secret GitHub). Doc : docs/cowork-routines/jobs-radar.md."
