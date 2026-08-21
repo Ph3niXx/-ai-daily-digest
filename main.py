@@ -146,6 +146,20 @@ KNOWN_DEAD_FEEDS: set[str] = set()
 # réseau du runner, blocage massif d'IP, RSS_FEEDS cassé).
 MIN_ARTICLES = 5
 
+# Un flux peut mourir sans rien casser : il répond 200, il rend vingt items, et
+# aucun ne bouge plus. `feed_failure()` ne voyait que les 4xx et le zéro-entrée,
+# donc ce cas traversait tous les contrôles en rapportant 0 article par jour.
+# Risque concret ici : `Claude Blog (miroir)` est un miroir tiers reconstruit
+# chaque jour par un particulier — le seul remplaçant disponible depuis que
+# anthropic.com n'expose plus de flux.
+#
+# Le seuil est volontairement très large. La source la plus lente du corpus
+# publie environ une fois par mois et Meta Engineering peut passer plusieurs
+# mois sans rien : une fausse mort coûterait un run rouge sur un flux sain,
+# c'est-à-dire exactement le bruit qui a rendu l'alerte TFT illisible. On ne
+# signale donc que le cas indiscutable — plus d'un semestre sans un seul item.
+FROZEN_FEED_DAYS = 180
+
 HEADERS = {
     "apikey": SUPABASE_KEY,
     "Authorization": f"Bearer {SUPABASE_KEY}",
@@ -313,7 +327,26 @@ def ping_supabase():
 
 # ─── STEP 2 : FETCH RSS ──────────────────────────────────────────────────────
 
-def feed_failure(feed):
+def entry_published(entry):
+    """Date de publication d'une entrée, ou None. Accepte un objet feedparser
+    comme un dict — les tests passent des dicts."""
+    for attr in ("published_parsed", "updated_parsed"):
+        val = entry.get(attr) if isinstance(entry, dict) else getattr(entry, attr, None)
+        if val:
+            return datetime(*val[:6], tzinfo=timezone.utc)
+    return None
+
+
+def newest_entry_age_days(feed, now=None):
+    """Âge en jours de l'item le plus récent, ou None si aucun n'est daté."""
+    now = now or datetime.now(timezone.utc)
+    dates = [d for d in (entry_published(e) for e in getattr(feed, "entries", []) or []) if d]
+    if not dates:
+        return None
+    return (now - max(dates)).days
+
+
+def feed_failure(feed, now=None):
     """Pourquoi ce flux n'a rien donné, ou None s'il va bien.
 
     feedparser ne lève JAMAIS d'exception sur un flux mort : un 404, un 410,
@@ -333,7 +366,37 @@ def feed_failure(feed):
         # Une redirection vers une page HTML est le symptôme classique d'un blog
         # qui a déménagé : le flux répond 200 mais ne contient plus de XML.
         return f"0 entrée ({exc})" if exc else "0 entrée"
+    # Dernier filet : un flux qui répond, qui rend des items, mais dont aucun
+    # n'a bougé depuis un semestre. Il emprunte le même chemin qu'un flux mort
+    # — nommé dans le verdict, silencieux si on l'assume dans KNOWN_DEAD_FEEDS.
+    # Un second canal d'avertissement serait un canal que personne ne lit.
+    age = newest_entry_age_days(feed, now)
+    if age is not None and age > FROZEN_FEED_DAYS:
+        return f"gelé (dernier item il y a {age} jours)"
     return None
+
+
+def run_step(label, fn, default=None, failures=None):
+    """Exécute une étape du pipeline sans jamais laisser son échec tuer le run.
+
+    Corollaire du correctif du 2026-08-21 : le `raise` du step 2/9 a été retiré,
+    mais les steps 3 à 6 (Gemini, RTE, concepts, signaux) tournent toujours
+    AVANT `save_to_supabase`, qui est au step 7/9, et aucun n'était encapsulé.
+    Un 503 Gemini détruisait donc encore la récolte du jour — même conséquence
+    que la panne du 18 août, autre cause.
+
+    L'échec n'est pas avalé : il est imprimé, enregistré dans `failures`, et
+    `pipeline_verdict()` en fait un code 1 à la toute fin, en nommant l'étape.
+    On rougit après avoir tout écrit, jamais à la place.
+    """
+    try:
+        return fn()
+    except Exception as exc:  # noqa: BLE001 — c'est précisément le but
+        detail = f"{type(exc).__name__}: {exc}"
+        print(f"   [ÉCHEC] {label} — {detail}")
+        if failures is not None:
+            failures.append((label, detail))
+        return default
 
 
 def dead_feed_key(section, source_name):
@@ -404,7 +467,7 @@ def fetch_recent_articles():
     return articles, dead
 
 
-def pipeline_verdict(article_count, dead, known=None):
+def pipeline_verdict(article_count, dead, known=None, step_failures=()):
     """Rend (code_sortie, messages) — logique pure, aucune E/S, aucun réseau.
 
     Deux causes de rouge, indépendantes et cumulables : une collecte trop
@@ -433,6 +496,14 @@ def pipeline_verdict(article_count, dead, known=None):
             "[ÉCHEC] Régression de source : "
             + ", ".join(f"{k} ({reasons[k]})" for k in nouveaux)
             + ". Répare l'URL, ou ajoute la clé à KNOWN_DEAD_FEEDS si la mort est assumée."
+        )
+
+    if step_failures:
+        code = 1
+        messages.append(
+            "[ÉCHEC] Étape(s) en échec : "
+            + " ; ".join(f"{lbl} ({why})" for lbl, why in step_failures)
+            + ". Les écritures des étapes saines ont bien eu lieu."
         )
 
     ressuscites = sorted(set(known) - dead_keys)
@@ -1077,9 +1148,10 @@ def send_notification_email(article_count, concept_count, signal_count):
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
-def report_verdict(article_count, dead):
+def report_verdict(article_count, dead, step_failures=()):
     """Imprime le verdict et rend le code de sortie du process."""
-    code, messages = pipeline_verdict(article_count, dead)
+    code, messages = pipeline_verdict(article_count, dead,
+                                      step_failures=step_failures)
     for msg in messages:
         print(msg)
     return code
@@ -1101,41 +1173,70 @@ def main():
         print("[WARN] Aucun article RSS — les steps 3 à 9 n'ont rien à traiter.")
         return report_verdict(0, dead)
 
+    # Chaque étape est encapsulée : son échec est imprimé, enregistré, et rendu
+    # au verdict final — mais il ne tue plus le process avant que la récolte
+    # n'ait atteint Supabase au step 7/9. Sans cela, un 503 Gemini au step 3/9
+    # détruisait la journée aussi sûrement que le `raise` retiré du step 2/9.
+    failures = []
+
     print("\n🌐 Step 3/9 — Recherches web temps réel...")
-    web_results = web_search_ai_news()
+    web_results = run_step("Step 3/9 — recherches web", web_search_ai_news,
+                           default=[], failures=failures)
 
     print("\n🚂 Step 4/9 — Recherche articles RTE...")
-    rte_count = search_rte_articles()
+    rte_count = run_step("Step 4/9 — articles RTE", search_rte_articles,
+                         default=0, failures=failures)
 
     print("\n🔍 Step 5/9 — Extraction de concepts...")
-    concept_mentions = extract_concepts(articles)
-    concept_count = save_concepts_to_wiki(concept_mentions)
+    concept_mentions = run_step("Step 5/9 — extraction de concepts",
+                                lambda: extract_concepts(articles),
+                                default=[], failures=failures)
+    concept_count = run_step("Step 5/9 — écriture wiki",
+                             lambda: save_concepts_to_wiki(concept_mentions),
+                             default=0, failures=failures)
     print(f"   → {concept_count} concepts traités ({len(concept_mentions)} détectés)")
 
     print("\n📊 Step 6/9 — Tracking signaux faibles...")
-    signal_count = track_signals(concept_mentions)
-    update_signal_trends()
+    signal_count = run_step("Step 6/9 — tracking signaux",
+                            lambda: track_signals(concept_mentions),
+                            default=0, failures=failures)
+    run_step("Step 6/9 — tendances signaux", update_signal_trends,
+             failures=failures)
     print(f"   → {signal_count} signaux trackés")
 
     print("\n💾 Step 7/9 — Sauvegarde articles en base...")
-    save_to_supabase(articles)
+    run_step("Step 7/9 — sauvegarde des articles",
+             lambda: save_to_supabase(articles), failures=failures)
 
     print("\n🧠 Step 8/9 — Génération du brief...")
-    brief_html = generate_brief(articles, web_results)
-    save_brief(brief_html, len(articles))
+    brief_html = run_step("Step 8/9 — génération du brief",
+                          lambda: generate_brief(articles, web_results),
+                          failures=failures)
+    if brief_html:
+        run_step("Step 8/9 — sauvegarde du brief",
+                 lambda: save_brief(brief_html, len(articles)),
+                 failures=failures)
 
     print("\n📧 Step 9/9 — Envoi email...")
-    send_notification_email(len(articles), concept_count, signal_count)
+    run_step("Step 9/9 — envoi email",
+             lambda: send_notification_email(len(articles), concept_count,
+                                             signal_count),
+             failures=failures)
 
     print("\n" + "=" * 60)
-    print(f"✅ Pipeline terminé — {len(articles)} articles, {concept_count} concepts, {signal_count} signaux")
+    # Pas de coche verte quand une étape a cassé : c'est ce genre de résumé
+    # rassurant, imprimé juste au-dessus d'un échec, qui rend une surface
+    # menteuse.
+    marque = ("⚠️ Pipeline terminé avec des étapes en échec"
+              if failures else "✅ Pipeline terminé")
+    print(f"{marque} — {len(articles)} articles, {concept_count} concepts, {signal_count} signaux")
     print("=" * 60)
 
     # Verdict tout à la fin, une fois les 9 steps passés : les articles, le
     # brief, les concepts, les signaux et l'email sont déjà partis. Rougir ici
     # alerte sans rien détruire — c'est toute la différence avec le `raise` au
     # step 2/9 qui jetait la récolte du jour.
-    return report_verdict(len(articles), dead)
+    return report_verdict(len(articles), dead, step_failures=failures)
 
 
 if __name__ == "__main__":
