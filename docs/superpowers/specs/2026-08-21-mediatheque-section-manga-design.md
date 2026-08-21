@@ -188,7 +188,16 @@ Ces trois-là sont la vraie raison pour laquelle cette section n'était pas « u
 est `null`, donc `released()` renvoie **0**, donc `MdtStepper` calcule `max = 0` et se
 désactive (`disabled = … || max === 0`). Un manga en cours de publication serait
 intégralement non déclarable. Correctif : branche `kind === 'manga'` en tête de `released()`,
-qui renvoie `episodes_total`.
+qui renvoie `episodes_total || 0`.
+
+**`released()` doit rester un nombre.** La tentation est de lui faire renvoyer `null` quand
+`volumes` est inconnu, pour distinguer « zéro tome » de « je ne sais pas ». Ce serait un
+bug silencieux : `status()` fait `chainEntries.reduce((s, e) => s + released(e), 0)` — que
+`null` traverse sans bruit puisque `s + null === s` — mais `currentEntryOf()` fait
+`(progress || 0) < released(e)`, et `5 < null` est **faux**. Le manga ne serait alors jamais
+l'entrée courante : ni hero, ni rail, sans la moindre erreur en console. Le cas « volumes
+inconnu » se traite donc dans `MdtStepper`, qui est le seul à en souffrir, et pas dans un
+contrat numérique partagé par quatre fonctions.
 
 **`pickTonight()` proposerait de « regarder » un manga.** La bande « Ce soir » lit *toutes*
 les cartes, sans filtre de section — c'est sa décision de conception depuis 2026-07-25,
@@ -198,10 +207,16 @@ Ce n'est pas un filtre de confort : proposer un tome de Vagabond pour un crénea
 n'a aucun sens et discréditerait la bande entière.
 
 **Le vocabulaire.** `nextEpLabel()` produit « S2 · ép. 16 sur 24 » et `curLabel()`
-« S2 · 12/28 ». Pour un manga il faut « tome 12 sur 37 » et « 11/37 ». Une fonction
-`unitOf(entry)` pilotée par `kind` porte le contrat, et les deux libellés la consultent —
-plutôt qu'un ternaire dupliqué dans chacun, qui divergerait (précédent vécu :
-`mdtCurLabel` / `nextEpLabel` avaient divergé sur le durcissement de `kind`).
+« S2 · 12/28 ». Pour un manga il faut « tome 12 sur 37 » et « 11/37 ».
+
+Une fonction `unitOf(entry)` pilotée par `kind` porte le contrat et renvoie **la forme
+employée dans les libellés** — `"tome"` ou `"ép."`, pas `"épisode"`. `nextEpLabel` la
+consulte au lieu d'écrire l'unité en dur : c'est le seul libellé qui nomme une unité.
+`curLabel` n'en nomme aucune (« S2 · 12/28 ») et n'a donc rien à consulter — il se
+contente de retirer l'étiquette de saison pour un manga, qui n'en a pas.
+
+Un ternaire dupliqué dans les deux aurait divergé, précédent vécu à l'appui :
+`mdtCurLabel` et `nextEpLabel` avaient déjà divergé sur le durcissement de `kind`.
 
 ## Front — la section
 
@@ -258,7 +273,10 @@ C'est le même critère que celui appliqué à la bande « Avant l'épisode ».
 **`tests/test_mediatheque_view.mjs`** (node, logique pure) :
 - `released()` sur un manga `RELEASING` renvoie `episodes_total`, pas 0 — le cas qui tue le
   stepper.
-- `released()` sur un manga sans `volumes` renvoie `null`, et le stepper reste utilisable.
+- `released()` sur un manga sans `volumes` renvoie `0` (jamais `null` ni `undefined`) —
+  et `currentEntryOf()` continue de fonctionner sur les autres entrées de la chaîne.
+- `MdtStepper` reste utilisable sur un manga sans `volumes` : non plafonné plutôt que
+  désactivé.
 - `unitOf()` : `'tome'` pour `kind:'manga'`, `'épisode'` sinon.
 - `nextEpLabel()` / `curLabel()` sur un manga : « tome 12 sur 37 », « 11/37 ».
 - `pickTonight()` : un manga n'est **jamais** proposé, quel que soit le budget, y compris
