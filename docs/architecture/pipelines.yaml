@@ -108,6 +108,14 @@ pipelines:
       lignes [DEAD] d'un run réel sur le runner, jamais depuis une mesure locale : les
       17 flux réparés le 2026-08-21 l'ont été sur des URL vérifiées depuis une IP
       résidentielle, or certains CDN (Substack) répondent 200 ici et 403 au runner.
+      Deux garde-fous complètent le dispositif, même jour, même ADR : les steps 3 à 9
+      passent par `run_step()` — leur échec est nommé dans le verdict final mais ne tue
+      plus le process avant la persistance du step 7/9, un 503 Gemini détruisait encore
+      la journée ; et un flux qui répond 200 avec des items figés depuis plus de
+      FROZEN_FEED_DAYS (180 j) est déclaré mort, ce qui borne le risque du miroir tiers
+      utilisé pour `Claude Blog`. Seuil volontairement large : la source la plus lente du
+      corpus publie une fois par mois, une fausse mort coûterait un run rouge sur un flux
+      sain — le bruit exact qui a rendu l'alerte TFT illisible.
 
   - id: weekly_analysis
     name: "Analyses hebdo (Claude Haiku)"

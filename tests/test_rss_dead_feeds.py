@@ -32,6 +32,7 @@ import inspect
 import io
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -294,6 +295,109 @@ check("aucun doublon de cle section/nom",
 # delibere, des deux cotes.
 check("aucune section inconnue du cockpit",
       sorted({s for _, _, s in main.RSS_FEEDS} - SECTIONS), [])
+
+
+print("-- un flux gele est un flux mort qui ne dit pas son nom")
+
+# feed_failure() ne voyait que les 4xx et le zero-entree. Un flux qui repond 200
+# avec vingt items figes -- un miroir tiers qui cesse d'etre reconstruit, un blog
+# qui arrete de publier sans fermer son flux -- traversait tous les controles en
+# rapportant 0 article par jour sans que rien ne le dise. C'est le risque connu
+# du miroir Anthropic, seul remplacant disponible pour un flux officiel disparu.
+#
+# Le seuil est volontairement TRES large. La source la plus lente du corpus
+# publie environ une fois par mois, et Meta Engineering peut passer plusieurs
+# mois sans rien. Une fausse mort couterait un run rouge sur un flux sain,
+# c'est-a-dire exactement le bruit qui a rendu l'alerte TFT illisible. On ne
+# signale donc que le cas indiscutable : plus d'un semestre sans un seul item.
+
+NOW = datetime(2026, 8, 21, 12, 0, 0, tzinfo=timezone.utc)
+
+
+def dated_feed(days_ago, now=NOW):
+    """Flux valide dont l'item le plus recent a `days_ago` jours."""
+    stamp = (now - timedelta(days=days_ago)).timetuple()
+    return FakeFeed(entries=[{"title": "item", "published_parsed": stamp}],
+                    status=200)
+
+
+check("un flux frais n'est pas gele",
+      main.feed_failure(dated_feed(3), now=NOW), None)
+check("un flux lent (90 jours) n'est PAS declare mort",
+      main.feed_failure(dated_feed(90), now=NOW), None)
+check("un flux sans un item depuis 200 jours est signale gele",
+      (main.feed_failure(dated_feed(200), now=NOW) or "").startswith("gelé"), True)
+check("et le message donne l'age en clair",
+      "200 jours" in (main.feed_failure(dated_feed(200), now=NOW) or ""), True)
+check("un flux dont aucun item n'est date reste juge sur ses seules entrees",
+      main.feed_failure(FakeFeed(entries=[{"title": "sans date"}], status=200),
+                        now=NOW), None)
+check("le gel ne masque pas un 404",
+      main.feed_failure(FakeFeed(entries=[], status=404), now=NOW), "HTTP 404")
+
+# Un flux gele emprunte le meme chemin qu'un flux mort : il est NOMME dans le
+# verdict et se tait si on l'assume dans KNOWN_DEAD_FEEDS. Pas de second canal.
+code, messages = verdict(OK_COUNT,
+                         DEAD_SOCLE + [("claude", "Claude Blog (miroir)",
+                                        "gelé (dernier item il y a 200 jours)")])
+check("un flux gele rend le run rouge", code, 1)
+check("et il est nomme comme une regression de source",
+      any("claude/Claude Blog (miroir)" in m for m in messages), True)
+
+print("-- une etape qui casse ne doit plus emporter la recolte")
+
+# Le raise du step 2/9 est corrige, mais les steps 3 a 6 (Gemini, RTE, concepts,
+# signaux) tournent toujours AVANT save_to_supabase, qui est au step 7/9, et
+# aucun n'etait encapsule : un echec dur de Gemini detruisait encore la recolte
+# du jour. Meme consequence que la panne du 2026-08-18, autre cause.
+
+boom = []
+
+
+def explode():
+    raise RuntimeError("Gemini 503")
+
+
+with contextlib.redirect_stdout(io.StringIO()):
+    got = main.run_step("Step 3/9 — recherches web", explode, default=[],
+                        failures=boom)
+check("une etape qui leve rend son defaut au lieu de propager", got, [])
+check("et l'echec est enregistre avec le nom de l'etape",
+      [lbl for lbl, _ in boom], ["Step 3/9 — recherches web"])
+check("la cause exacte est conservee", "Gemini 503" in boom[0][1], True)
+
+ok_steps = []
+with contextlib.redirect_stdout(io.StringIO()):
+    got = main.run_step("Step 4/9 — RTE", lambda: 42, default=0,
+                        failures=ok_steps)
+check("une etape qui passe rend sa valeur", got, 42)
+check("et n'enregistre aucun echec", ok_steps, [])
+
+code, messages = main.pipeline_verdict(
+    OK_COUNT, DEAD_SOCLE, known=SOCLE,
+    step_failures=[("Step 3/9 — recherches web", "RuntimeError: Gemini 503")])
+check("une etape en echec rend le run rouge", code, 1)
+check("et le message NOMME l'etape fautive",
+      any("Step 3/9" in m for m in messages), True)
+check("la recolte reste creditee malgre l'etape en echec",
+      any("Panne de collecte" in m for m in messages), False)
+
+# Une etape en echec ET une collecte maigre : les deux causes se disent.
+code, messages = main.pipeline_verdict(
+    main.MIN_ARTICLES - 1, DEAD_SOCLE, known=SOCLE,
+    step_failures=[("Step 8/9 — brief", "TimeoutError: gemini")])
+check("les deux causes sont rapportees ensemble", len(messages) >= 2, True)
+
+src = inspect.getsource(main.main)
+check("les steps 3 a 6 passent par run_step", src.count("run_step(") >= 4, True)
+# rindex et non index : main() appelle deja report_verdict dans son
+# early-return "aucun article", legitime puisque les steps 3 a 9 n'auraient
+# alors rien a ecrire. C'est le verdict FINAL qui doit suivre la persistance.
+check("la sauvegarde precede toujours le verdict final",
+      src.index("save_to_supabase") < src.rindex("report_verdict"), True)
+check("l'early-return sans article rend quand meme un verdict",
+      "return report_verdict(0, dead)" in src, True)
+
 
 print()
 if failures:
