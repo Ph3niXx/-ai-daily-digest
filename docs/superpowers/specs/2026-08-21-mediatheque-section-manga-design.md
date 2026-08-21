@@ -237,11 +237,35 @@ t'apprêtes à regarder ce soir ») ne s'applique pas à un tome.
 franchise. Les statuts dérivés (`status()`) marchent tels quels — un manga `FINISHED` dont
 tous les tomes sont lus est « Vu », un manga en cours entamé est « En cours ».
 
-**L'agenda se retire tout seul.** `buildWeek()` ne trouve aucune entrée datée, donc
-`MdtWeek` renvoie `null` par sa garde existante `if (!week.count && !week.later.length)`.
-Aucun `if (section === 'manga')` n'est ajouté : la brique disparaît parce qu'elle n'a rien
-à dire, pas parce qu'on l'a exclue. Un test verrouille ce comportement, faute de quoi il
-serait cassé par mégarde par une future valeur de repli dans `buildWeek`.
+**L'agenda doit être retiré explicitement — il ne se retire PAS tout seul.**
+
+Cette section affirmait le contraire, et c'était faux. Le raisonnement séduisant était :
+un manga n'a pas de `next_episode_airing_at`, donc `buildWeek()` ne trouve rien, donc
+`MdtWeek` renvoie `null` par sa garde `if (!week.count && !week.later.length)`, donc la
+brique disparaît sans qu'on l'exclue. Élégant, et démenti par le code.
+
+`buildWeek()` porte une branche de repli — celle ajoutée le 2026-07-25 pour qu'une saison
+en diffusion à la date périmée ne s'évapore pas entre deux syncs :
+
+```javascript
+} else if (e.airing_status === "RELEASING" && e.in_main_chain) {
+  later.push({ …base, at: null, reason: "undated", daysAhead: null });
+```
+
+`RELEASING` + `in_main_chain`, c'est l'état **normal** d'un manga en cours de publication.
+La section Manga aurait donc affiché un agenda peuplé de lignes « date inconnue » —
+exactement le mode d'échec que le principe directeur de cette spec existe pour interdire,
+et il serait arrivé par la porte que la spec déclarait fermée.
+
+D'où : `buildWeek()` gagne `if (e.kind === "manga") continue;` en tête de sa boucle
+d'entrées. Le discriminant est `kind` et non le `media_type` de la franchise, pour deux
+raisons : `released()` a déjà établi `kind === "manga"` comme le signal « pas de calendrier »
+au niveau de l'entrée, et `buildWeek` itère sur des entrées — passer par la franchise
+n'ajouterait qu'une indirection.
+
+Le test qui verrouille ce comportement doit employer une fixture **`RELEASING`**. Une
+fixture `FINISHED` ne déclenche pas la branche fautive : le test passerait sans rien
+prouver.
 
 ## Manhwa et manhua
 

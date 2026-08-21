@@ -520,5 +520,57 @@ check("status: manga tout lu et termine => Vu",
 check("currentEntryOf: le manga entame est bien l'entree courante",
   (V.currentEntryOf([mangaOngoing], new Map([["mg1", 11]])) || {}).id, "mg1");
 
+// ── « Ce soir » ignore ce qui ne se regarde pas ───────────────
+// La bande lit TOUTES les cartes par design (ADR-42) : sans garde, elle
+// proposerait de « regarder » un tome. Le test le plus important est le
+// dernier — manga SEUL candidat : c'est la ou un filtre absent se voit.
+const mgEntry = { id: "mgt1", kind: "manga", airing_status: "RELEASING",
+  episodes_total: 37, next_episode_number: null, in_main_chain: true,
+  sort_order: 0, runtime_minutes: null };
+const animeEntry = { id: "ant1", kind: "season", season_number: 1,
+  airing_status: "FINISHED", episodes_total: 12, in_main_chain: true,
+  sort_order: 0, runtime_minutes: 24 };
+const mgCard = { f: { id: "fmg", media_type: "manga", shelved: false, title_english: "Vagabond" },
+  entries: [mgEntry], st: { id: "watching" }, lastTouch: 99 };
+const anCard = { f: { id: "fan", media_type: "anime", shelved: false, title_english: "Frieren" },
+  entries: [animeEntry], st: { id: "watching" }, lastTouch: 1 };
+const PROG_T = new Map([["mgt1", 11], ["ant1", 3]]);
+const nightAt = (h) => new Date(2026, 7, 20, h, 30, 0).getTime();
+
+check("pickTonight: le manga n'est jamais propose, l'anime oui",
+  V.pickTonight([mgCard, anCard], PROG_T, { budgetMin: 60 }, nightAt(21))
+    .map((p) => p.card.f.id), ["fan"]);
+check("pickTonight: budget illimite ne le fait pas entrer non plus",
+  V.pickTonight([mgCard, anCard], PROG_T, { budgetMin: null }, nightAt(21))
+    .map((p) => p.card.f.id), ["fan"]);
+check("pickTonight: manga SEUL candidat => zero proposition, pas de remplissage",
+  V.pickTonight([mgCard], PROG_T, { budgetMin: null }, nightAt(21)), []);
+check("pickTonight: une carte sans media_type reste traitee comme un anime",
+  V.pickTonight([{ ...anCard, f: { ...anCard.f, media_type: null } }], PROG_T,
+    { budgetMin: 60 }, nightAt(21)).length, 1);
+
+// ── L'agenda se retire de lui-meme ───────────────────────────
+// Aucun `if (section === 'manga')` n'est ajoute nulle part : la brique
+// disparait parce qu'elle n'a RIEN a dire (pas de next_episode_airing_at),
+// pas parce qu'on l'a exclue. Ce test verrouille cette propriete — sans lui,
+// une future valeur de repli dans buildWeek ferait reapparaitre un agenda
+// vide dans une section qui n'en aura jamais.
+const mgFrById = new Map([["fmg", mgCard.f]]);
+const wk = V.buildWeek([mgEntry].map((e) => ({ ...e, franchise_id: "fmg" })),
+  mgFrById, nightAt(14));
+check("buildWeek: des entrees manga ne produisent aucun jour", wk.count, 0);
+check("buildWeek: ni aucune ligne « plus tard »", wk.later.length, 0);
+
+// ── Quatre sections ──────────────────────────────────────────
+const FOUR = ["anime", "tv", "movie", "manga"];
+check("cardsOfSection: la section manga isole bien ses cartes",
+  V.cardsOfSection([mgCard, anCard], "manga").map((c) => c.f.id), ["fmg"]);
+check("cardsOfSection: le manga ne fuit pas dans anime",
+  V.cardsOfSection([mgCard, anCard], "anime").map((c) => c.f.id), ["fan"]);
+check("countBySection: quatre compteurs, pas trois",
+  V.countBySection([mgCard, anCard], FOUR), { anime: 1, tv: 0, movie: 0, manga: 1 });
+check("invariant: quatre sections partitionnent toujours la bibliotheque",
+  FOUR.reduce((n, s) => n + V.cardsOfSection([mgCard, anCard], s).length, 0), 2);
+
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);

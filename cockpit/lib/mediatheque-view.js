@@ -239,6 +239,16 @@
     for (const e of entries) {
       const f = franchiseById.get(e.franchise_id);
       if (!f || f.shelved) continue;
+      // Un manga n'a pas de calendrier de parution, et la branche de repli
+      // « RELEASING && in_main_chain » plus bas — ajoutée pour qu'une saison à
+      // la date périmée ne s'évapore pas entre deux syncs — lui fabriquerait
+      // sinon une ligne « date inconnue » à chaque rendu. RELEASING +
+      // in_main_chain est l'état NORMAL d'un manga en cours de publication :
+      // l'agenda de la section Manga serait peuplé de fantômes.
+      // Le discriminant est `kind` et non le media_type de la franchise, pour
+      // rester cohérent avec released(), qui a déjà établi `kind === "manga"`
+      // comme le signal « pas de calendrier » au niveau de l'entrée.
+      if (e.kind === "manga") continue;
 
       const label = e.title_english || e.title_romaji || f.title_english || f.title_romaji || "?";
       // Le poster voyage avec l'item : c'est le repère le plus rapide pour
@@ -347,10 +357,17 @@
     return addDays(t, 0) === addDays(nowMs, 0);
   }
 
+  // « Ce soir » répond à « qu'est-ce que je REGARDE ». Un manga n'entre pas
+  // dans cette question : il n'a pas de durée, le budget « 2 h+ » n'a aucun
+  // sens sur un tome, et proposer de la lecture au milieu de trois épisodes
+  // discréditerait la bande entière. C'est le seul endroit du module qui
+  // connaît une liste de types — partout ailleurs la section suffit.
+  const WATCHABLE_TYPES = new Set(["anime", "tv", "movie"]);
+
   function pickTonight(cards, progressById, ctx, nowMs) {
     const budget = ctx && ctx.budgetMin !== undefined ? ctx.budgetMin : 60;
     const late = new Date(nowMs).getHours() >= LATE_HOUR;
-    const active = cards.filter((c) => !c.f.shelved);
+    const active = cards.filter((c) => !c.f.shelved && WATCHABLE_TYPES.has(typeOf(c.f)));
     const taken = new Set();
     const out = [];
 

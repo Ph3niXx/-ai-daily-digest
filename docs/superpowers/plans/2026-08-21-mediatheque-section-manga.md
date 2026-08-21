@@ -951,9 +951,13 @@ Dans `scratchpad/render-mediatheque.mjs`, ajouter une franchise manga aux fixtur
 …l'entrée correspondante :
 
 ```javascript
+  // RELEASING, PAS FinISHED : c'est la branche de repli « RELEASING &&
+  // in_main_chain » de buildWeek qui produisait un agenda fantome. Une
+  // fixture terminee ne la declenche pas et le test « pas d'agenda »
+  // passerait sans rien prouver.
   { id: "e7", franchise_id: "f-manga-1", source: "anilist", source_id: 30642, kind: "manga",
     season_number: null, title: "Vinland Saga", episodes_total: 29,
-    airing_status: "FINISHED", in_main_chain: true, start_date: "2005-04-13",
+    airing_status: "RELEASING", in_main_chain: true, start_date: "2005-04-13",
     runtime_minutes: null, next_episode_number: null, next_airing_at: null },
 ```
 
