@@ -338,11 +338,20 @@
      du CSS existant, pas des suppositions. */
 
   /* LE defaut de mise en page. .jv-wrap impose `height: calc(100vh - 41px)`
-     ET `min-height: 720px` (l.16-17). Sur un iPhone, le min-height depasse
-     la hauteur utile une fois la barre d'adresse et la barre d'accueil
-     deduites : le composer passe sous la ligne de flottaison. Et 100vh
-     ignore la barre d'adresse retractable de Safari, la ou 100dvh la suit. */
-  .jv-wrap { height: 100dvh; min-height: 0; }
+     ET `min-height: 720px` (styles-jarvis.css:16-17). Sur un iPhone le
+     min-height depasse la hauteur utile et pousse le composer sous la ligne
+     de flottaison ; et 100vh ignore la barre d'adresse retractable de Safari,
+     la ou 100dvh la suit.
+     Les 52 px soustraits sont le `padding-top` que .main recoit sous 760 px
+     (styles-mobile.css:107) pour degager le hamburger flottant : .jv-wrap
+     n'est pas un enfant du viewport mais un descendant de .main (app.jsx:696),
+     et .app est une grille dont la rangee auto grandit avec son contenu
+     (styles.css:62-65). Sans cette soustraction, .main demande 52px + 100dvh,
+     la page depasse le viewport et le composer repasse sous la ligne de
+     flottaison — le defaut meme que cette regle corrige.
+     COUPLAGE : si le 52 px de styles-mobile.css:107 change, celui-ci doit
+     changer avec lui. */
+  .jv-wrap { height: calc(100dvh - 52px); min-height: 0; }
 
   /* En colonne unique, la bordure droite de la colonne chat devient un trait
      vertical orphelin colle au bord de l'ecran. */
@@ -359,7 +368,7 @@
      n'est pas un choix esthetique, c'est le seuil exact. */
   .jv-composer textarea { font-size: 16px; }
 
-  /* .jv-iconbtn fait 32x32 (l.111) : sous la cible tactile minimale. */
+  /* .jv-iconbtn fait 32x32 (l.110) : sous la cible tactile minimale. */
   .jv-iconbtn, .jv-send { min-width: 44px; min-height: 44px; }
 }
 
