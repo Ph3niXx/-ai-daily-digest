@@ -24,10 +24,14 @@ EXCLUDED_FORMATS = {"MUSIC"}
 
 
 def _rel_targets(media, rel_types):
+    # Le type de l'ANCRE, pas « ANIME » en dur : sinon le walk d'un manga ne
+    # trouve rien (ses SEQUEL/PREQUEL sont de type MANGA) et, pire, on
+    # aspirerait son adaptation anime dans la meme franchise. Vinland Saga
+    # porte deux ADAPTATION -> ANIME.
     out = []
     for edge in ((media.get("relations") or {}).get("edges") or []):
         node = edge.get("node") or {}
-        if edge.get("relationType") in rel_types and node.get("type") == "ANIME":
+        if edge.get("relationType") in rel_types and node.get("type") == media.get("type"):
             out.append(node["id"])
     return out
 
@@ -62,6 +66,11 @@ def _date_key(media):
 
 
 def _kind(media, in_chain):
+    # Avant tout test de format : le format d'un manga vaut MANGA, ONE_SHOT ou
+    # NOVEL, qu'aucune branche ci-dessous ne reconnait — il tomberait en
+    # « other » et le libelle afficherait « OTHER · ep. 3 ».
+    if media.get("type") == "MANGA":
+        return "manga"
     f = media.get("format") or ""
     if in_chain and f in SEASON_FORMATS:
         return "season"
@@ -72,6 +81,22 @@ def _kind(media, in_chain):
     if f == "SPECIAL":
         return "special"
     return "other"
+
+
+def emits_events(franchise):
+    """Un manga ne produit AUCUN evenement de sortie.
+
+    Les trois event_type existants decriraient une realite japonaise : un 30e
+    tome paru a Tokyo n'est pas une sortie VF et peut preceder l'edition
+    francaise de deux ans. L'alerte serait fausse par construction, et elle
+    remonterait jusqu'a l'encart Mediatheque du Brief du jour.
+
+    Ce predicat vit ici et pas dans diff_events() : « quels types meritent une
+    alerte » est une politique de pipeline, pas une regle de comparaison de
+    lignes. diff_events est partagee avec tmdb_tracker_sync et son test defend
+    explicitement son agnosticisme (tests/test_media_tracker_common.py:1).
+    """
+    return franchise.get("media_type") != "manga"
 
 
 def build_franchise(media_by_id, anchor_id):
@@ -136,14 +161,18 @@ from media_tracker_common import sb_env, sb_get, sb_upsert, sb_patch, diff_event
 
 GQL_URL = "https://graphql.anilist.co"
 MEDIA_FIELDS = """
-  id idMal type format status episodes duration averageScore genres
+  id idMal type format status episodes volumes chapters duration averageScore genres
   description(asHtml: false)
   title { romaji english native }
   startDate { year month day } endDate { year month day }
   coverImage { large color } bannerImage
   nextAiringEpisode { episode airingAt }
   relations { edges { relationType node { id type format } } }"""
-BATCH_QUERY = "query($ids:[Int]){Page(page:1,perPage:25){media(id_in:$ids,type:ANIME){%s}}}" % MEDIA_FIELDS
+# Pas de filtre de type : les ids AniList sont uniques entre ANIME et MANGA
+# (Media(id:30642, type:ANIME) -> Not Found, verifie le 2026-08-21), donc un
+# meme batch rafraichit les deux. `nextAiringEpisode` reste demande : il vaut
+# simplement null pour un manga, et le retirer casserait les animes.
+BATCH_QUERY = "query($ids:[Int]){Page(page:1,perPage:25){media(id_in:$ids){%s}}}" % MEDIA_FIELDS
 
 THROTTLE_S = 2.5
 _last_call = [0.0]
@@ -178,9 +207,13 @@ def fetch_media_batch(ids):
 
 
 def prune_dangling_edges(media_by_id):
-    """Un id disparu d'AniList est tombstoné {id, type:OTHER} pour arrêter le
-    walk — mais les edges qui le référencent le déclarent encore ANIME. On
-    élague ces edges pour qu'aucun fantôme n'entre dans la franchise.
+    """Un id disparu d'AniList est tombstoné {id, type: "OTHER"} pour arrêter
+    le walk. On élague les TOMBSTONES, pas les types : `type == "ANIME"`
+    était un proxy pour « média réel » datant d'avant le manga — il élaguait
+    de fait chaque edge manga→manga, réduisant toute franchise manga à son
+    seul ancrage, en silence, puisque prune tourne AVANT build_franchise.
+    L'enum MediaType d'AniList ne connaît que ANIME et MANGA ; "OTHER" n'est
+    écrit que par le tombstone de fetch_franchise_graph.
     (Parité avec pruneDanglingEdges de cockpit/lib/anilist.js.)"""
     for m in media_by_id.values():
         edges = (m.get("relations") or {}).get("edges")
@@ -188,7 +221,7 @@ def prune_dangling_edges(media_by_id):
             continue
         m["relations"]["edges"] = [
             e for e in edges
-            if (t := media_by_id.get((e.get("node") or {}).get("id"))) is None or t.get("type") == "ANIME"
+            if (t := media_by_id.get((e.get("node") or {}).get("id"))) is None or t.get("type") != "OTHER"
         ]
     return media_by_id
 
@@ -243,7 +276,11 @@ def to_entry_row(entry, media):
         "title_native": title.get("native"),
         "format": media.get("format"),
         "airing_status": media.get("status"),
-        "episodes_total": episodes if episodes is not None else (1 if media.get("format") == "MOVIE" else None),
+        # Un manga se compte en TOMES. `chapters` n'est jamais un repli : 224
+        # chapitres a la place de 29 tomes rendrait le compteur ininterpretable.
+        "episodes_total": (media.get("volumes") if media.get("type") == "MANGA"
+                           else (episodes if episodes is not None
+                                 else (1 if media.get("format") == "MOVIE" else None))),
         # Durée d'UN épisode (ou du film) — alimente le filtrage par budget de
         # pickTonight(). None si AniList ne la connaît pas, jamais 0.
         "runtime_minutes": media.get("duration"),
@@ -269,8 +306,10 @@ ANILIST_SOURCE = "anilist"
 
 
 def franchises_qs():
+    # media_type est LU par emits_events() : sans lui dans le select, le
+    # garde-fou lit None, renvoie True, et les fausses alertes partent.
     return (f"source=eq.{ANILIST_SOURCE}"
-            "&select=id,source_root_id,title_english,title_romaji&order=added_at")
+            "&select=id,source_root_id,title_english,title_romaji,media_type&order=added_at")
 
 
 def entries_qs():
@@ -303,7 +342,7 @@ def run_sync(dry_run):
         fresh_rows = [{**to_entry_row(e, graph[e["source_id"]]), "franchise_id": fr["id"]}
                       for e in built["entries"]]
         old_by_sid = {e["source_id"]: e for e in by_franchise.get(fr["id"], [])}
-        events = diff_events(fr, old_by_sid, fresh_rows)
+        events = diff_events(fr, old_by_sid, fresh_rows) if emits_events(fr) else []
         new_count = sum(1 for r in fresh_rows if r["source_id"] not in old_by_sid)
         print(f"  {name}: {len(fresh_rows)} entrées ({new_count} nouvelles), {len(events)} événement(s)")
         total_new += new_count
