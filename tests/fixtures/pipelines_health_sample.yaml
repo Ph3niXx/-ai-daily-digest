@@ -17,6 +17,18 @@ pipelines:
     name: "Pipeline actif non surveillé"
     status: active
 
+  # Le cas backup_supabase : aucune table de sortie, donc aucune sonde de
+  # fraîcheur — c'est l'âge du dernier RUN qui sert de seul signal.
+  - id: actif_sans_table
+    name: "Pipeline sans table de sortie"
+    workflow_file: ".github/workflows/tests.yml"
+    status: active
+    health:
+      domain: socle
+      panels: []
+      impact: "Rien ne le montre."
+      max_run_age_hours: 192
+
   - id: archive_avec_health
     name: "Pipeline archivé"
     status: archived

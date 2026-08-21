@@ -16,6 +16,7 @@ Stack : Gemini 2.5 Flash-Lite (gratuit) + Supabase + GitHub Actions + Gmail SMTP
 
 import os
 import re
+import sys
 import json
 import smtplib
 import feedparser
@@ -42,7 +43,11 @@ SITE_URL = "https://ph3nixx.github.io/jarvis-cockpit"
 
 RSS_FEEDS = [
     # ── Claude · Anthropic (releases, SDK, skills) ───────────────────────────
-    ("Anthropic News",       "https://www.anthropic.com/rss.xml",                           "claude"),
+    # Miroir NON OFFICIEL de claude.com/blog, tenu par un tiers sur GitHub Pages
+    # et reconstruit quotidiennement : anthropic.com n'expose plus aucun flux (15
+    # URL candidates testées le 2026-08-21, toutes en 404). À re-vérifier
+    # périodiquement — un miroir tiers peut s'arrêter sans prévenir personne.
+    ("Claude Blog (miroir)", "https://tim-hilde.github.io/anthropic-rss/rss.xml",           "claude"),
     ("Claude Code Releases", "https://github.com/anthropics/claude-code/releases.atom",     "claude"),
     ("Anthropic SDK Python", "https://github.com/anthropics/anthropic-sdk-python/releases.atom",     "claude"),
     ("Anthropic SDK TS",     "https://github.com/anthropics/anthropic-sdk-typescript/releases.atom", "claude"),
@@ -52,19 +57,22 @@ RSS_FEEDS = [
     # ── Nouveautés IA grand public ───────────────────────────────────────────
     ("OpenAI Blog",          "https://openai.com/blog/rss.xml",                             "updates"),
     ("Google AI Blog",       "https://blog.google/technology/ai/rss/",                      "updates"),
-    ("Mistral AI Blog",      "https://mistral.ai/news/feed.xml",                            "updates"),
+    ("Mistral AI Blog",      "https://mistral.ai/news/rss",                                 "updates"),
 
     # ── LLMs & Modèles ──────────────────────────────────────────────────────
     ("Google DeepMind",      "https://deepmind.google/blog/rss.xml",                        "llm"),
-    ("Meta AI Blog",         "https://ai.meta.com/blog/feed/",                              "llm"),
+    ("Meta Engineering (ML)", "https://engineering.fb.com/category/ml-applications/feed/",  "llm"),
     ("HuggingFace Blog",     "https://huggingface.co/blog/feed.xml",                        "llm"),
     ("Ahead of AI",          "https://magazine.sebastianraschka.com/feed",                   "llm"),
-    ("Import AI",            "https://importai.substack.com/feed",                           "llm"),
-    ("The Batch",            "https://www.deeplearning.ai/the-batch/feed/",                  "llm"),
+    # Même contenu que la newsletter, servi par le WordPress perso de Jack Clark :
+    # c'est le Substack qui bloquait, en 403, l'IP datacenter du runner GitHub.
+    ("Import AI",            "https://jack-clark.net/feed/",                                "llm"),
+    # deeplearning.ai a retiré son flux ; AINews reprend le créneau digest quotidien.
+    ("AINews",               "https://news.smol.ai/rss.xml",                                "llm"),
 
     # ── Agents & Automatisation ──────────────────────────────────────────────
-    ("LangChain Blog",       "https://blog.langchain.dev/rss/",                             "agents"),
-    ("LlamaIndex Blog",      "https://medium.com/feed/llamaindex",                          "agents"),
+    ("LangChain Blog",       "https://www.langchain.com/blog/rss.xml",                      "agents"),
+    ("LlamaIndex Releases",  "https://github.com/run-llama/llama_index/releases.atom",      "agents"),
     ("Simon Willison",       "https://simonwillison.net/atom/everything/",                  "agents"),
     ("AutoGPT Releases",     "https://github.com/Significant-Gravitas/AutoGPT/releases.atom","agents"),
 
@@ -74,11 +82,12 @@ RSS_FEEDS = [
     ("Towards Data Science", "https://towardsdatascience.com/feed",                          "papers"),
 
     # ── Outils Dev ───────────────────────────────────────────────────────────
-    ("Langfuse Blog",        "https://langfuse.com/blog/feed.xml",                          "tools"),
-    ("Qdrant Blog",          "https://qdrant.tech/blog/feed.xml",                           "tools"),
-    ("Weaviate Blog",        "https://weaviate.io/blog/feed.xml",                           "tools"),
-    ("MLflow Blog",          "https://mlflow.org/blog/feed.xml",                            "tools"),
-    ("Weights & Biases",     "https://wandb.ai/site/feed.xml",                              "tools"),
+    # Langfuse ne publie aucun RSS : Arize tient le créneau observabilité/eval LLM.
+    ("Arize Blog",           "https://arize.com/blog/feed/",                                "tools"),
+    ("Qdrant Blog",          "https://qdrant.tech/blog/index.xml",                          "tools"),
+    ("Weaviate Blog",        "https://weaviate.io/blog/rss.xml",                            "tools"),
+    ("MLflow Blog",          "https://mlflow.org/blog/rss.xml",                             "tools"),
+    ("W&B Fully Connected",  "https://wandb.ai/fully-connected/rss.xml",                    "tools"),
 
     # ── Business & Funding ───────────────────────────────────────────────────
     ("VentureBeat AI",       "https://venturebeat.com/category/ai/feed/",                   "biz"),
@@ -97,25 +106,45 @@ RSS_FEEDS = [
     ("Arxiv CS.LG",          "https://rss.arxiv.org/rss/cs.LG",                             "papers"),
 
     # ── IA x Énergie / Utilities (NOUVEAU) ───────────────────────────────────
-    ("IEEE Smart Grid",      "https://smartgrid.ieee.org/resources/blog/rss",               "energy"),
-    ("Energy Central AI",    "https://energycentral.com/c/iu/feed",                         "energy"),
+    ("IEEE Spectrum Energy", "https://spectrum.ieee.org/feeds/topic/energy.rss",            "energy"),
+    # energycentral.com a migré sur Bettermode : plus de flux par communauté,
+    # celui-ci est le flux global du site.
+    ("Energy Central",       "https://www.energycentral.com/rss/feed",                      "energy"),
     ("Utility Dive",         "https://www.utilitydive.com/feeds/news/",                     "energy"),
-    ("GreenTech Media",      "https://www.greentechmedia.com/feed",                         "energy"),
-    ("RTE France Actu",      "https://www.rte-france.com/actualites/rss.xml",               "energy"),
-    ("ENTSO-E News",         "https://www.entsoe.eu/news/feed/",                            "energy"),
+    # GreenTech Media est morte ; Latitude Media est fondée par son équipe éditoriale.
+    ("Latitude Media",       "https://www.latitudemedia.com/feed",                          "energy"),
+    # rte-france.com renvoie 410 Gone — suppression assumée, RTE n'offre aucun
+    # flux de remplacement. Créneau énergie France repris par un média spécialisé.
+    ("Connaissance des Energies", "https://www.connaissancedesenergies.org/rss.xml",        "energy"),
+    ("ENTSO-E News",         "https://www.entsoe.eu/rss/news.xml",                          "energy"),
 ]
 
 MAX_ARTICLES_PER_FEED = 4
 LOOKBACK_HOURS = 36  # 36h pour couvrir le week-end
 
-# Socle connu de flux morts, mesuré en direct le 2026-08-17 : 16 des 43 sources
-# déclarées ne répondent plus (sections `energy` en entier, la plupart de
-# `tools`, plus Anthropic News, Mistral, Meta AI, The Batch, LlamaIndex,
-# LangChain). Ce n'est PAS un objectif : c'est une dette chiffrée. Le run
-# échoue dès qu'un flux de PLUS meurt, sans rougir tous les jours pour une
-# dette déjà connue. En réparant ou en retirant un flux, baisse ce nombre —
-# c'est un cliquet, il ne doit jamais remonter.
-MAX_DEAD_FEEDS = 16
+# Socle connu de flux muets, en clés "section/nom". Vide : les 17 flux morts du
+# socle précédent ont été remplacés le 2026-08-21 et répondent tous 200.
+#
+# PROCÉDURE DE CALIBRATION — à lire avant d'ajouter la moindre clé ici.
+# Ce socle se remplit UNIQUEMENT en recopiant les lignes `[DEAD]` du log d'un
+# run réel sur le runner GitHub. JAMAIS depuis une mesure locale : plusieurs
+# éditeurs (Substack en tête) répondent 200 depuis une IP résidentielle et 403
+# depuis une IP datacenter. C'est exactement l'erreur qui a coûté quatre jours
+# de veille : le prédécesseur de cette constante était un compteur (16) mesuré
+# à la maison, alors que le runner en voyait 17 — le garde-fou n'est donc
+# jamais passé au vert en production, et il jetait chaque matin une récolte
+# complète d'articles déjà collectés.
+#
+# Un ensemble plutôt qu'un compteur, parce qu'un compteur ne distingue pas
+# « 17 morts dont les 17 connus » de « 17 morts dont 3 nouveaux » : il autorise
+# une régression silencieuse tant que le total ne bouge pas. L'ensemble nomme
+# le coupable, et signale aussi le cas inverse — une clé ressuscitée, à retirer.
+KNOWN_DEAD_FEEDS: set[str] = set()
+
+# Plancher de collecte. Les jours verts d'août ramenaient 25 à 56 articles ;
+# sous 5, ce n'est plus une journée creuse, c'est une panne de collecte (panne
+# réseau du runner, blocage massif d'IP, RSS_FEEDS cassé).
+MIN_ARTICLES = 5
 
 HEADERS = {
     "apikey": SUPABASE_KEY,
@@ -307,7 +336,23 @@ def feed_failure(feed):
     return None
 
 
+def dead_feed_key(section, source_name):
+    """Clé stable d'un flux dans KNOWN_DEAD_FEEDS. Un nom seul ne suffit pas :
+    deux sections peuvent porter la même source."""
+    return f"{section}/{source_name}"
+
+
 def fetch_recent_articles():
+    """Rend (articles, dead) — et ne lève JAMAIS pour cause de flux muet.
+
+    Détecter n'est pas avorter. La version précédente levait ici, au step 2/9,
+    alors que la persistance est au step 7/9 : le run du 2026-08-21 avait
+    collecté 53 articles valides et les a tous jetés parce qu'un 17e flux était
+    muet. Pire, l'incitation était inversée — un run qui ne ramenait rien
+    sortait vert, un run qui ramenait 53 articles sortait rouge. Le verdict est
+    désormais rendu par `pipeline_verdict()`, tout à la fin de `main()`, une
+    fois les écritures faites.
+    """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     articles = []
     dead = []
@@ -354,20 +399,50 @@ def fetch_recent_articles():
 
     if dead:
         print(f"   → {len(dead)}/{len(RSS_FEEDS)} flux muets : "
-              + ", ".join(f"{s}/{n}" for s, n, _ in dead))
-    if len(dead) > MAX_DEAD_FEEDS:
-        # Cliquet volontaire, pas un seuil de qualité. Le socle actuel de flux
-        # morts est connu et documenté ; le faire échouer tous les jours
-        # noierait le signal et rendrait le brief quotidien rouge en permanence
-        # pour une dette déjà identifiée. En revanche toute mort NOUVELLE doit
-        # se voir le jour même : c'est exactement ce qui a manqué jusqu'ici.
-        raise RuntimeError(
-            f"{len(dead)} flux RSS muets alors que le socle connu est de {MAX_DEAD_FEEDS}. "
-            f"Un flux vient de mourir — répare-le, ou abaisse MAX_DEAD_FEEDS "
-            f"après l'avoir retiré de RSS_FEEDS."
+              + ", ".join(dead_feed_key(s, n) for s, n, _ in dead))
+
+    return articles, dead
+
+
+def pipeline_verdict(article_count, dead, known=None):
+    """Rend (code_sortie, messages) — logique pure, aucune E/S, aucun réseau.
+
+    Deux causes de rouge, indépendantes et cumulables : une collecte trop
+    maigre pour être crédible, et un flux muet qui n'était pas au socle. Le
+    troisième cas — une clé du socle qui reparle — ne rougit pas mais se dit :
+    un cliquet qui ne redescend jamais finit par tout autoriser.
+    """
+    known = KNOWN_DEAD_FEEDS if known is None else known
+    dead_keys = {dead_feed_key(s, n) for s, n, _ in dead}
+    reasons = {dead_feed_key(s, n): why for s, n, why in dead}
+    messages = []
+    code = 0
+
+    if article_count < MIN_ARTICLES:
+        code = 1
+        messages.append(
+            f"[ÉCHEC] Panne de collecte : {article_count} article(s) pour un plancher "
+            f"de {MIN_ARTICLES}. Ce n'est pas une journée creuse — vérifie le réseau du "
+            f"runner et RSS_FEEDS."
         )
 
-    return articles
+    nouveaux = sorted(dead_keys - set(known))
+    if nouveaux:
+        code = 1
+        messages.append(
+            "[ÉCHEC] Régression de source : "
+            + ", ".join(f"{k} ({reasons[k]})" for k in nouveaux)
+            + ". Répare l'URL, ou ajoute la clé à KNOWN_DEAD_FEEDS si la mort est assumée."
+        )
+
+    ressuscites = sorted(set(known) - dead_keys)
+    if ressuscites:
+        messages.append(
+            "[INFO] De nouveau vivants, à retirer de KNOWN_DEAD_FEEDS : "
+            + ", ".join(ressuscites)
+        )
+
+    return code, messages
 
 
 # ─── STEP 3 : WEB SEARCH VIA GEMINI ──────────────────────────────────────────
@@ -1002,6 +1077,14 @@ def send_notification_email(article_count, concept_count, signal_count):
 
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
+def report_verdict(article_count, dead):
+    """Imprime le verdict et rend le code de sortie du process."""
+    code, messages = pipeline_verdict(article_count, dead)
+    for msg in messages:
+        print(msg)
+    return code
+
+
 def main():
     print("=" * 60)
     print("🧠 AI COCKPIT — Daily Pipeline")
@@ -1011,10 +1094,12 @@ def main():
     ping_supabase()
 
     print("\n📡 Step 2/9 — Fetching RSS feeds...")
-    articles = fetch_recent_articles()
+    articles, dead = fetch_recent_articles()
     if not articles:
-        print("[WARN] Aucun article RSS. Abandon.")
-        return
+        # Seul cas où l'on saute les steps 3 à 9 : ils travaillent tous sur
+        # `articles` et n'ont donc rien à écrire. Le verdict, lui, est rendu.
+        print("[WARN] Aucun article RSS — les steps 3 à 9 n'ont rien à traiter.")
+        return report_verdict(0, dead)
 
     print("\n🌐 Step 3/9 — Recherches web temps réel...")
     web_results = web_search_ai_news()
@@ -1046,6 +1131,12 @@ def main():
     print(f"✅ Pipeline terminé — {len(articles)} articles, {concept_count} concepts, {signal_count} signaux")
     print("=" * 60)
 
+    # Verdict tout à la fin, une fois les 9 steps passés : les articles, le
+    # brief, les concepts, les signaux et l'email sont déjà partis. Rougir ici
+    # alerte sans rien détruire — c'est toute la différence avec le `raise` au
+    # step 2/9 qui jetait la récolte du jour.
+    return report_verdict(len(articles), dead)
+
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -9,6 +9,15 @@ on:
 jobs:
   daily-digest:
     runs-on: ubuntu-latest
+    # `feedparser.parse()` (main.py) n'a pas de timeout : un seul des 43 flux
+    # servi par un serveur qui n'envoie jamais de réponse suspend le job jusqu'au
+    # plafond GitHub de 6 h, en brûlant le quota Actions et en masquant la panne.
+    # Valeur mesurée sur les 120 derniers runs (2026-04-29 → 2026-08-21,
+    # 115 verts) : médiane 1 min 47, p90 2 min 38, pire run vert 4 min 35.
+    # 15 min laisse donc ~3× de marge au run sain le plus lent — la même valeur
+    # que backup-supabase et lastfm-sync, les autres jobs qui enchaînent fetch
+    # réseau et appels d'API — tout en divisant par 24 le coût d'un blocage.
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 

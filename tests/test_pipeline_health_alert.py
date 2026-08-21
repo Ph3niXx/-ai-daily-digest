@@ -4,13 +4,18 @@ Le bandeau front existait déjà mais s'affiche sur l'onglet propriétaire du
 pipeline — donc, pour les pipelines en panne, sur des onglets désertés. Le canal
 hors cockpit est une issue GitHub, tenue à jour par le contrôle quotidien.
 
-Trois invariants, parce que chacun a une façon différente de mal tourner :
+Quatre invariants, parce que chacun a une façon différente de mal tourner :
 
 1. Cron quotidien ⇒ commenter à chaque passage produirait ~365 notifications
    par an et l'alerte serait muette par saturation. Le corps est réécrit.
-2. Une seule issue, retrouvée par son titre exact — sinon on en accumule une
+2. Mais GitHub ne notifie QUE sur création et sur commentaire : réécrire un
+   corps ne prévient personne. L'issue #9, ouverte le 17/08 et parfaitement
+   exacte, n'a alerté de rien — la panne du 18/08 est passée inaperçue. D'où
+   le commentaire de TRANSITION : une notification quand l'ENSEMBLE des
+   pipelines dégradés change, zéro le reste du temps.
+3. Une seule issue, retrouvée par son titre exact — sinon on en accumule une
    par jour.
-3. Retour au vert ⇒ fermeture automatique, sinon l'issue reste ouverte pour
+4. Retour au vert ⇒ fermeture automatique, sinon l'issue reste ouverte pour
    toujours et cesse de vouloir dire quelque chose.
 
 Run: python tests/test_pipeline_health_alert.py
@@ -100,14 +105,57 @@ check("la cause stale est reprise", "779.1 h" in body, True)
 check("le lien du run est present", "https://github.test/run/2" in body, True)
 check("le cas 'vert mais rien ecrit' est explique", "vert mais la table" in body, True)
 
-print("-- pipelines degrades, issue deja ouverte : on reecrit, on ne commente pas")
+print("-- etat precedent inconnu : on reecrit, on ne commente pas")
 
+# Lecture de l'etat precedent impossible (Supabase muet). « Je ne sais pas »
+# ne doit pas se comporter comme « rien n'etait degrade », sinon une panne de
+# Supabase notifierait chaque brique deja connue comme un nouveau probleme.
 gh = FakeGitHub(open_issues=[{"number": 7, "title": ph.ALERT_TITLE}])
 ph._gh = gh
-ph.sync_alert_issue("o/r", "tok", ROWS, ["tft_sync"])
+ph.sync_alert_issue("o/r", "tok", ROWS, ["tft_sync"], previously_degraded=None)
 check("le corps est reecrit", gh.paths("PATCH"), ["/issues/7"])
 check("aucun commentaire ajoute (anti-spam)", gh.paths("POST"), [])
 check("aucune seconde issue creee", "/issues" in gh.paths("POST"), False)
+
+print("-- l'ensemble degrade ne bouge pas : aucune notification")
+
+gh = FakeGitHub(open_issues=[{"number": 7, "title": ph.ALERT_TITLE}])
+ph._gh = gh
+ph.sync_alert_issue("o/r", "tok", ROWS, ["tft_sync"], previously_degraded={"tft_sync"})
+check("le corps est quand meme rafraichi", gh.paths("PATCH"), ["/issues/7"])
+check("mais personne n'est notifie", gh.paths("POST"), [])
+
+print("-- un pipeline ENTRE dans l'ensemble degrade : une notification, une seule")
+
+gh = FakeGitHub(open_issues=[{"number": 7, "title": ph.ALERT_TITLE}])
+ph._gh = gh
+ph.sync_alert_issue("o/r", "tok", ROWS, ["weekly_analysis", "tft_sync"],
+                    previously_degraded={"weekly_analysis"})
+check("un commentaire, un seul", gh.paths("POST"), ["/issues/7/comments"])
+comment = gh.body_of("POST", "/issues/7/comments")
+check("l'entrant est nomme", "tft_sync" in comment, True)
+check("sa cause est donnee", "au moins 15" in comment, True)
+check("le deja-degrade n'est pas re-annonce comme entrant",
+      comment.count("weekly_analysis"), 0)
+check("le commentaire ne repete pas le tableau", "| Pipeline |" in comment, False)
+
+print("-- un pipeline SORT de l'ensemble degrade : notification de sortie")
+
+gh = FakeGitHub(open_issues=[{"number": 7, "title": ph.ALERT_TITLE}])
+ph._gh = gh
+ph.sync_alert_issue("o/r", "tok", ROWS, ["tft_sync"],
+                    previously_degraded={"tft_sync", "weekly_analysis"})
+check("un commentaire est poste", gh.paths("POST"), ["/issues/7/comments"])
+comment = gh.body_of("POST", "/issues/7/comments")
+check("le sortant est nomme", "weekly_analysis" in comment, True)
+check("il est annonce comme repasse au vert", "vert" in comment, True)
+
+print("-- creation d'issue : elle notifie deja par elle-meme, pas de commentaire")
+
+gh = FakeGitHub()
+ph._gh = gh
+ph.sync_alert_issue("o/r", "tok", ROWS, ["tft_sync"], previously_degraded=set())
+check("une issue creee et rien d'autre", gh.paths("POST"), ["/issues"])
 
 print("-- une PR portant le meme titre ne doit pas etre confondue avec l'issue")
 

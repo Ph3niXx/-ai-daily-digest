@@ -163,7 +163,11 @@ function SignalCard({ signal, rank, onNavigate }) {
       <div className="sig-card-foot">
         <div className="sig-card-stats">
           <span className="sig-card-count">{signal.count}</span>
-          <span className="sig-card-count-label">mentions<br/>cette semaine</span>
+          {/* La fenêtre de comptage vient de signal.week_start, jamais d'un
+              adverbe : signal_tracking gèle dès que le weekly ne tourne plus. */}
+          <span className="sig-card-count-label">
+            mentions{signal.week_label ? <><br/>{signal.week_label}</> : null}
+          </span>
         </div>
         <div className="sig-card-spark">
           <Sparkline values={signal.history} trend={signal.trend} />
@@ -180,7 +184,10 @@ function SignalCard({ signal, rank, onNavigate }) {
           aria-label="Demander à Jarvis à propos de ce signal"
           onClick={(e) => {
             e.stopPropagation();
-            const prompt = `À propos du signal "${signal.name}" (${signal.category}, ${trendLabel}) : ${signal.context || signal.count + " mentions cette semaine"}\nMa question : `;
+            const countPhrase = signal.week_label
+              ? `${signal.count} mentions, ${signal.week_label}`
+              : `${signal.count} mentions`;
+            const prompt = `À propos du signal "${signal.name}" (${signal.category}, ${trendLabel}) : ${signal.context || countPhrase}\nMa question : `;
             try { localStorage.setItem("jarvis-prefill", prompt); } catch {}
             if (typeof onNavigate === "function") onNavigate("jarvis");
           }}
@@ -359,6 +366,9 @@ function GamesBriefCard({ releases = [], onNavigate }) {
 function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
   const { macro, top, signals, stats, date, user, radar, week } = data;
   const morningItems = data.morning_card || [];
+  // Semaine réellement mesurée par signal_tracking. Repli sur le présent
+  // uniquement quand le corpus de secours (cockpit/data.js) ne la fournit pas.
+  const signalsWeek = data.signals_week || { week: null, when: null, verb: "Ce qui émerge", current: true };
   const [readTop, setReadTop] = React.useState({});
   const toggleRead = (rank) => {
     const wasRead = !!readTop[rank];
@@ -604,12 +614,24 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
                       · {newSinceVisit} nouveaux articles · {macro.articles_summarized} au total
                     </span></>
                   )}
+                  {/* Le compteur de nouveautés porte sur les articles ; la
+                      synthèse affichée dessous peut, elle, dater d'avant-hier. */}
+                  {macro.dateline && (
+                    <>{' '}<span className="hero-kicker-meta">· {macro.dateline}</span></>
+                  )}
                 </>
               ) : (
                 <>
+                  {/* macro.kicker vaut déjà « Brief du lundi 17 août » quand la
+                      dernière ligne daily_briefs n'est pas celle du jour. */}
                   {macro.kicker}
                   <span className="hero-kicker-sep">—</span>
                   <span className="hero-kicker-meta">{macro.articles_summarized} articles synthétisés · lecture {macro.reading_time}</span>
+                  {macro.stale_days > 0 && (
+                    <span className="hero-kicker-meta">
+                      {' '}· pas de nouveau brief depuis {macro.stale_days} jour{macro.stale_days > 1 ? "s" : ""}
+                    </span>
+                  )}
                 </>
               )}
             </div>
@@ -669,14 +691,22 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
             <div className="hero-todo">
               <div className="hero-todo-label">À traiter depuis hier</div>
               <div className="hero-todo-num">{stats.unread_total ?? stats.articles_today}</div>
-              <div className="hero-todo-unit">articles · {stats.signals_rising ?? 0} signaux à regarder</div>
+              {/* Le compte de signaux vient de signal_tracking : il faut dire
+                  de quelle semaine, sinon il se lit comme un compte du jour. */}
+              <div className="hero-todo-unit">
+                articles · {stats.signals_rising ?? 0} signaux à regarder
+                {signalsWeek.when ? ` (${signalsWeek.when})` : ""}
+              </div>
               <button className="btn btn--primary btn--sm hero-todo-cta" onClick={() => onNavigate("top")}>
                 Commencer la revue <Icon name="arrow_right" size={12} stroke={2} />
               </button>
             </div>
             <div className="hero-meta">
               <div className="hero-meta-item">
-                <span className="hero-meta-label">Prochain brief</span>
+                {/* Le libellé bascule en constat dès qu'un passage a été
+                    manqué : annoncer « demain 06:00 » quand le pipeline est
+                    arrêté depuis quatre jours, c'est une promesse, pas un état. */}
+                <span className="hero-meta-label">{stats.next_brief_label || "Prochain brief"}</span>
                 <span className="hero-meta-val">{stats.next_brief}</span>
               </div>
             </div>
@@ -701,8 +731,12 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
           <div className="zero-state">
             <div className="zero-state-eyebrow">À jour</div>
             <h2 className="zero-state-title">Tu as fait le tour. Bravo.</h2>
+            {/* Même défaut que le hero : on n'annonce le passage du lendemain
+                que si le dernier brief est récent. Sinon on dit ce qu'on sait. */}
             <p className="zero-state-body">
-              Pendant que tu attends le brief de demain matin, voilà 2 idées qui dorment dans ton carnet — peut-être le bon moment pour les creuser.
+              {macro.stale_days > 1
+                ? `Le brief n'a pas tourné depuis ${macro.stale_days} jours. En attendant, voilà 2 idées qui dorment dans ton carnet — peut-être le bon moment pour les creuser.`
+                : "Pendant que tu attends le prochain passage du brief, voilà 2 idées qui dorment dans ton carnet — peut-être le bon moment pour les creuser."}
             </p>
             {shownIdeas.length > 0 && (
               <div className="zero-state-ideas">
@@ -870,8 +904,14 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
         <div className="col col--signals">
           <div className="block-head">
             <div>
-              <div className="section-kicker">Signaux faibles · S17</div>
-              <h2 className="section-title">Ce qui émerge<br/>cette semaine</h2>
+              {/* « · S17 » et « cette semaine » étaient écrits en dur : ils ne
+                  bougeaient plus quand le weekly cessait d'écrire. */}
+              <div className="section-kicker">
+                Signaux faibles{signalsWeek.week ? ` · ${signalsWeek.week}` : ""}
+              </div>
+              <h2 className="section-title">
+                {signalsWeek.verb}{signalsWeek.when ? <><br/>{signalsWeek.when}</> : null}
+              </h2>
             </div>
             <button className="link-more" onClick={() => onNavigate("signals")}>
               Voir tous <Icon name="arrow_right" size={12} stroke={2} />

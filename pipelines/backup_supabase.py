@@ -1,14 +1,32 @@
 #!/usr/bin/env python3
 """
-Sauvegarde des données saisies par l'utilisateur → fichiers JSON.
+Sauvegarde des données irremplaçables de Supabase → fichiers JSON.
 
 Audit du 2026-08-15, vague 0 : le projet accumulait quatre mois de données
 irremplaçables sans aucune sauvegarde (26 workflows, zéro dump/export).
 
-Périmètre volontairement restreint : uniquement ce qu'AUCUN pipeline ne sait
-refabriquer. Les corpus RSS, les scrobbles, les snapshots Steam et l'index
-vectoriel de Jarvis sont exclus — ils se régénèrent depuis leur source. Un
-statut « relancé le 12/08 » sur une offre, non.
+Critère du périmètre : ce qu'aucun pipeline ne sait refabriquer À L'IDENTIQUE.
+
+Le « à l'identique » a été ajouté le 2026-08-21 parce que la première version du
+critère se lisait en regardant QUI produit la donnée — pipeline = refabriquable,
+utilisateur = non — sans se demander si le producteur est encore capable de
+reproduire la même chose. Il ne l'est pas dès que la donnée est datée : un
+pipeline qui relit un flux RSS aujourd'hui n'y retrouve pas les items d'il y a
+trois mois, il n'écrirait qu'un brief d'aujourd'hui. Sont donc dans le périmètre
+en plus des saisies utilisateur : `daily_briefs`, `signal_tracking` (produites
+par main.py, mais depuis des flux dont les items disparaissent),
+`usage_events` (seule mesure de ce qui est réellement ouvert, horodatée, et
+qu'aucun pipeline ne reconstruit) et `jarvis_conversations`.
+
+Restent exclus les corpus qu'un pipeline sait re-remplir avec le même contenu
+depuis une source qui, elle, ne s'efface pas : scrobbles Last.fm, bibliothèque
+Steam, catalogues TMDB/IGDB/AniList, index vectoriel de Jarvis.
+
+Comportement voulu face aux tables vides ou absentes, à ne pas « corriger » :
+une table absente (404 PostgREST) fait échouer le run — un renommage ou un DROP
+silencieux doit être bruyant, sinon la sauvegarde rétrécit sans prévenir. Une
+table légitimement vide, elle, vaut 0 ligne et n'est pas un échec : le run ne
+sort en 1 que si TOUTES les tables sont vides (sauvegarde blanche).
 
 Transport : PostgREST avec la service key. `pg_dump` n'est pas utilisable ici,
 faute de mot de passe Postgres dans les secrets du dépôt (docs/secrets.md).
@@ -62,6 +80,14 @@ TABLES = {
     "article_feedback": "id",
     "challenge_attempts": "id",
     "history_notes": "iso",
+    # Daté, donc non refabricable à l'identique (ajouté le 2026-08-21).
+    # Volumes relevés en base ce jour-là : usage_events 3 561 lignes / ~610 ko
+    # de JSON, signal_tracking 522, daily_briefs 136, jarvis_conversations 102.
+    # Aucune ne pèse assez pour gêner l'artefact GitHub.
+    "usage_events": "id",
+    "daily_briefs": "date",  # PK = la date du brief, pas un id
+    "signal_tracking": "id",
+    "jarvis_conversations": "id",
 }
 
 

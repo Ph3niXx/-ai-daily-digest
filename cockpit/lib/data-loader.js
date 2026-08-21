@@ -31,6 +31,45 @@
     const start = new Date(d.getFullYear(), 0, 0);
     return Math.floor((d - start) / 86400000);
   }
+  // ── Fraîcheur des données amont ──────────────────────────
+  // Un pipeline en panne ne vide pas sa table : il cesse de l'écrire. La
+  // dernière ligne reste et le front l'affiche comme si elle datait du matin.
+  // Ces helpers servent à DÉRIVER toute formulation temporelle de la date
+  // portée par la donnée, au lieu de l'écrire en dur dans le rendu.
+  //
+  // Tout est calculé en UTC : le reste du loader date en UTC (isoToday,
+  // fetch_date, week_start). Mélanger local et UTC ferait dériver l'écart
+  // d'un jour selon le fuseau du lecteur.
+  function utcDayStart(value){
+    const m = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) : null;
+  }
+  function todayUtcStart(now){
+    const d = now == null ? new Date() : new Date(now);
+    return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+  // Nombre de jours entre une date ISO et aujourd'hui. null si pas de date :
+  // « on ne sait pas » ne doit jamais se confondre avec « c'est frais ».
+  function staleDays(value, now){
+    const t = utcDayStart(value);
+    return t == null ? null : Math.round((todayUtcStart(now) - t) / 86400000);
+  }
+  // « lundi 17 août » (avec { weekday: "long" }) ou « 17 août ».
+  function frDay(value, opts){
+    const t = utcDayStart(value);
+    if (t == null) return null;
+    return new Date(t).toLocaleDateString("fr-FR",
+      Object.assign({ day: "numeric", month: "long", timeZone: "UTC" }, opts || {}));
+  }
+  // Lundi ISO d'une date, en ISO court. Sert à comparer la semaine d'une
+  // ligne signal_tracking à la semaine en cours sans arithmétique de numéro.
+  function mondayIso(value, now){
+    const t = value == null ? todayUtcStart(now) : utcDayStart(value);
+    if (t == null) return null;
+    const d = new Date(t);
+    const shift = (d.getUTCDay() + 6) % 7;
+    return new Date(t - shift * 86400000).toISOString().slice(0, 10);
+  }
   function relTime(iso){
     if (!iso) return "";
     const diff = Date.now() - new Date(iso).getTime();
@@ -120,26 +159,44 @@
     };
   }
 
-  function buildStats(articles, signals){
+  function buildStats(articles, signals, brief, nowMs){
     const rm = getReadMap();
     const unread = articles.filter(a => !rm[a.id]).length;
     const rising = (signals || []).filter(s => s.trend === "rising" || s.trend === "new").length;
-    const now = new Date();
+    const now = nowMs == null ? new Date() : new Date(nowMs);
     const beforeBrief = now.getUTCHours() < 6;
+    // « demain 06:00 » est une promesse, pas une mesure. Le pipeline peut être
+    // arrêté depuis quatre jours, la case continuerait d'annoncer le prochain
+    // passage. Dès qu'un passage a été manqué, on remplace la promesse par le
+    // constat : la date du dernier brief réellement en base.
+    const briefAge = staleDays(brief && brief.date, nowMs);
+    const briefLate = briefAge == null || briefAge >= 2;
     return {
       articles_today: articles.length,
       signals_rising: rising,
       unread,
       unread_total: unread,
       streak: computeStreak(),
-      next_brief: beforeBrief ? "aujourd'hui 06:00" : "demain 06:00",
+      next_brief_label: briefLate ? "Dernier brief" : "Prochain brief",
+      next_brief: briefLate
+        ? (briefAge == null ? "aucun" : frDay(brief.date, { weekday: "long" }))
+        : (beforeBrief ? "aujourd'hui 06:00" : "demain 06:00"),
       cost_month: null,        // filled by Tier 2 loadCost() if needed
       cost_budget: "3 €",
       cost_history_7d: [],     // filled by Tier 2
     };
   }
 
-  function buildMacro(articles, brief){
+  // `brief` est la LIGNE daily_briefs, pas seulement son HTML : c'est elle qui
+  // porte `date`, et sans cette date le brief du 17 s'affiche le 21 sous le
+  // chapeau « Synthèse du matin ». Le garde-fou historique
+  // (`!articles.length && !brief`) couvrait « base vide au premier lancement »,
+  // jamais « amont en panne ».
+  function buildMacro(articles, brief, nowMs){
+    const briefDate = (brief && brief.date) || null;
+    const stale = staleDays(briefDate, nowMs);
+    // Un brief du jour ne se date pas : la page porte déjà la date du jour.
+    const dateline = stale > 0 ? "Brief du " + frDay(briefDate, { weekday: "long" }) : null;
     if (!articles.length && !brief) {
       return {
         kicker: "Synthèse du matin",
@@ -147,6 +204,9 @@
         body: "Le pipeline quotidien tourne à 06:00 UTC. Reviens dans quelques heures — ou consulte l'historique.",
         reading_time: "—",
         articles_summarized: 0,
+        brief_date: null,
+        stale_days: null,
+        dateline: null,
       };
     }
     const top = articles[0];
@@ -166,11 +226,16 @@
     const title = briefTitle || top?.title || "Brief du jour";
     const body = (briefBody || stripHtml(top?.summary || "")).slice(0, 420);
     return {
-      kicker: "Synthèse du matin",
+      // Le chapeau porte la date dès que le contenu n'est plus celui du jour :
+      // c'est la seule ligne du hero que l'œil lit avant le titre.
+      kicker: dateline || "Synthèse du matin",
       title,
       body,
       reading_time: Math.max(1, Math.round(articles.length * 1.5)) + " min",
       articles_summarized: articles.length,
+      brief_date: briefDate,
+      stale_days: stale,
+      dateline,
     };
   }
 
@@ -240,8 +305,37 @@
         history: hist.length ? hist : [0,0,0,0,0,0,0, s.mention_count || 0],
         category: s.category || "Autres",
         context: s.context || "",
+        // La semaine mesurée voyage avec le signal. Sans elle, la vue affiche
+        // « N mentions cette semaine » sur une ligne vieille de trois semaines.
+        week_start: s.week_start || null,
+        week_label: s.week_start ? "semaine du " + frDay(s.week_start) : null,
       };
     });
+  }
+
+  // En-tête de la section Signaux. Le kicker affichait « Signaux faibles · S17 »
+  // écrit en dur, et le titre « Ce qui émerge cette semaine » au présent : deux
+  // affirmations que rien ne mesurait. On les dérive de la semaine la plus
+  // récente réellement présente dans signal_tracking.
+  function buildSignalsWeek(rows, nowMs){
+    const iso = (rows || [])
+      .map(s => s && s.week_start)
+      .filter(Boolean)
+      .sort()
+      .pop() || null;
+    if (!iso) return { iso: null, week: null, when: null, verb: "Ce qui émerge", current: true, stale_days: null };
+    const current = mondayIso(iso) === mondayIso(null, nowMs);
+    // Midi UTC : ancre le jour civil quel que soit le fuseau du lecteur, car
+    // isoWeek() raisonne en heure locale.
+    const anchor = new Date(utcDayStart(iso) + 12 * 3600000);
+    return {
+      iso,
+      week: "S" + String(isoWeek(anchor)).padStart(2, "0"),
+      when: current ? "cette semaine" : "semaine du " + frDay(iso),
+      verb: current ? "Ce qui émerge" : "Ce qui émergeait",
+      current,
+      stale_days: staleDays(iso, nowMs),
+    };
   }
 
   function buildRadar(rows){
@@ -1201,7 +1295,7 @@
       ).catch(() => []),
     ]);
 
-    const stats = buildStats(articlesToday, signals);
+    const stats = buildStats(articlesToday, signals, brief);
     // Cost history (last 8 weeks) — best effort.
     // weekly_analysis.tokens_used is a JSONB with { cost_usd, input_tokens, output_tokens, total_tokens, calls, runs }.
     try {
@@ -1229,6 +1323,7 @@
       macro: buildMacro(articlesToday, brief),
       top: buildTop(articlesToday, dailyPicks),
       signals: buildSignals(signals),
+      signals_week: buildSignalsWeek(signals),  // en-tête daté de la section Signaux
       nav: getNav(),
       radar: buildRadar(radarRows),
       week: buildWeek(recent),
@@ -1267,7 +1362,10 @@
     if (rising) items.push({
       kind: "signal", icon: "trending_up",
       title: rising.name,
-      reason: rising.context || `${rising.count} mentions cette semaine`,
+      // « cette semaine » était écrit en dur : la Morning Card présentait au
+      // présent une ligne signal_tracking qui pouvait dater de trois semaines.
+      reason: rising.context
+        || (rising.week_label ? `${rising.count} mentions, ${rising.week_label}` : `${rising.count} mentions`),
       cta: "voir signal", navigate: "signals",
     });
     const nextGap = data.radar && data.radar.next_gap;
@@ -4911,17 +5009,20 @@
     bootTier1,
     loadPanel,
     loadUserProfile,      // consomme par boot-mediatheque.js (page d'entree mobile)
+    loadDailyBrief,       // expose pour verrouiller son contrat (tests/test_home_view.mjs)
     invalidateCache,
     hydrateGlobalsFromTier1,
     TIER2_PANELS,
     T2,
     cache,
     // shape builders re-exported for panels that want to rebuild parts live
-    buildSignals, buildRadar, buildTop, buildMacro, buildWeek, buildStats, buildDateShape, buildUser,
+    buildSignals, buildSignalsWeek, buildRadar, buildTop, buildMacro, buildWeek, buildStats,
+    buildDateShape, buildUser, buildMorningCard,
     applyAttemptsToChallenges, mapWeeklyChallengeRow, buildWikiFromConcepts, buildSignalsFromDB,
     buildOpportunitiesFromDB, buildIdeasFromDB, transformProfile,
     // helpers
     isoWeek, dayOfYear, relTime, stripHtml, getReadMap, computeStreak,
+    staleDays, frDay, mondayIso,
     fetchJobsByIds,
   };
 })();

@@ -9,7 +9,7 @@
       "dom_id": "brief",
       "scope": "mixte",
       "status": "documented",
-      "last_updated": "2026-08-19"
+      "last_updated": "2026-08-21"
     },
     {
       "slug": "evening",
@@ -79,7 +79,7 @@
       "dom_id": "claude",
       "scope": "pro",
       "status": "documented",
-      "last_updated": "2026-04-25"
+      "last_updated": "2026-08-21"
     },
     {
       "slug": "veille-outils",
@@ -269,7 +269,7 @@
       "dom_id": "gaming",
       "scope": "perso",
       "status": "documented",
-      "last_updated": "2026-08-19"
+      "last_updated": "2026-08-21"
     },
     {
       "slug": "mediatheque",
@@ -309,7 +309,7 @@
       "dom_id": "sante",
       "scope": "mixte",
       "status": "documented",
-      "last_updated": "2026-08-20"
+      "last_updated": "2026-08-21"
     }
   ]
 }

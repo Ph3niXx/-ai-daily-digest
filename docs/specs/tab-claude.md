@@ -64,7 +64,7 @@ Pas de table dédiée — réutilise la table `articles` partagée avec les 9 au
 ## Back — pipelines qui alimentent
 - **Daily pipeline** ([main.py](main.py)) — cron `0 6 * * 1-5` :
   - Fetch RSS sur 6 sources estampillées `section="claude"` :
-    - `Anthropic News` → https://www.anthropic.com/rss.xml
+    - `Claude Blog (miroir)` → https://tim-hilde.github.io/anthropic-rss/rss.xml — miroir tiers NON OFFICIEL de claude.com/blog, reconstruit quotidiennement. anthropic.com n'expose plus aucun flux (15 URL candidates testées le 2026-08-21, toutes en 404) et les items pointent vers claude.com/blog : les billets research et policy d'anthropic.com ne remontent plus. Dépendance à surveiller.
     - `Claude Code Releases` → https://github.com/anthropics/claude-code/releases.atom
     - `Anthropic SDK Python` → https://github.com/anthropics/anthropic-sdk-python/releases.atom
     - `Anthropic SDK TS` → https://github.com/anthropics/anthropic-sdk-typescript/releases.atom
@@ -101,4 +101,6 @@ Pas de table dédiée — réutilise la table `articles` partagée avec les 9 au
 - [ ] **Panels frères partagent le composant** : toute modif sur `claude` affecte aussi `updates` et les autres panels Veille.
 
 ## Dernière MAJ
+2026-08-21 — la source `Anthropic News` (https://www.anthropic.com/rss.xml) est morte en 404 : le blog a migré vers claude.com/blog, qui n'expose aucun flux. Remplacée par un miroir tiers non officiel hébergé sur GitHub Pages. Les 5 autres sources de la section (flux Atom GitHub officiels) sont intactes — c'est ce qui a permis à l'onglet de ne pas se vider. Cf. ADR-44.
+
 2026-04-25 — création de l'onglet : 6 flux RSS Anthropic dédiés (anthropic.com + 5 repos GitHub), corpus `CLAUDE_DATA`, route `/claude`, sidebar group Veille.

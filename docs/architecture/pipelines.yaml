@@ -15,7 +15,7 @@
 #                   `paused` = le workflow existe et reste lançable à la main, mais
 #                   son cron a été retiré. Comme tout statut ≠ active, il sort du
 #                   catalogue de surveillance : sa ligne est alors ÉLAGUÉE de la
-#                   table pipeline_health au contrôle suivant (ADR-40), sans quoi
+#                   table pipeline_health au contrôle suivant (ADR-45), sans quoi
 #                   elle resterait affichée « en panne » pour toujours.
 #   health        : contrat de surveillance, consommé par pipelines/pipeline_health.py
 #     domain          : section de l'onglet Santé. Vocabulaire FERMÉ de 7 valeurs
@@ -34,7 +34,7 @@
 #                       SORTIE. C'est le seul signal possible pour un pipeline qui
 #                       n'écrit aucune table : sans lui, un cron qui cesserait d'être
 #                       déclenché resterait vert indéfiniment sur la foi d'un succès
-#                       vieux de plusieurs mois (ADR-40).
+#                       vieux de plusieurs mois (ADR-45).
 #
 #     `table` et `max_age_hours` se déclarent SÉPARÉMENT, ce qui donne trois cas :
 #       table + max_age_hours  → fraîcheur mesurée ET sanctionnée. Pour les
@@ -100,7 +100,7 @@ pipelines:
       Détection des flux RSS morts depuis le 2026-08-17 (ADR-38) : feedparser ne lève
       jamais sur un 404 ou une redirection HTML, on teste donc `status` et `entries`
       explicitement. Le cliquet entier MAX_DEAD_FEEDS a été remplacé le 2026-08-21
-      (ADR-39) par un ensemble nommé KNOWN_DEAD_FEEDS + un plancher MIN_ARTICLES :
+      (ADR-44) par un ensemble nommé KNOWN_DEAD_FEEDS + un plancher MIN_ARTICLES :
       `fetch_recent_articles()` ne lève plus jamais, et le run sort en code 1 APRÈS
       avoir tout écrit (articles, brief, concepts, signaux, email). Deux causes
       distinctes de rougeur : collecte sous MIN_ARTICLES, ou flux muet absent du socle
@@ -219,7 +219,7 @@ pipelines:
     avg_duration_s: 90
     budget_usd: 0
     status: active
-    notes: "Input workflow_dispatch 'days' pour backfill manuel (défaut 365). Écrit user_profile.strava_refresh_token après rotation OAuth."
+    notes: "Input workflow_dispatch 'days' pour backfill manuel (défaut 365). Écrit user_profile.strava_refresh_token après rotation OAuth. PANNE EN COURS depuis le 2026-06-30 : l'APPLICATION Strava elle-même est désactivée côté portail développeur (réponse API `resource: Application / field: Status / code: Inactive`). Le refresh de token RÉUSSIT — Strava émet toujours des access_tokens — c'est l'appel API qui est refusé, donc rejouer l'OAuth ne peut rien y changer tant que l'app n'est pas réactivée sur strava.com/settings/api. Ce contexte daté vit ici et non dans le message d'erreur du script, qui ne doit porter que l'instruction (nettoyé le 2026-08-21)."
 
   - id: withings_sync
     name: "Withings composition corporelle"
@@ -246,7 +246,7 @@ pipelines:
     avg_duration_s: 30
     budget_usd: 0
     status: active
-    notes: "Mode --backfill via workflow_dispatch pour réimporter depuis l'epoch. Écrit user_profile.withings_refresh_token après rotation OAuth — corrigé le 2026-07-26 : le token tourné était jusque-là jeté dans une variable `_new_refresh` au motif d'une « période de grâce » qui n'existe pas. Withings rotant à chaque appel et invalidant l'ancien immédiatement, le pipeline n'a réussi qu'une fois (2026-04-23) puis a échoué 3 mois sur invalid refresh_token. Le secret GitHub n'est valable que pour le premier run après (ré)autorisation ; ensuite la source de vérité est user_profile."
+    notes: "Mode --backfill via workflow_dispatch pour réimporter depuis l'epoch. Écrit user_profile.withings_refresh_token après rotation OAuth — corrigé le 2026-07-26 : le token tourné était jusque-là jeté dans une variable `_new_refresh` au motif d'une « période de grâce » qui n'existe pas. Withings rotant à chaque appel et invalidant l'ancien immédiatement, le pipeline n'a réussi qu'une fois (2026-04-23) puis a échoué 3 mois sur invalid refresh_token. Le secret GitHub n'est valable que pour le premier run après (ré)autorisation ; ensuite la source de vérité est user_profile. ATTENTION — ce correctif est INERTE tant qu'un OAuth manuel n'a pas été rejoué : il ne s'arme qu'APRÈS un refresh réussi, or le seul token disponible est mort depuis le 2026-04-23. Séquence obligatoire : scripts/withings_oauth_init.py, poser le refresh_token dans le secret WITHINGS_REFRESH_TOKEN, puis déclencher le workflow À LA MAIN dans la foulée — le premier run consomme le secret et écrit user_profile.withings_refresh_token, après quoi la boucle s'auto-entretient. Depuis le 2026-08-21 le log distingue « aucun token en base » (repli nominal sur le secret) de « lecture Supabase refusée » (anomalie d'accès) : les deux rendaient None en silence."
 
   - id: lastfm_sync
     name: "Last.fm scrobbles (+ enrichissement lundi)"
@@ -527,9 +527,14 @@ pipelines:
         tourne, relancer veille-picks.yml.
     notes: >
       Tourne à 06:30 UTC, après daily_digest (06:00) qui remplit `articles`. Pipeline SÉPARÉ de
-      main.py délibérément : le digest n'a pas raté un jour en 114 jours et si la sélection casse,
-      le brief doit continuer — le front retombe alors sur l'ordre de crawl (buildTop, drapeau
-      `picked: false`). Recalibrage AVANT sélection pour que les règles fraîches servent le jour
+      main.py délibérément : si la sélection casse, le brief doit continuer — le front retombe
+      alors sur l'ordre de crawl (buildTop, drapeau `picked: false`). Mais « continuer » n'est
+      pas « se taire » : depuis le 2026-08-21 les DEUX vides sortent en code 1, et se distinguent
+      par le message. Table `articles` du jour vide = l'amont est mort, daily_digest n'a rien
+      écrit, la sélection ne PEUT pas tourner (c'est le cas resté invisible du 18 au 21 août :
+      le run sortait vert tous les jours et seule la sonde de fraîcheur de pipeline_health l'a
+      vu). Articles présents mais aucun pick retenu = la sélection est stérile, le message donne
+      le nombre d'articles livrés. Recalibrage AVANT sélection pour que les règles fraîches servent le jour
       même. Seuil MIN_VOTES_TO_RECALIBRATE=8 : en dessous on écrirait du bruit, et une règle fausse
       coûte plus cher qu'une règle absente. Le profil injecté est filtré par liste blanche
       (PROFILE_KEYS_FOR_PROMPT) — sans ça les clés d'API stockées dans user_profile (lastfm, tmdb)
@@ -653,6 +658,11 @@ pipelines:
       - article_feedback
       - challenge_attempts
       - history_notes
+      # Ajoutées le 2026-08-21 : datées, donc non refabricables à l'identique.
+      - usage_events
+      - signal_tracking
+      - daily_briefs
+      - jarvis_conversations
     avg_duration_s: 30
     budget_usd: 0
     status: active
@@ -664,6 +674,11 @@ pipelines:
     health:
       domain: socle
       panels: []
+      # Cron hebdomadaire (168 h) + 24 h de marge pour le retard de déclenchement
+      # GitHub, qui va couramment de 30 à 60 min. C'est le SEUL signal de cette
+      # brique : sans cette clé, un cron qui cesserait d'être déclenché la
+      # laisserait verte indéfiniment (ADR-45).
+      max_run_age_hours: 192
       impact: >-
         Aucune surface ne le montre. Les saisies que rien ne sait refabriquer
         (offres, profil, idées, engagements, notes, progression média) ne sont
@@ -672,12 +687,17 @@ pipelines:
         Ouvrir le dernier run et lire quelle table a échoué : le script sort en
         code 1 dès qu'une seule table manque ou que le total est vide.
     notes: >-
-      Périmètre volontairement restreint aux données qu'aucun pipeline ne sait refabriquer
-      (saisies utilisateur + sortie de la routine Jobs Radar). Les corpus RSS, scrobbles,
-      snapshots Steam et l'index vectoriel de Jarvis sont exclus : ils se régénèrent depuis
-      leur source. Sortie = un artefact de run conservé 90 jours (~3 Mo), pas une table.
-      Transport PostgREST et non pg_dump, faute de mot de passe Postgres dans les secrets.
-      Introduit par ADR-37 (audit du 2026-08-15).
+      Périmètre restreint aux données qu'aucun pipeline ne sait refabriquer À L'IDENTIQUE.
+      Le critère a été élargi le 2026-08-21 : il ne suffit pas de demander « qui produit
+      cette donnée ? » (pipeline = refabriquable, utilisateur = non), il faut demander si
+      le producteur en est encore capable. Tout ce qui est daté ne l'est pas — les items
+      RSS disparaissent de leur flux. D'où l'ajout de usage_events (seule mesure de
+      l'usage réel du cockpit), daily_briefs, signal_tracking et jarvis_conversations.
+      Les corpus RSS bruts, scrobbles, snapshots Steam et l'index vectoriel de Jarvis
+      restent exclus : ils se régénèrent depuis leur source. Sortie = un artefact de run
+      conservé 90 jours (1,0 Mo au 2026-08-21), pas une table — et il vit chez GitHub,
+      c'est-à-dire chez l'hébergeur de ce qui le produit. Transport PostgREST et non
+      pg_dump, faute de mot de passe Postgres dans les secrets. ADR-37, élargi par ADR-45.
 
 # Pipelines locaux (pas GitHub Actions) — listés ici pour la vue d'ensemble,
 # mais non inclus dans la timeline 24h côté UI.

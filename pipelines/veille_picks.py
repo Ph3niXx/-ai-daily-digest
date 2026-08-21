@@ -21,6 +21,12 @@ DÉLIBÉRÉMENT UN PIPELINE À PART, pas une étape de main.py : le digest quoti
 n'a pas raté un jour en 114 jours et reste la seule chose du cockpit qui marche
 sans faute. Si cette sélection casse, le brief doit continuer sans elle.
 
+Cette tolérance ne couvre QUE la sélection. Si la table `articles` du jour est
+vide, ce n'est pas une journée sans pick : c'est l'amont qui est mort et la
+sélection qui ne peut pas tourner — on sort en erreur. Sortir vert sur ce cas a
+laissé daily_digest en panne à partir du 2026-08-18 sans qu'un seul run rouge ne
+le signale ; seule la sonde de fraîcheur de pipeline_health l'a vu.
+
 Usage:
     python pipelines/veille_picks.py
     python pipelines/veille_picks.py --dry-run
@@ -270,8 +276,13 @@ def main():
                       f"fetch_date=eq.{day}&select=id,title,summary,section,source"
                       f"&order=date_fetched.desc&limit=100")
     if not articles:
-        print(f"\n⚠️  Aucun article pour le {day} — rien à sélectionner.")
-        return 0
+        # Premier vide : la table du jour est remplie par daily_digest, donc zéro
+        # article ne dit rien de la journée — il dit que l'amont n'a pas écrit.
+        # Rendre 0 ici rendait cette panne indiscernable d'un succès.
+        print(f"\n[ERREUR] Aucun article pour le {day} — daily_digest n'a rien "
+              f"écrit ce jour-là. La sélection ne peut pas tourner : vérifier le "
+              f"run de daily_digest avant de relancer celui-ci.")
+        return 1
 
     print(f"\n📥 {len(articles)} articles du jour")
     try:
@@ -283,10 +294,12 @@ def main():
         return 1
 
     if not picks:
-        # Échec bruyant : le front retombera sur l'ancien comportement, mais on
-        # veut savoir que la sélection n'a rien produit plutôt que le découvrir
-        # par un Top redevenu arbitraire.
-        print("[ERREUR] Aucun pick valide — le front retombera sur l'ordre de crawl.")
+        # Second vide, à ne pas confondre avec le précédent : l'amont a livré,
+        # c'est la sélection qui n'a rien retenu. Échec bruyant lui aussi — le
+        # front retombera sur l'ancien comportement, mais on veut le savoir
+        # plutôt que le découvrir par un Top redevenu arbitraire.
+        print(f"[ERREUR] Aucun pick valide sur {len(articles)} articles du jour — "
+              f"le front retombera sur l'ordre de crawl.")
         return 1
 
     by_id = {a["id"]: a for a in articles}

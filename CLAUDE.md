@@ -75,7 +75,8 @@ Tout nouveau secret GitHub Actions → entrée dans [docs/secrets.md](docs/secre
 
 ## Bugs connus / Améliorations possibles
 
-- Certains RSS ne publient pas quotidiennement (LLMs, Énergie souvent à 0)
+- Une section RSS à 0 n'est pas un rythme de publication : le 2026-08-21, 17 des 43 flux étaient morts (404/403/XML cassé), tous remplacés depuis. Avant de conclure « ils ne publient pas », lire les lignes `[DEAD]` du dernier run.
+- Un seuil calibré en local est faux sur le runner (IP datacenter bloquée par certains CDN) — ADR-44
 - Le HTML brut dans les summaries est strippé côté JS mais pas toujours côté Python (anciens articles)
 - Le diagnostic du radar ne peut être refait qu'en remettant les scores à 0 en base
 - La carte des concepts (graphe de relations entre concepts wiki) n'est pas encore implémentée

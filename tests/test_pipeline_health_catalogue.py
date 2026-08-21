@@ -1,4 +1,4 @@
-"""Le catalogue surveillé : 19 briques, toutes classées, toutes réparables.
+"""Le catalogue surveillé : 18 briques, toutes classées, toutes réparables.
 
 Ce test garde l'invariant que l'onglet Santé suppose : chaque brique du
 catalogue sait dire à quelle section elle appartient et quel geste la répare.
@@ -37,15 +37,22 @@ by_id = {p["id"]: p for p in pipes}
 
 print("-- le catalogue")
 
-check("19 briques surveillees", len(pipes), 19)
+# 18 et non 19 depuis le 2026-08-21 : tft_sync est passé en `status: paused`
+# (cron retiré, clé Riot de développement non viable — ADR-45), il sort donc du
+# catalogue surveillé. Ce compteur est un inventaire, pas un seuil : il doit
+# bouger quand le catalogue bouge, et c'est précisément ce qu'on veut voir.
+check("18 briques surveillees", len(pipes), 18)
 
 EXPECTED = {
     "veille_ia": {"daily_digest", "veille_picks"},
     "apprentissage": {"weekly_analysis"},
     "veille_satellite": {"sport_sync", "gaming_sync", "anime_sync", "news_sync"},
     "mediatheque": {"anime_tracker_sync", "tmdb_tracker_sync", "jp_vocab_sync"},
+    # tft_sync retiré le 2026-08-21 : passé en `status: paused` (ADR-45), il ne
+    # fait plus partie du catalogue surveillé. Le remettre ici exigerait de
+    # remettre son cron, ce qui suppose une clé Riot non expirante.
     "perso": {"strava_sync", "withings_sync", "lastfm_sync", "steam_sync",
-              "tft_sync", "igdb_tracker_sync"},
+              "igdb_tracker_sync"},
     "business": {"jobs_radar_routine"},
     "socle": {"backup_supabase", "pipeline_health"},
 }
@@ -73,6 +80,12 @@ check("la routine Jobs Radar est distante", by_id["jobs_radar_routine"]["remote"
 check("elle est jugee sur job_scans", by_id["jobs_radar_routine"]["health"]["table"], "job_scans")
 check("la sauvegarde est surveillee sur son run seul",
       by_id["backup_supabase"]["health"].get("table"), None)
+# Corollaire indispensable du check precedent : sans table de sortie, l'age du
+# dernier RUN est le seul signal possible. Si cette cle disparaissait d'un
+# refacto YAML, la sauvegarde redeviendrait la seule brique que rien ne
+# surveille — et c'est la seule dont la panne est irrattrapable (ADR-45).
+check("et sur l'age de son dernier run",
+      by_id["backup_supabase"]["health"].get("max_run_age_hours"), 192)
 check("le surveillant s'inscrit lui-meme",
       by_id["pipeline_health"]["health"]["domain"], "socle")
 

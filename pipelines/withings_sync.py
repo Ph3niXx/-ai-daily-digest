@@ -225,6 +225,12 @@ def load_refresh_token_from_supabase(url, key):
 
     Absent = premier run après (re)autorisation : on retombe sur le secret
     GitHub, qui n'est valable qu'une fois.
+
+    Les deux façons de ne rien lire sont dites séparément, parce qu'elles
+    appellent des gestes contraires : « pas de ligne » est nominal et se règle
+    par un OAuth, « Supabase a refusé » est une anomalie d'accès et se règle sur
+    la clé. Le silence commun aux deux a coûté un aller-retour SQL en
+    diagnostic — le log ne permettait pas de trancher.
     """
     try:
         resp = requests.get(
@@ -236,12 +242,21 @@ def load_refresh_token_from_supabase(url, key):
     except requests.RequestException as exc:
         print(f"[supabase] WARNING: lecture du refresh_token impossible ({exc})")
         return None
-    if resp.status_code == 200:
-        rows = resp.json()
-        if rows and rows[0].get("value"):
-            print("[supabase] refresh_token chargé depuis user_profile")
-            return rows[0]["value"]
-    return None
+    if resp.status_code != 200:
+        print(f"[supabase] WARNING: lecture du refresh_token refusée "
+              f"(HTTP {resp.status_code}) : {resp.text[:200]}. Vérifier "
+              f"SUPABASE_SERVICE_KEY et la table user_profile.")
+        return None
+
+    rows = resp.json()
+    if not rows or not rows[0].get("value"):
+        print("[supabase] aucun refresh_token en base — repli sur le secret "
+              "GitHub WITHINGS_REFRESH_TOKEN, valable une seule fois puisque "
+              "Withings le consomme au premier usage.")
+        return None
+
+    print("[supabase] refresh_token chargé depuis user_profile")
+    return rows[0]["value"]
 
 
 def save_refresh_token_to_supabase(url, key, token):

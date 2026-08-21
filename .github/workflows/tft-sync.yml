@@ -1,8 +1,28 @@
 name: TFT Tracker — Match Sync
 
 on:
-  schedule:
-    - cron: '0 */2 * * *'
+  # Cron retiré le 2026-08-21. NE PAS LE REMETTRE TEL QUEL.
+  #
+  # Pourquoi : la clef `RIOT_API_KEY` du dépôt est une clef de DÉVELOPPEMENT,
+  # que Riot invalide au bout de 24 h. Un cron bihoraire tire donc 12 runs par
+  # jour, dont les 12 échouent dès le lendemain de la dernière rotation à la
+  # main. Sur l'historique complet du workflow (1 170 runs depuis le
+  # 2026-04-20), 9 runs seulement sont verts — et les 9 tiennent dans une
+  # fenêtre de 22 h 35
+  # (2026-04-23 11:14 → 2026-04-24 09:49 UTC), soit exactement la durée de vie
+  # d'une clef. Ce workflow représentait à lui seul ~88 % de tout l'historique
+  # rouge du dépôt et noyait les vraies pannes des autres pipelines.
+  #
+  # Rotation de secret ≠ correctif : re-générer une clef de dev repart pour
+  # 24 h. Pour remettre le cron il faut d'abord obtenir une **Personal API Key**
+  # auprès de Riot (formulaire developer.riotgames.com, validation manuelle,
+  # clef non expirante), la poser dans `RIOT_API_KEY`, vérifier qu'un
+  # `workflow_dispatch` passe au vert plus de 24 h après la pose — et seulement
+  # alors restaurer :
+  #   schedule:
+  #     - cron: '0 */2 * * *'
+  #
+  # En attendant, le pipeline reste lançable à la main.
   workflow_dispatch:
 
 jobs:
