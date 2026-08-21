@@ -280,9 +280,10 @@ démarrage lent sur réseau mobile, pas alarmer au moindre délai. C'est
 le correctif réel de l'angle mort d'observabilité — un démarrage avorté ne peut pas écrire en
 base, mais il peut s'afficher. C'est ce qui manquait le 2026-08-05.
 
-**Mesure d'usage.** Un champ `viewport` (`mobile` / `desktop`, dérivé de `matchMedia` au
-moment de l'émission) s'ajoute à `section_opened`, documenté dans `docs/telemetry.md` avant
-le commit. Ce n'est pas une sonde binaire de survie mais une mesure continue : elle dira
+**Mesure d'usage.** Un champ `viewport` (`mobile` / `desktop`, dérivé de `window.innerWidth`)
+est estampillé dans `track()` et porté par **tous** les events, pas seulement
+`section_opened` — un point d'instrumentation unique interdit qu'un event futur y échappe.
+Documenté dans `docs/telemetry.md` avant le commit. Ce n'est pas une sonde binaire de survie mais une mesure continue : elle dira
 quels onglets sont ouverts depuis le téléphone, et alimentera le classement des vagues 3 à 5
 avec des données mobiles plutôt que des données de bureau.
 

@@ -17,9 +17,23 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 > `surface:"pwa"` signifie que le portage n'a pas trouvé son usage — voir
 > `docs/superpowers/specs/2026-07-27-mediatheque-pwa-ios-design.md`.
 
+> **`viewport`** — depuis le 2026-08-21, **tous** les events portent un champ `viewport`
+> valant `"mobile"` (largeur ≤ 760 px) ou `"desktop"`, estampillé dans `track()`
+> (`cockpit/lib/telemetry.js`) et nulle part ailleurs : un point d'instrumentation unique
+> interdit qu'un event futur y échappe. Un appelant qui fournit explicitement `viewport`
+> garde sa valeur. C'est la mesure d'usage du portage iPhone — elle dit quels onglets sont
+> ouverts depuis le téléphone, et le critère d'arrêt du programme s'y adosse (voir
+> `docs/superpowers/specs/2026-08-21-cockpit-mobile-design.md`).
+>
+> **Limite connue, à ne pas oublier en la lisant :** `usage_events` n'accepte les `INSERT`
+> que du rôle `authenticated`. Un démarrage qui meurt avant l'authentification n'écrit
+> rien. `viewport` ne verra donc jamais une panne de démarrage — « pas utilisé » et
+> « cassé » restent indiscernables dans cette table. C'est le délai de garde du loader
+> (`cockpit/lib/bootstrap.js`) qui couvre cette classe de panne, pas la télémétrie.
+
 | event_type | payload | Point d'instrumentation |
 |---|---|---|
-| `section_opened` | `{section, entry}` | Effet sur `[activePanel]` dans `cockpit/app.jsx` + `cockpit/lib/boot-mediatheque.js` |
+| `section_opened` | `{section, entry, viewport}` | Effet sur `[activePanel]` dans `cockpit/app.jsx` + `cockpit/lib/boot-mediatheque.js` |
 | `search_performed` | `{query_length, results_count}` | `cockpit/panel-search.jsx` après fetch |
 | `link_clicked` | `{url, section}` | Event delegation globale `a[target="_blank"]` dans `app.jsx` |
 | `pipeline_triggered` | `{pipeline, mode}` | `cockpit/panel-jarvis.jsx` avant `jarvisSend()` |
