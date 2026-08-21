@@ -549,17 +549,37 @@ check("pickTonight: une carte sans media_type reste traitee comme un anime",
   V.pickTonight([{ ...anCard, f: { ...anCard.f, media_type: null } }], PROG_T,
     { budgetMin: 60 }, nightAt(21)).length, 1);
 
-// ── L'agenda se retire de lui-meme ───────────────────────────
-// Aucun `if (section === 'manga')` n'est ajoute nulle part : la brique
-// disparait parce qu'elle n'a RIEN a dire (pas de next_episode_airing_at),
-// pas parce qu'on l'a exclue. Ce test verrouille cette propriete — sans lui,
-// une future valeur de repli dans buildWeek ferait reapparaitre un agenda
-// vide dans une section qui n'en aura jamais.
+// ── L'agenda exclut le manga, explicitement ───────────────────
+// buildWeek() porte une garde `if (e.kind === "manga") continue;` en tete
+// de boucle. Elle est volontaire, pas un sous-produit d'une donnee absente :
+// sans elle, la branche de repli `RELEASING && in_main_chain` (ajoutee pour
+// qu'une saison anime a la date perimee ne s'evapore pas entre deux syncs)
+// fabriquerait une ligne « date inconnue » pour CHAQUE manga en cours de
+// publication — soit l'etat normal d'un manga suivi, pas un cas rare.
 const mgFrById = new Map([["fmg", mgCard.f]]);
 const wk = V.buildWeek([mgEntry].map((e) => ({ ...e, franchise_id: "fmg" })),
   mgFrById, nightAt(14));
-check("buildWeek: des entrees manga ne produisent aucun jour", wk.count, 0);
 check("buildWeek: ni aucune ligne « plus tard »", wk.later.length, 0);
+
+// Preuve que la garde est SELECTIVE, pas un blanket "jamais d'agenda pour
+// la section manga" : dans le MEME appel, un anime RELEASING avec une vraie
+// date doit occuper l'agenda pendant qu'un manga RELEASING sans date reste
+// invisible. Sans la garde, le manga ajouterait une ligne « plus tard »
+// fantome a cote de l'anime legitime — c'est justement ce que ce test
+// detecte.
+const animeAiringEntry = { id: "ant2", kind: "season", season_number: 1,
+  airing_status: "RELEASING", episodes_total: null, next_episode_number: 5,
+  next_episode_airing_at: localAt(2026, 7, 22, 12, 0), in_main_chain: true,
+  sort_order: 0, runtime_minutes: 24 };
+const mixedFrById = new Map([["fmg", mgCard.f], ["fan", anCard.f]]);
+const weekMixed = V.buildWeek(
+  [{ ...mgEntry, franchise_id: "fmg" }, { ...animeAiringEntry, franchise_id: "fan" }],
+  mixedFrById, nightAt(14));
+check("buildWeek: mix manga+anime => seul l'anime occupe l'agenda",
+  weekMixed.days.flatMap((d) => d.items).map((i) => i.franchiseId), ["fan"]);
+check("buildWeek: mix manga+anime => aucune ligne plus tard (le manga n'y est pas)",
+  weekMixed.later.length, 0);
+check("buildWeek: mix manga+anime => count vaut 1, pas 2", weekMixed.count, 1);
 
 // ── Quatre sections ──────────────────────────────────────────
 const FOUR = ["anime", "tv", "movie", "manga"];
