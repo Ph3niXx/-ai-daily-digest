@@ -11,7 +11,12 @@
 #   read_tables   : tables Supabase lues (pour analyses)
 #   avg_duration_s: durée moyenne d'un run en secondes (observationnel)
 #   budget_usd    : coût moyen par run en USD (0 pour tier gratuit)
-#   status        : active | draft | archived
+#   status        : active | paused | draft | archived
+#                   `paused` = le workflow existe et reste lançable à la main, mais
+#                   son cron a été retiré. Comme tout statut ≠ active, il sort du
+#                   catalogue de surveillance : sa ligne est alors ÉLAGUÉE de la
+#                   table pipeline_health au contrôle suivant (ADR-40), sans quoi
+#                   elle resterait affichée « en panne » pour toujours.
 #   health        : contrat de surveillance, consommé par pipelines/pipeline_health.py
 #     domain          : section de l'onglet Santé. Vocabulaire FERMÉ de 7 valeurs
 #                       (veille_ia, apprentissage, veille_satellite, mediatheque,
@@ -23,6 +28,13 @@
 #     date_column     : colonne de date/timestamp servant à mesurer l'âge.
 #     max_age_hours   : au-delà, la donnée est déclarée `stale` même si les runs
 #                       passent au vert — c'est ce qui attrape le no-op silencieux.
+#     max_run_age_hours : (optionnel) âge maximal toléré pour le DERNIER run, quelle
+#                       que soit sa conclusion. Au-delà → `stale`. Mesure le
+#                       DÉCLENCHEMENT, là où les deux clés précédentes mesurent la
+#                       SORTIE. C'est le seul signal possible pour un pipeline qui
+#                       n'écrit aucune table : sans lui, un cron qui cesserait d'être
+#                       déclenché resterait vert indéfiniment sur la foi d'un succès
+#                       vieux de plusieurs mois (ADR-40).
 #
 #     `table` et `max_age_hours` se déclarent SÉPARÉMENT, ce qui donne trois cas :
 #       table + max_age_hours  → fraîcheur mesurée ET sanctionnée. Pour les
@@ -34,7 +46,9 @@
 #                                y est nominal — il n'a simplement pas couru. On
 #                                mesure quand même, pour pouvoir dire « plus rien
 #                                depuis 26 jours » au lieu d'un message muet.
-#       ni l'un ni l'autre     → seul le verdict du run compte.
+#       ni l'un ni l'autre     → seul le verdict du run compte, et il faut alors
+#                                déclarer `max_run_age_hours` sous peine de n'avoir
+#                                AUCUN signal si le cron cesse d'être déclenché.
 #
 #     filter          : (optionnel) fragment de requête PostgREST appliqué à la
 #                       sonde de fraîcheur — ex. `source=eq.anilist`. Nécessaire
@@ -56,7 +70,12 @@ pipelines:
     workflow_file: ".github/workflows/daily_digest.yml"
     health:
       domain: veille_ia
-      panels: [brief, updates, top]
+      # Liste dérivée de l'intersection output_tables × panels[].reads de
+      # dependencies.yaml, et non saisie à la main : elle n'annonçait que 3 onglets
+      # (brief, updates, top) alors que les 5 tables de ce pipeline en alimentent 12.
+      # Conséquence mesurée le 2026-08-21 : pendant les 4 jours de panne, 9 onglets
+      # affichaient des données gelées sans le moindre avertissement.
+      panels: [brief, updates, top, review, week, claude, search, wiki, signals, opps, stacks, history]
       table: articles
       date_column: fetch_date
       max_age_hours: 30
@@ -80,9 +99,15 @@ pipelines:
       Cron unique tous les jours 06:00 UTC. Retry Gemini ×4 avec fallback HTML si 503.
       Détection des flux RSS morts depuis le 2026-08-17 (ADR-38) : feedparser ne lève
       jamais sur un 404 ou une redirection HTML, on teste donc `status` et `entries`
-      explicitement. Socle connu de 16 flux muets sur 43 (constante MAX_DEAD_FEEDS) —
-      le run échoue dès qu'un flux de PLUS meurt, sans rougir chaque jour pour une
-      dette déjà identifiée. C'est un cliquet : il ne doit jamais remonter.
+      explicitement. Le cliquet entier MAX_DEAD_FEEDS a été remplacé le 2026-08-21
+      (ADR-39) par un ensemble nommé KNOWN_DEAD_FEEDS + un plancher MIN_ARTICLES :
+      `fetch_recent_articles()` ne lève plus jamais, et le run sort en code 1 APRÈS
+      avoir tout écrit (articles, brief, concepts, signaux, email). Deux causes
+      distinctes de rougeur : collecte sous MIN_ARTICLES, ou flux muet absent du socle
+      — auquel cas le message le NOMME. Le socle se calibre UNIQUEMENT depuis les
+      lignes [DEAD] d'un run réel sur le runner, jamais depuis une mesure locale : les
+      17 flux réparés le 2026-08-21 l'ont été sur des URL vérifiées depuis une IP
+      résidentielle, or certains CDN (Substack) répondent 200 ici et 403 au runner.
 
   - id: weekly_analysis
     name: "Analyses hebdo (Claude Haiku)"
@@ -130,8 +155,8 @@ pipelines:
 
   - id: tft_sync
     name: "TFT matches (Riot API)"
-    cron: "0 */2 * * *"
-    human_time: "Toutes les 2 heures"
+    cron: ""                      # cron retiré le 2026-08-21 — voir notes
+    human_time: "Manuel (workflow_dispatch)"
     workflow_file: ".github/workflows/tft-sync.yml"
     health:
       domain: perso
@@ -140,8 +165,9 @@ pipelines:
       table: tft_matches
       date_column: played_at
       remediation: >-
-        La clé Riot développeur expire toutes les 24 h : en régénérer une sur
-        developer.riotgames.com et mettre à jour le secret GitHub.
+        Obtenir une Personal API Key sur developer.riotgames.com (non expirante,
+        validation manuelle) et la poser dans RIOT_API_KEY. Régénérer une clé de
+        développement ne tient que 24 h et ne répare rien.
     script: "tft_pipeline.py"
     input_api: "Riot Games API (TFT)"
     output_tables:
@@ -153,7 +179,17 @@ pipelines:
     read_tables: []
     avg_duration_s: 45
     budget_usd: 0
-    status: active
+    status: paused
+    notes: >-
+      Cron retiré le 2026-08-21. RIOT_API_KEY est une clé de DÉVELOPPEMENT que Riot
+      invalide au bout de 24 h : sur 1 170 runs depuis le 2026-04-20, 9 seulement sont
+      verts, et les 9 tiennent dans une fenêtre de 22 h 35 (2026-04-23 11:14 →
+      2026-04-24 09:49 UTC) — soit exactement la durée de vie d'une clé. Ce workflow
+      pesait ~88 % de tout l'historique rouge du dépôt et noyait les vraies pannes.
+      Rotation de secret ≠ correctif : il faut une Personal API Key (non expirante,
+      formulaire Riot avec validation manuelle), puis vérifier qu'un workflow_dispatch
+      passe au vert PLUS DE 24 h après la pose, et seulement alors restaurer le cron
+      `0 */2 * * *` et repasser status à active.
 
   - id: strava_sync
     name: "Strava activités"

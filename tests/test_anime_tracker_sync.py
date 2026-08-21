@@ -59,8 +59,17 @@ check("_rel_targets: un anime ne remonte que des ids ANIME (non-regression)",
 # prune_dangling_edges tourne AVANT build_franchise. Le tombstone ecrit par
 # fetch_franchise_graph est {id, type: "OTHER"} ; le MediaType AniList ne
 # connait que ANIME et MANGA, donc "OTHER" designe un tombstone et rien
-# d'autre. Ces trois checks echouent contre l'ancien predicat
-# `t.get("type") == "ANIME"`.
+# d'autre.
+#
+# PORTEE REELLE de ces trois checks, contre l'ancien predicat
+# `t.get("type") == "ANIME"` : SEUL LE PREMIER discrimine (l'arete
+# manga->manga survivait-elle ?). Les deux autres passent sous l'ancien
+# comme sous le nouveau — ce sont des garde-fous de non-regression, pas des
+# temoins du correctif. Le filet suffit : le check 1 seul repasse la CI au
+# rouge si quelqu'un restaure l'ancien predicat. Ce commentaire disait
+# « ces trois checks echouent », ce qui etait faux et surestimait la
+# couverture — et un commentaire qui la surestime est precisement ce qui
+# empeche de la corriger.
 PRUNE_GRAPH = {
     200: {"id": 200, "type": "MANGA", "relations": {"edges": [
         {"relationType": "SEQUEL", "node": {"id": 201, "type": "MANGA"}},

@@ -1,14 +1,14 @@
 # Médiathèque
 
-> Bibliothèque personnelle rangée en trois rayons — anime, séries, films : recherche deux sources, suivi de progression par saison, alerte sur les nouvelles sorties, et une bande « Ce soir » qui tranche quoi regarder selon le temps dispo.
+> Bibliothèque personnelle rangée en quatre rayons — anime, séries, films, manga : recherche deux sources, suivi de progression par saison, alerte sur les nouvelles sorties, et une bande « Ce soir » qui tranche quoi regarder selon le temps dispo.
 
 ## Scope
 perso
 
 ## Finalité fonctionnelle
-Suivre tout ce qu'on regarde au même endroit — animes (AniList), séries et films (TMDB) : retrouver un titre avec ses saisons et leurs dates, déclarer sa progression épisode par épisode, être prévenu dès qu'une nouvelle saison d'un titre suivi est annoncée ou commence à être diffusée, et savoir quoi lancer le soir selon le temps qu'on a — sans dépendre d'un site tiers.
+Suivre tout ce qu'on regarde et tout ce qu'on lit au même endroit — animes et mangas (AniList), séries et films (TMDB) : retrouver un titre avec ses saisons et leurs dates, déclarer sa progression épisode par épisode, être prévenu dès qu'une nouvelle saison d'un titre suivi est annoncée ou commence à être diffusée, et savoir quoi lancer le soir selon le temps qu'on a — sans dépendre d'un site tiers.
 
-Toute source est traduite dans un vocabulaire unique à l'ingestion (ADR-29) : la logique d'affichage ne sait pas d'où vient une entrée. Mangas et livres restent hors périmètre.
+Toute source est traduite dans un vocabulaire unique à l'ingestion (ADR-29) : la logique d'affichage ne sait pas d'où vient une entrée. Les mangas et manhwas y ont rejoint les trois autres rayons (ADR-43), en tomes et sans calendrier. Livres et romans restent hors périmètre.
 
 ## Parcours utilisateur
 1. **Le soir (18 h → 2 h)** — l'écran s'ouvre sur la bande « Ce soir » à la place du hero : au plus trois propositions, une par rôle (ce qui vient de sortir, reprendre, sortir du lot). L'utilisateur indique son temps dispo d'un tap (30 min / 1 h / 2 h+) et les propositions se recalculent ; le choix est mémorisé pour la soirée. Un clic sur le bouton d'une carte fait +1 épisode sans ouvrir la fiche.
@@ -26,8 +26,10 @@ Toute source est traduite dans un vocabulaire unique à l'ingestion (ADR-29) : l
 - **Temps dispo en un tap** : trois pastilles (30 min / 1 h / 2 h+) filtrent les propositions sur la durée réelle d'un épisode ou d'un film. Le choix vaut pour la soirée entière, minuit compris — décider « 2 h+ » à 23 h 50 ne se réinitialise pas dix minutes plus tard. Un titre dont la durée est inconnue reste proposé, simplement classé après ceux dont la durée colle.
 - **Bande sensible à l'heure et à la journée** : passé 23 h, la bande privilégie le format le plus court et le dit. C'est un tri croissant, pas un seuil « long / pas long » — sinon trois candidats de 76, 139 et 201 minutes tombent du même côté et c'est le plus long qui sort à minuit. Une journée chargée en réunions change la phrase d'accroche, jamais le classement — et la bande ne commente ni le sport ni le sommeil.
 - **Bande « Avant l'épisode »** (section Anime uniquement) : deux ou trois mots japonais tirés du titre original de la série que la page met en avant — la première proposition **anime** de « Ce soir » le soir, le titre du hero en journée — avec lecture en kana, romanisation et sens en français. Elle n'existe pas sur Séries ni sur Films : `jp_vocab_sync` filtre `media_type == "anime"`, il n'y a aucun mot à montrer pour une franchise TMDB. Un seul geste possible : « je connais », qui sort le mot de la rotation pour de bon, partout où il apparaît. **Ce n'est ni une leçon ni un système de révision** : pas d'échéance, pas de série de jours, pas de file d'attente, pas de retard possible. Sauter un soir n'accumule rien ; un mot revient parce que la série revient. Ce choix est délibéré — c'est un arriéré de cartes en retard qui a fait abandonner l'outil de révision précédent. Duolingo et Anki gardent l'apprentissage systématique ; la médiathèque n'apporte que ce qu'eux ne peuvent pas savoir : ce qu'on s'apprête à regarder ce soir. Quand tous les mots du titre sont connus, la bande le dit en une ligne au lieu de disparaître.
-- **Recherche deux sources fusionnées** : un seul champ, une seule bascule. AniList et TMDB sont interrogés en parallèle et leurs résultats mélangés, triés par pertinence, chacun avec une pastille discrète de provenance. Si une source ne répond pas, l'autre s'affiche quand même et la liste le dit en pied — pas d'écran d'erreur tant qu'il reste quelque chose à montrer.
-- **Sections Anime / Séries / Films** : une barre d'onglets sous le titre, une section active à la fois, mémorisée entre les sessions (Anime au premier lancement). Chaque onglet porte le nombre de franchises non mises de côté de son rayon — une section vide se voit **avant** le clic. La section gouverne le hero, le rail, l'agenda et la collection ; elle ne gouverne **ni** le bandeau Sorties **ni** la bande « Ce soir », toutes deux rendues au-dessus des onglets parce que leur portée est la bibliothèque entière. Une section = un `media_type` : en ajouter une (manga, livre…) tient dans une ligne de `MDT_SECTIONS`. Remplace les chips de type multi-sélection, dont le défaut « Anime seul coché » rendait invisibles les séries et les films pourtant supportés de bout en bout depuis ADR-29.
+- **Recherche trois sources fusionnées** : un seul champ, une seule bascule. AniList/anime, AniList/manga et TMDB sont interrogés en parallèle et leurs résultats mélangés, triés par pertinence, chacun avec une pastille discrète de provenance. Si une source ne répond pas, l'autre s'affiche quand même et la liste le dit en pied — pas d'écran d'erreur tant qu'il reste quelque chose à montrer.
+- **Sections Anime / Séries / Films / Manga** : une barre d'onglets sous le titre, une section active à la fois, mémorisée entre les sessions (Anime au premier lancement). Chaque onglet porte le nombre de franchises non mises de côté de son rayon — une section vide se voit **avant** le clic. La section gouverne le hero, le rail, l'agenda et la collection ; elle ne gouverne **ni** le bandeau Sorties **ni** la bande « Ce soir », toutes deux rendues au-dessus des onglets parce que leur portée est la bibliothèque entière. Une section = un `media_type` : en ajouter une tient dans une ligne de `MDT_SECTIONS` — c'est par là que le manga est arrivé. La section **Manga n'a ni agenda ni bandeau Sorties** : aucune source ne connaît les dates de parution VF, et une brique sans source se retire plutôt que de s'afficher vide (ADR-43). Remplace les chips de type multi-sélection, dont le défaut « Anime seul coché » rendait invisibles les séries et les films pourtant supportés de bout en bout depuis ADR-29.
+- **Progression en tomes (section Manga)** : un seul compteur — les tomes lus — sur `media_progress.episodes_watched`, sans distinction entre « possédé » et « lu ». Tout le vocabulaire suit l'unité : « tome 12 sur 37 » au rail, « +1 tome » sur le hero, « À lire » / « Lu » sur les chips de statut, et les libellés d'accessibilité avec. **Le dénominateur est le nombre de tomes japonais** : « 11 / 37 » veut dire « 11 lus sur les 37 que compte la série », *pas* « 37 disponibles en français ». L'édition VF accuse couramment un à trois ans de retard, et rien côté code ne peut corriger ça — seule une source de dates VF le pourrait, et il n'en existe pas d'atteignable. Quand AniList ne connaît pas encore le nombre de tomes, le compteur n'est pas plafonné et s'affiche sans dénominateur plutôt qu'avec un « sur ? » qui suggérerait une donnée manquante réparable.
+- **Manhwas et manhuas dans la section Manga** : AniList les classe en `type: MANGA` avec `countryOfOrigin` KR/CN. Aucune colonne « pays » n'est stockée — les séparer un jour se fera en changeant `media_type` à la main sur les lignes concernées, le pipeline ne réécrivant pas `media_franchises`.
 - **Recherche en direct** : bibliothèque d'abord. Dès 1 caractère elle filtre la bibliothèque (titres anglais/romaji/japonais, insensible à la casse et aux accents, mises de côté comprises) ; à partir de 3 caractères elle interroge aussi les sources en ligne (format, année, genres, score ; les fiches déjà en bibliothèque sont signalées). La bascule segmentée « Ma bibliothèque · N | En ligne · M » atterrit sur la bibliothèque dès qu'il y a une correspondance locale.
 - **Fiche franchise** : toutes les saisons regroupées et numérotées avec dates et nombre d'épisodes, films canon à leur place chronologique, OVA/bonus à part ; prochaine diffusion datée pour les saisons en cours.
 - **Bibliothèque** (dans la section ouverte) : hero cinématique mettant en avant le titre le plus pertinent du rayon, puis rail « Continuer à regarder » (cartes bannière 16:9 de largeur fixe avec `+1 épisode` visible sans survol, la franchise du hero exclue), agenda des 7 prochains jours de diffusion, et « Ma collection » repliée (grille dense de posters, chips de statut, tri). Au filtre par défaut la collection contient **toutes les franchises actives de la section** ; les mises de côté se retrouvent via leur chip dédié ou par la recherche. Son compteur (« 12 / 47 ») est borné à la section, sans quoi il se lirait comme un filtre actif. Son état plié/déplié est mémorisé (forcé ouvert tant que la **section** est vide).
@@ -108,6 +110,10 @@ panel et les scripts chargés par la page est verrouillé par `tests/test_mediat
 - **Section vide** (Films à 1 titre, Séries à 2 au moment du découpage) : la collection est forcée dépliée quel que soit le pli mémorisé, et son message nomme le rayon (« cherche un film ci-dessus ») — un pli fermé au milieu d'un écran vide ne se lit pas comme un pli. Les onglets affichent `0` plutôt que de disparaître : une section absente ne se distinguerait pas d'une section vide.
 - **Franchise d'un type sans section déclarée** : `cardsOfSection` renvoie vide plutôt que de la replier sur « anime ». Aucun cas en base aujourd'hui (`media_type` ∈ {null, anime, tv, movie}) ; le jour où le schéma en accepte un autre, le titre doit manquer bruyamment, pas atterrir dans le mauvais rayon.
 - **Ajout depuis la recherche** : la page bascule sur la section du titre ajouté. Sans ça, ajouter une série depuis la section Anime la ferait disparaître à la fermeture de la fiche — bien en base, mais dans un onglet qu'on ne regarde pas, indiscernable d'un ajout raté.
+- **Section Manga, pas d'agenda ni de bandeau** : `buildWeek()` porte un garde-fou explicite `if (e.kind === "manga") continue;`. Ce n'est PAS emergent : sa branche de repli « `RELEASING` + `in_main_chain` » — ajoutee le 2026-07-25 pour qu'une saison a la date perimee ne s'evapore pas entre deux syncs — fabriquerait sinon une ligne « date inconnue » a chaque rendu, l'etat `RELEASING` etant celui de tout manga en cours de publication.
+- **Un manga n'entre jamais dans « Ce soir »** : `pickTonight()` filtre sur `WATCHABLE_TYPES`. La bande demande ce qu'on *regarde* ; un tome n'a pas de duree et le budget « 2 h+ » n'a aucun sens sur lui.
+- **Tomes inconnus** (`volumes` null chez AniList, serie en cours non encore comptee) : le stepper n'est pas plafonne au lieu d'etre desactive, et le libelle s'affiche sans denominateur.
+- **Un manga et son adaptation anime sont deux franchises distinctes**, avec deux progressions. Coherent avec le doublon cross-source assume par ADR-29, et souhaitable ici : lire et regarder sont deux parcours.
 - **Changement de section** : le filtre de statut retombe sur « Tous » — « Mis de côté » sur un rayon ne dit rien de l'autre, et arriver sur une section filtrée sans l'avoir demandé se lit comme une section vide.
 - **Avant 18 h** : la bande « Ce soir » n'est pas rendue et `pickTonight()` n'est pas appelé — le hero reprend sa place, la page est strictement celle d'avant.
 - **Passage de minuit** : le budget est daté du jour de *début* de session, il ne se réinitialise donc pas entre 23 h 50 et 00 h 10. Il retombe sur « 1 h » à la session suivante.
@@ -118,13 +124,44 @@ panel et les scripts chargés par la page est verrouillé par `tests/test_mediat
 - « Vu » vs « En cours · à jour » : un anime bascule « Vu » dès qu'**aucune saison ne diffuse actuellement** (aucune `RELEASING`) et que tous les épisodes sortis sont vus — y compris s'il a une saison future annoncée mais pas encore diffusée. Il repasse « En cours » quand un nouvel épisode sort non vu (`released` remonté par le pipeline quotidien). « En cours · à jour » est réservé au cas « saison en diffusion et rattrapée ».
 
 ## Limitations connues / TODO
-- [ ] mangas et livres non couverts — le schéma `media_type` les accepterait, mais la progression en chapitres/pages et l'absence de calendrier de diffusion demandent leur propre décision
+- [ ] **pas de dates de sortie VF** — aucune source atteignable au 2026-08-21 : MangaDex n'agrège que de la scanlation anglaise, OpenLibrary rend 0 résultat sur du manga français, Nautiljon répond 403 derrière Cloudflare, le quota anonyme de Google Books est épuisé (429, non concluant) et le dépôt légal BnF est par construction rétrospectif. Conséquence assumée : le dénominateur affiché est le nombre de tomes **japonais**, et l'édition française accuse couramment un à trois ans de retard
+- [ ] livres et romans non couverts — la progression en pages et l'absence totale de numérotation d'unité demanderaient leur propre décision
 - [ ] doublon cross-source assumé : un anime référencé aussi sur TMDB donne deux franchises distinctes. Dédupliquer demanderait une table de correspondance (ADR-29)
 - [ ] pas de note/score au niveau franchise (agrégée)
 - [ ] import d'historique MAL/AniList non couvert
 - [ ] deux franchises qui partagent une même entrée AniList (crossover / OVA bonus commun) ne peuvent pas être suivies en parallèle — l'ajout de la seconde échoue silencieusement (unicité de l'entrée par source). Cas rare, à corriger par « ignorer les entrées déjà présentes » ou unicité par franchise.
 
 ## Dernière MAJ
+2026-08-21 — section Manga (AniList, sans calendrier). Quatrieme rayon, ouvert aux mangas et
+manhwas que l'utilisateur **achete en VF**. Une entree = une serie, `episodes_total` = tomes
+(`volumes` AniList, jamais `chapters`), un seul compteur. Migration `sql/033_media_manga.sql`
+pour le CHECK `kind`, rien d'autre.
+
+**Ce qui n'est pas livre, et pourquoi.** Aucun calendrier de parution VF, aucune alerte de
+sortie. Cinq sources sondees le 2026-08-21, aucune exploitable : MangaDex n'agrege que de la
+scanlation anglaise, OpenLibrary rend 0 resultat sur du manga francais, Nautiljon repond 403
+derriere Cloudflare, le quota anonyme de Google Books est epuise (429, non concluant), et le
+depot legal BnF est par construction retrospectif. Le principe retenu est qu'une brique sans
+source **se retire** plutot que de s'afficher vide : deux rayons vides se lisent comme une
+panne, et on y revient plusieurs fois avant de comprendre.
+
+Trois pieges invisibles a la lecture, tous trouves a l'implementation : `released()` rendait
+**0** pour un manga `RELEASING` (pas de `nextAiringEpisode`), ce qui DESACTIVAIT le stepper et
+rendait tout manga en cours non declarable ; `pickTonight()` aurait propose de « regarder » un
+tome ; et `pruneDanglingEdges` / `prune_dangling_edges` gardaient une arete seulement si sa
+cible etait ANIME, elaguant donc **chaque** arete manga->manga et reduisant silencieusement
+toute franchise manga a son seul ancrage — le prune tournant avant `build_franchise`.
+
+La spec de conception affirmait que l'agenda disparaitrait tout seul. C'etait faux : la branche
+de repli `RELEASING && in_main_chain` de `buildWeek` lui fabriquait une ligne « date inconnue ».
+Le retrait est desormais explicite et teste.
+
+Cote pipeline, `anime_tracker_sync` a ete **etendu et non duplique** — la sonde a montre qu'un
+`id_in` sans filtre de type ramene anime et manga dans un seul appel, les ids AniList etant
+uniques entre les deux. Un predicat pur `emits_events()` interdit toute ecriture dans
+`media_releases` pour un manga : un tome paru a Tokyo n'est pas une sortie VF et l'alerte serait
+fausse par construction. Details : ADR-43.
+
 2026-08-20 — découpage en sections (Anime / Séries / Films). Les chips de type
 multi-sélection cédent la place à une barre d'onglets : une section active à la fois,
 mémorisée, avec son propre hero, son rail, son agenda et sa collection. **Aucune
