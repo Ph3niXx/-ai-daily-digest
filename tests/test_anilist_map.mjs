@@ -98,5 +98,32 @@ check("walk manga: l'adaptation ANIME n'est jamais aspiree",
 check("walk manga: buildFranchise produit des entrees kind manga",
   A.buildFranchise(MG_GRAPH, 100).entries.map((e) => e.kind), ["manga", "manga"]);
 
+// ── pruneDanglingEdges : n'elague que les TOMBSTONES ───────────
+// Le piege qui a cache le bug : les tests ci-dessus appellent chainIds /
+// buildFranchise directement, jamais pruneDanglingEdges. Or l'ancienne
+// condition `target.type === "ANIME"` prunait TOUTE arete manga->manga (pas
+// seulement les tombstones), et fetchFranchiseLive appelle prune AVANT
+// buildFranchise : une franchise manga live se serait retrouvee reduite a
+// son seul ancrage, en silence.
+const PRUNE_GRAPH = {
+  200: { id: 200, type: "MANGA", relations: { edges: [
+    { relationType: "SEQUEL", node: { id: 201, type: "MANGA" } },
+    { relationType: "SIDE_STORY", node: { id: 202, type: "OTHER" } },
+  ] } },
+  201: { id: 201, type: "MANGA", relations: { edges: [] } },
+  202: { id: 202, type: "OTHER" },
+  300: { id: 300, type: "ANIME", relations: { edges: [
+    { relationType: "SEQUEL", node: { id: 301, type: "OTHER" } },
+  ] } },
+  301: { id: 301, type: "OTHER" },
+};
+A.pruneDanglingEdges(PRUNE_GRAPH);
+check("pruneDanglingEdges: une arete manga->manga survit",
+  PRUNE_GRAPH[200].relations.edges.map((e) => e.node.id), [201]);
+check("pruneDanglingEdges: une arete manga->tombstone est elaguee",
+  PRUNE_GRAPH[200].relations.edges.some((e) => e.node.id === 202), false);
+check("pruneDanglingEdges: une arete anime->tombstone reste elaguee (non-regression)",
+  PRUNE_GRAPH[300].relations.edges, []);
+
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);

@@ -166,16 +166,20 @@
     return out;
   }
 
-  // Un id disparu d'AniList est tombstoné {id, type:"OTHER"} pour arrêter le
-  // walk — mais les edges qui le référencent le déclarent encore ANIME. On
-  // élague ces edges pour qu'aucun fantôme n'entre dans la franchise.
   function pruneDanglingEdges(mediaById) {
     for (const m of Object.values(mediaById)) {
       const edges = m.relations && m.relations.edges;
       if (!edges) continue;
       m.relations.edges = edges.filter((edge) => {
         const target = mediaById[(edge.node || {}).id];
-        return !target || target.type === "ANIME";
+        // On élague les TOMBSTONES, pas les types. `type === "ANIME"` était un
+        // proxy pour « média réel » du temps où tout était de l'anime : il
+        // supprimait de fait chaque arête manga→manga, réduisant toute
+        // franchise manga à son seul ancrage — et prune tourne AVANT
+        // buildFranchise, donc en silence. L'enum MediaType d'AniList ne
+        // connaît que ANIME et MANGA ; « OTHER » n'est écrit que par le
+        // tombstone de fetchFranchiseLive.
+        return !target || target.type !== "OTHER";
       });
     }
     return mediaById;
