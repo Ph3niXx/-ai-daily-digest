@@ -6,8 +6,8 @@ import json
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from pipelines.anime_tracker_sync import build_franchise, chain_ids, missing_ids
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "pipelines"))
+from anime_tracker_sync import build_franchise, chain_ids, missing_ids
 
 FIXTURES = json.loads((Path(__file__).parent / "fixtures" / "franchise_graphs.json").read_text(encoding="utf-8"))
 

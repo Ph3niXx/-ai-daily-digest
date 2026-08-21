@@ -38,13 +38,6 @@ jobs:
         run: |
           status=0
           for f in tests/test_*.py; do
-            # Exclusion temporaire (bug pre-commit, a corriger ailleurs):
-            # - test_franchise_walk.py: bug sys.path dans le test (insere la racine du repo
-            #   au lieu de pipelines/), ce qui empeche d'importer media_tracker_common
-            if [[ "$f" == "tests/test_franchise_walk.py" ]]; then
-              echo "── $f (excluded: pre-commit failure)"
-              continue
-            fi
             echo "── $f"
             python "$f" || status=1
           done
