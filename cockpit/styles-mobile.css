@@ -18,6 +18,13 @@
                      via le palier 720px existant de styles-evening.css ; seul
                      défaut réel = `.evening-foot .btn` sous 44px de haut,
                      corrigé ci-dessous (section « Miroir du soir »).
+     Jarvis          (audit 2026-08-21, lecture seule — pas d'accès appareil) :
+                     seul onglet de la vague 1 qui reçoit de la saisie ;
+                     `.jv-wrap` en min-height:720px dépassait la hauteur utile
+                     iPhone et 100vh ignorait la barre d'adresse Safari,
+                     textarea à 15px déclenchait le zoom Safari, `.jv-iconbtn`
+                     sous la cible tactile — corrigé ci-dessous (section
+                     « Jarvis »).
    Tous les autres n'ont PAS été vérifiés sous 760 px et se replient au
    mieux à 900-920 px, une largeur de tablette. Ne pas lire l'absence de
    règle ici comme « ce panel va bien » — c'est ce silence qui avait rendu
@@ -314,6 +321,46 @@
     white-space: nowrap;
   }
   .ps-body { padding-bottom: 24px; }
+
+  /* ─── Jarvis — le seul onglet de la vague 1 qui recoit de la saisie ───
+     styles-jarvis.css ne descend qu'a 880 px, et ce palier ne fait qu'une
+     chose : passer .jv-wrap en une colonne et masquer .jv-memory. Le reste
+     de la mise en page reste celle du bureau.
+
+     Ne PAS toucher au defilement : .jv-scroll porte deja
+     `flex:1; min-height:0; overflow-y:auto` (styles-jarvis.css:268) et
+     .jv-chat est deja `flex column; min-height:0` (l.31). .jv-feed n'est
+     PAS le conteneur de defilement — c'est une boite centree de 720 px a
+     l'interieur de .jv-scroll. Y poser overflow-y creerait un second
+     scroller imbrique.
+
+     Les quatre regles ci-dessous traitent des defauts constates par lecture
+     du CSS existant, pas des suppositions. */
+
+  /* LE defaut de mise en page. .jv-wrap impose `height: calc(100vh - 41px)`
+     ET `min-height: 720px` (l.16-17). Sur un iPhone, le min-height depasse
+     la hauteur utile une fois la barre d'adresse et la barre d'accueil
+     deduites : le composer passe sous la ligne de flottaison. Et 100vh
+     ignore la barre d'adresse retractable de Safari, la ou 100dvh la suit. */
+  .jv-wrap { height: 100dvh; min-height: 0; }
+
+  /* En colonne unique, la bordure droite de la colonne chat devient un trait
+     vertical orphelin colle au bord de l'ecran. */
+  .jv-chat { border-right: none; }
+
+  /* 36 px de padding de chaque cote (l.286 et l.505) ne laissent que 318 px
+     de contenu sur un ecran de 390. L'inset bas est ce qui empeche le bouton
+     d'envoi de passer sous la barre d'accueil en PWA plein ecran. */
+  .jv-feed { padding: 0 16px; }
+  .jv-composer-wrap { padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Le textarea est a 15 px (l.568) — un pixel sous le seuil. Safari zoome
+     sur tout champ de saisie sous 16 px et ne dezoome jamais ensuite. 16px
+     n'est pas un choix esthetique, c'est le seuil exact. */
+  .jv-composer textarea { font-size: 16px; }
+
+  /* .jv-iconbtn fait 32x32 (l.111) : sous la cible tactile minimale. */
+  .jv-iconbtn, .jv-send { min-width: 44px; min-height: 44px; }
 }
 
 /* Très petits écrans (≤380px) : paddings resserrés */
