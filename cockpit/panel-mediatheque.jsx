@@ -91,15 +91,21 @@ function MdtStepper({ entry, progressById, onProgress }) {
   const [editing, setEditing] = useMdtState(false);
   const watched = progressById.get(entry.id) || 0;
   const released = mdtReleased(entry);
-  const max = released;                       // plafonné aux épisodes sortis
-  const disabled = entry.airing_status === "NOT_YET_RELEASED" || max === 0;
-  const clamp = (v) => Math.max(0, Math.min(max, v));
+  // Un manga dont AniList ne connaît pas encore le nombre de tomes donnerait
+  // max=0, donc un stepper désactivé sur une série qu'on est en train de lire.
+  // On le déplafonne plutôt que de le condamner.
+  const uncapped = entry.kind === "manga" && entry.episodes_total == null;
+  const max = released;
+  const disabled = entry.airing_status === "NOT_YET_RELEASED" || (max === 0 && !uncapped);
+  const clamp = (v) => (uncapped ? Math.max(0, v) : Math.max(0, Math.min(max, v)));
   // Dénominateur : pour une saison en diffusion on montre les épisodes SORTIS
   // à date (released), pas le total planifié — évite le « x/? » quand AniList
   // n'a pas encore renseigné episodes_total. Le total prévu reste en contexte.
   const total = entry.episodes_total;
   const countLabel =
-    entry.airing_status === "RELEASING"
+    entry.kind === "manga"
+      ? `${watched}/${total != null ? total : "?"}`
+      : entry.airing_status === "RELEASING"
       ? (total != null && total > released ? `${watched}/${released} · ${total} prévus` : `${watched}/${released}`)
       : entry.airing_status === "NOT_YET_RELEASED"
         ? `${watched}/${total != null ? total : "—"}`
@@ -116,7 +122,7 @@ function MdtStepper({ entry, progressById, onProgress }) {
           />
         ) : countLabel}
       </span>
-      <button disabled={disabled || watched >= max} onClick={() => onProgress(entry, clamp(watched + 1))} aria-label="Un épisode de plus">+</button>
+      <button disabled={disabled || (!uncapped && watched >= max)} onClick={() => onProgress(entry, clamp(watched + 1))} aria-label="Un épisode de plus">+</button>
       <button disabled={disabled || watched >= max} className="mdt-chip" style={{ marginLeft: 4 }}
         onClick={() => onProgress(entry, max)} title="Marquer tous les épisodes sortis comme vus">✓ vue</button>
     </div>
@@ -498,6 +504,9 @@ const MDT_SECTIONS = [
   { id: "movie", label: "Films",  kicker: "Personnel · films",
     japanese: false, emptyHint: "cherche un film ci-dessus pour commencer",
     searchLabel: "Rechercher un film" },
+  { id: "manga", label: "Manga",  kicker: "Personnel · manga",
+    japanese: false, emptyHint: "cherche un manga ci-dessus pour commencer",
+    searchLabel: "Rechercher un manga" },
 ];
 const MDT_SECTION_IDS = MDT_SECTIONS.map((s) => s.id);
 
@@ -872,20 +881,24 @@ function PanelMediatheque({ data, onNavigate }) {
     if (!searching) { setResults(null); setSearchErr(null); return; }
     let cancelled = false;
     const t = setTimeout(async () => {
-      const [ani, tmdb] = await Promise.allSettled([
+      const [ani, manga, tmdb] = await Promise.allSettled([
         window.anilist.searchAnime(q),
+        window.anilist.searchManga(q),
         tmdbKey && window.tmdb ? window.tmdb.search(q, tmdbKey) : Promise.resolve([]),
       ]);
       if (cancelled) return;
 
-      const aniRows = ani.status === "fulfilled" ? ani.value.map((m) => ({
+      // Forme commune aux deux corpus AniList : seul le badge diffère.
+      const aniMap = (badge) => (m) => ({
         src: "anilist", kind: null, id: m.id,
         title: (m.title && (m.title.english || m.title.romaji)) || "?",
         native: (m.title && m.title.native) || null,
         year: (m.startDate && m.startDate.year) || null,
         format: m.format || null, poster: (m.coverImage && m.coverImage.large) || null,
-        genres: m.genres || [], badge: "Anime", score: m.averageScore || 0,
-      })) : [];
+        genres: m.genres || [], badge, score: m.averageScore || 0,
+      });
+      const aniRows = ani.status === "fulfilled" ? ani.value.map(aniMap("Anime")) : [];
+      const mangaRows = manga.status === "fulfilled" ? manga.value.map(aniMap("Manga")) : [];
 
       const tmdbRows = tmdb.status === "fulfilled" ? tmdb.value.map((r) => ({
         src: "tmdb", kind: r.kind, id: r.tmdb_id,
@@ -900,13 +913,14 @@ function PanelMediatheque({ data, onNavigate }) {
       // Une source qui tombe ne doit pas masquer l'autre : on affiche ce qu'on
       // a et on le signale, plutôt qu'un écran d'erreur alors que la moitié du
       // résultat est disponible. Erreur bloquante seulement si TOUT a échoué.
-      const failed = [ani, tmdb].filter((p) => p.status === "rejected").length;
-      setResults([...aniRows, ...tmdbRows].sort((a, b) => b.score - a.score));
-      setSearchErr(failed === 2 ? "Aucune source ne répond — réessaie dans un instant."
-        : failed === 1 ? "Une source n'a pas répondu — résultats partiels." : null);
+      const sources = [ani, manga, tmdb];
+      const failed = sources.filter((p) => p.status === "rejected").length;
+      setResults([...aniRows, ...mangaRows, ...tmdbRows].sort((a, b) => b.score - a.score));
+      setSearchErr(failed === sources.length ? "Aucune source ne répond — réessaie dans un instant."
+        : failed >= 1 ? "Une source n'a pas répondu — résultats partiels." : null);
       mdtTrack("mediatheque_search", {
-        q_len: q.length, results: aniRows.length + tmdbRows.length,
-        sources: (aniRows.length ? 1 : 0) + (tmdbRows.length ? 1 : 0),
+        q_len: q.length, results: aniRows.length + mangaRows.length + tmdbRows.length,
+        sources: (aniRows.length ? 1 : 0) + (mangaRows.length ? 1 : 0) + (tmdbRows.length ? 1 : 0),
       });
     }, 400);
     return () => { cancelled = true; clearTimeout(t); };
