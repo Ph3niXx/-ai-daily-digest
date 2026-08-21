@@ -42,6 +42,14 @@
     return e && e.kind === "manga" ? "tome" : "ép.";
   }
 
+  // Forme longue, pour les libellés qui écrivent le mot en entier : boutons
+  // « +1 … », aria-labels, titres. `unitOf` rend la forme abrégée employée
+  // DANS les libellés de progression (« ép. ») ; les deux ne sont pas
+  // interchangeables, et un ternaire recopié à chaque site d'appel dériverait.
+  function unitLongOf(e) {
+    return e && e.kind === "manga" ? "tome" : "épisode";
+  }
+
   // Étiquette de saison partagée par les deux libellés (rail et hero/carte).
   // `kind` est durci : une entrée sans kind ne doit pas faire planter le rendu.
   function kindTag(cur) {
@@ -451,7 +459,7 @@
     released, kindTag, nextEpLabel, curLabel, status, currentEntryOf,
     nextAiringOf, pickHero, normalize, matchesQuery, pickRail, buildWeek,
     isEvening, pickTonight, tonightHeadline, fitsBudget, airedToday,
-    typeOf, cardsOfSection, countBySection, unitOf,
+    typeOf, cardsOfSection, countBySection, unitOf, unitLongOf,
   };
   if (typeof window !== "undefined") window.mdtView = Object.assign(window.mdtView || {}, api);
   if (typeof module !== "undefined" && module.exports) module.exports = api;

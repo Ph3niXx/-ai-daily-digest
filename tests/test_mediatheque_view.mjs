@@ -499,6 +499,15 @@ check("unitOf: film => ep.", V.unitOf({ kind: "movie" }), "ép.");
 check("unitOf: entree sans kind => ep. (defaut historique)",
   V.unitOf({}), "ép.");
 
+// unitLongOf rend la forme LONGUE, pour les libelles qui ecrivent le mot en
+// entier (boutons "+1 ...", aria-labels, titres) -- pas interchangeable avec
+// unitOf, qui reste la forme abregee des libelles de progression.
+check("unitLongOf: manga => tome", V.unitLongOf(mangaOngoing), "tome");
+check("unitLongOf: saison => episode", V.unitLongOf({ kind: "season" }), "épisode");
+check("unitLongOf: film => episode", V.unitLongOf({ kind: "movie" }), "épisode");
+check("unitLongOf: entree sans kind => episode (defaut historique)",
+  V.unitLongOf({}), "épisode");
+
 check("nextEpLabel: manga => « tome N sur M », pas « ep. »",
   V.nextEpLabel(mangaOngoing, 11), "tome 12 sur 37");
 check("nextEpLabel: manga sans volumes => denominateur inconnu",

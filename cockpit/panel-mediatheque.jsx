@@ -112,7 +112,7 @@ function MdtStepper({ entry, progressById, onProgress }) {
         : `${watched}/${total != null ? total : (released || "?")}`;
   return (
     <div className="mdt-stepper">
-      <button disabled={disabled || watched <= 0} onClick={() => onProgress(entry, clamp(watched - 1))} aria-label="Un épisode de moins">−</button>
+      <button disabled={disabled || watched <= 0} onClick={() => onProgress(entry, clamp(watched - 1))} aria-label={`Un ${window.mdtView.unitLongOf(entry)} de moins`}>−</button>
       <span className="mdt-stepper-count" onClick={() => !disabled && setEditing(true)}>
         {editing ? (
           <input
@@ -122,9 +122,9 @@ function MdtStepper({ entry, progressById, onProgress }) {
           />
         ) : countLabel}
       </span>
-      <button disabled={disabled || (!uncapped && watched >= max)} onClick={() => onProgress(entry, clamp(watched + 1))} aria-label="Un épisode de plus">+</button>
+      <button disabled={disabled || (!uncapped && watched >= max)} onClick={() => onProgress(entry, clamp(watched + 1))} aria-label={`Un ${window.mdtView.unitLongOf(entry)} de plus`}>+</button>
       <button disabled={disabled || watched >= max} className="mdt-chip" style={{ marginLeft: 4 }}
-        onClick={() => onProgress(entry, max)} title="Marquer tous les épisodes sortis comme vus">✓ vue</button>
+        onClick={() => onProgress(entry, max)} title={`Marquer tous les ${window.mdtView.unitLongOf(entry)}s sortis comme vus`}>✓ vue</button>
     </div>
   );
 }
@@ -459,7 +459,7 @@ function MdtHero({ hero, progressById, onOpen, onProgress }) {
           {copy.quick && cur && (
             <button className="mdt-btn mdt-btn--ghost mdt-hero-quick"
               onClick={() => onProgress(cur, Math.min(mdtReleased(cur), (progressById.get(cur.id) || 0) + 1))}>
-              +1 épisode
+              +1 {window.mdtView.unitLongOf(cur)}
             </button>
           )}
         </div>
@@ -661,6 +661,9 @@ function MdtTonight({ picks, headline, budget, onBudget, progressById, onOpen, o
                       });
                       onProgress(p.entry, watched + 1);
                     }}>
+                    {/* Jamais de manga ici : pickTonight l'exclut par construction
+                       (WATCHABLE_TYPES, mediatheque-view.js, Tâche 1-3) — "+1 épisode"
+                       reste toujours vrai ; ne pas le remplacer par unitLongOf. */}
                     {p.role === "discover" ? "▶ Commencer" : "+1 épisode"}
                   </button>
                 </div>
@@ -701,7 +704,7 @@ function MdtRail({ cards, progressById, onOpen, onProgress }) {
                 {cur && (
                   <button className="mdt-chip mdt-rail-plus"
                     onClick={() => onProgress(cur, Math.min(rel, watched + 1))}>
-                    +1 épisode
+                    +1 {window.mdtView.unitLongOf(cur)}
                   </button>
                 )}
               </div>
