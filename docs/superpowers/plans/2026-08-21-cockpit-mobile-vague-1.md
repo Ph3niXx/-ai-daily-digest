@@ -926,10 +926,33 @@ Si l'audit n'a rien révélé, commiter tout de même la mise à jour de l'en-t�
 - Consumes: rien
 - Produces: rien
 
-- [ ] **Step 1 : Relever la structure réelle du composer**
+- [ ] **Step 1 : Connaître la structure réelle (relevée le 2026-08-21, à ne pas re-dériver)**
 
-Run: `grep -n "jv-composer\|jv-feed\|jv-chat\|textarea" cockpit/panel-jarvis.jsx | head -20`
-Expected : identifier l'imbrication exacte de `.jv-chat` > `.jv-feed` + `.jv-composer-wrap` > `.jv-composer` > `.jv-composer-inner`, et la balise de saisie.
+L'imbrication effective, lue dans `cockpit/panel-jarvis.jsx:615-800` — elle **ne correspond pas** à ce qu'une lecture rapide suggère :
+
+```
+.jv-wrap                 grille 2 colonnes, height: calc(100vh - 41px), min-height: 720px
+  .jv-chat               flex column, min-height: 0, border-right
+    header.jv-header     flex-shrink: 0
+    .jv-scroll           flex:1, min-height:0, overflow-y:auto  ← LE conteneur de defilement
+      .jv-feed           max-width 720px, margin auto, padding 0 36px  (PAS un scroller)
+    .jv-composer-wrap    flex-shrink:0, padding 10px 36px 16px
+      .jv-composer-inner max-width 720px
+        .jv-prompts
+        .jv-composer     flex, align-items: flex-end
+          textarea       font-size: 15px
+          .jv-composer-actions
+            .jv-iconbtn ×2   32×32
+            .jv-send
+  .jv-memory             masquee sous 880px par styles-jarvis.css:23-26
+```
+
+Deux conséquences qui gouvernent le Step 2 : **le défilement fonctionne déjà** (`.jv-scroll` porte tout ce qu'il faut, `styles-jarvis.css:268`) — ne pas y toucher, et surtout ne pas poser d'`overflow-y` sur `.jv-feed`, ce qui créerait un second scroller imbriqué. Et le palier 880 px existant ne fait qu'une chose : passer `.jv-wrap` en une colonne et masquer `.jv-memory`.
+
+Vérifier que cette structure n'a pas bougé avant d'écrire le CSS :
+
+Run: `grep -n "jv-wrap\|jv-chat\|jv-scroll\|jv-feed\|jv-composer-wrap\|jv-composer\"\|jv-send" cockpit/panel-jarvis.jsx | head -12`
+Expected : `.jv-scroll` présent et englobant `.jv-feed`. Si ce n'est plus le cas, **s'arrêter et remonter** — le Step 2 repose dessus.
 
 - [ ] **Step 2 : Ajouter le bloc mobile**
 
@@ -937,37 +960,54 @@ Dans le `@media (max-width: 760px)` de `cockpit/styles-mobile.css` :
 
 ```css
   /* ─── Jarvis — le seul onglet de la vague 1 qui recoit de la saisie ───
-     styles-jarvis.css ne descend qu'a 880 px, un palier de tablette. Les
-     trois regles ci-dessous traitent des comportements propres a iOS, pas
-     un simple retrecissement. */
+     styles-jarvis.css ne descend qu'a 880 px, et ce palier ne fait qu'une
+     chose : passer .jv-wrap en une colonne et masquer .jv-memory. Le reste
+     de la mise en page reste celle du bureau.
 
-  /* Le clavier iOS recouvre le bas de l'ecran : le fil doit garder sa propre
-     hauteur de defilement, sinon le composer sort du viewport. 100dvh suit
-     la barre d'adresse retractable, ce que 100vh ne fait pas. */
-  .jv-chat { height: 100dvh; display: flex; flex-direction: column; }
-  .jv-feed { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+     Ne PAS toucher au defilement : .jv-scroll porte deja
+     `flex:1; min-height:0; overflow-y:auto` (styles-jarvis.css:268) et
+     .jv-chat est deja `flex column; min-height:0` (l.31). .jv-feed n'est
+     PAS le conteneur de defilement — c'est une boite centree de 720 px a
+     l'interieur de .jv-scroll. Y poser overflow-y creerait un second
+     scroller imbrique.
 
-  /* La barre d'accueil de l'iPhone mange le bas de la zone sure. Sans cet
-     inset, le bouton d'envoi tombe dessous et devient intouchable en PWA
-     plein ecran. */
-  .jv-composer-wrap { padding-bottom: env(safe-area-inset-bottom, 0px); }
+     Les quatre regles ci-dessous traitent des defauts constates par lecture
+     du CSS existant, pas des suppositions. */
 
-  /* Safari zoome automatiquement sur tout champ de saisie sous 16 px, et ne
-     dezoome jamais apres. 16px n'est pas un choix esthetique : c'est le
-     seuil exact au-dessous duquel iOS declenche le zoom. */
-  .jv-composer textarea,
-  .jv-composer input { font-size: 16px; }
+  /* LE defaut de mise en page. .jv-wrap impose `height: calc(100vh - 41px)`
+     ET `min-height: 720px` (l.16-17). Sur un iPhone, le min-height depasse
+     la hauteur utile une fois la barre d'adresse et la barre d'accueil
+     deduites : le composer passe sous la ligne de flottaison. Et 100vh
+     ignore la barre d'adresse retractable de Safari, la ou 100dvh la suit. */
+  .jv-wrap { height: 100dvh; min-height: 0; }
 
-  /* Les actions du composer passent sous le champ plutot que de le comprimer. */
-  .jv-composer-inner { flex-direction: column; align-items: stretch; gap: 8px; }
-  .jv-composer-actions { justify-content: flex-end; }
-  .jv-iconbtn { min-width: 44px; min-height: 44px; }
+  /* En colonne unique, la bordure droite de la colonne chat devient un trait
+     vertical orphelin colle au bord de l'ecran. */
+  .jv-chat { border-right: none; }
+
+  /* 36 px de padding de chaque cote (l.286 et l.505) ne laissent que 318 px
+     de contenu sur un ecran de 390. L'inset bas est ce qui empeche le bouton
+     d'envoi de passer sous la barre d'accueil en PWA plein ecran. */
+  .jv-feed { padding: 0 16px; }
+  .jv-composer-wrap { padding: 10px 16px calc(16px + env(safe-area-inset-bottom, 0px)); }
+
+  /* Le textarea est a 15 px (l.568) — un pixel sous le seuil. Safari zoome
+     sur tout champ de saisie sous 16 px et ne dezoome jamais ensuite. 16px
+     n'est pas un choix esthetique, c'est le seuil exact. */
+  .jv-composer textarea { font-size: 16px; }
+
+  /* .jv-iconbtn fait 32x32 (l.111) : sous la cible tactile minimale. */
+  .jv-iconbtn, .jv-send { min-width: 44px; min-height: 44px; }
 ```
 
 - [ ] **Step 3 : Vérifier que les sélecteurs existent réellement**
 
-Run: `for c in jv-chat jv-feed jv-composer-wrap jv-composer-inner jv-composer-actions jv-iconbtn; do printf "%-22s jsx:%s\n" "$c" "$(grep -c "$c" cockpit/panel-jarvis.jsx)"; done`
-Expected : chaque classe apparaît au moins une fois dans le JSX. **Une classe à 0 est un sélecteur mort** — corriger le CSS pour cibler la vraie classe, ne pas l'ajouter au JSX pour faire coller le CSS.
+Les six classes que le Step 2 cible sont `jv-wrap`, `jv-chat`, `jv-feed`, `jv-composer-wrap`, `jv-composer`, `jv-iconbtn`, `jv-send`. Chacune doit apparaître dans le JSX :
+
+Run: `grep -c "jv-wrap" cockpit/panel-jarvis.jsx` (puis idem pour chaque classe, une commande par classe)
+Expected : chaque compte ≥ 1. **Une classe à 0 est un sélecteur mort** — corriger le CSS pour cibler la vraie classe, jamais ajouter la classe au JSX pour faire coller le CSS. C'est ce réflexe inversé qui avait produit ~38 sélecteurs morts lors de l'audit du 2026-05-22.
+
+Vérifier aussi qu'aucune règle du Step 2 ne duplique une règle déjà portée par `styles-jarvis.css` : `.jv-chat` y est déjà `flex column; min-height: 0` (l.31-36) et `.jv-scroll` déjà `flex:1; overflow-y:auto` (l.268-274). Le Step 2 ne doit rien réaffirmer de tout ça.
 
 - [ ] **Step 4 : Mettre à jour l'en-tête de `styles-mobile.css`**
 
@@ -1039,10 +1079,14 @@ Expected après correction : aucune occurrence.
 
 ```bash
 python scripts/validate_spec.py
-python scripts/lint_specs.py
+python scripts/lint_specs_produit.py
 python scripts/lint_claude_md.py
-python scripts/validate_arch.py
+python scripts/validate_architecture.py
 ```
+
+(Noms relevés dans les workflows `validate-spec.yml`, `lint-specs.yml`,
+`lint-claude-md.yml` et `validate-arch.yml` — ce ne sont pas les noms qu'on
+devine à partir des noms de workflows.)
 
 Expected : tous en succès. **Attention** : sous Windows, ces scripts plantent en `UnicodeEncodeError` sur les caractères non-cp1252, y compris sur le symbole d'échec — un crash ne veut donc pas dire « ça passe ». Lancer avec `PYTHONIOENCODING=utf-8` pour lire le vrai verdict :
 
