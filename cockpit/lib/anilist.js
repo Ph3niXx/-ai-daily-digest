@@ -17,7 +17,10 @@
     const edges = (media.relations && media.relations.edges) || [];
     for (const edge of edges) {
       const node = edge.node || {};
-      if (relTypes.includes(edge.relationType) && node.type === "ANIME") out.push(node.id);
+      // Le type de l'ANCRE, pas « ANIME » en dur : sinon le walk d'un manga ne
+      // trouve rien (ses SEQUEL/PREQUEL sont de type MANGA) et, pire, on
+      // risquerait d'aspirer son adaptation anime dans la même franchise.
+      if (relTypes.includes(edge.relationType) && node.type === media.type) out.push(node.id);
     }
     return out;
   }
@@ -51,6 +54,7 @@
   }
 
   function kindOf(media, inChain) {
+    if (media.type === "MANGA") return "manga";
     const f = media.format || "";
     if (inChain && SEASON_FORMATS.includes(f)) return "season";
     if (f === "MOVIE") return "movie";
@@ -94,15 +98,21 @@
   // ── Réseau ─────────────────────────────────────────────────────
   const GQL_URL = "https://graphql.anilist.co";
   const MEDIA_FIELDS = `
-    id idMal type format status episodes duration averageScore genres
+    id idMal type format status episodes volumes chapters duration averageScore genres
     description(asHtml: false)
     title { romaji english native }
     startDate { year month day } endDate { year month day }
     coverImage { large color } bannerImage
     nextAiringEpisode { episode airingAt }
     relations { edges { relationType node { id type format } } }`;
-  const SEARCH_QUERY = `query($q:String){Page(page:1,perPage:12){media(search:$q,type:ANIME,sort:SEARCH_MATCH){${MEDIA_FIELDS}}}}`;
-  const BATCH_QUERY = `query($ids:[Int]){Page(page:1,perPage:25){media(id_in:$ids,type:ANIME){${MEDIA_FIELDS}}}}`;
+  // La recherche est bornée par type (on cherche « des animes » ou « des mangas »),
+  // le batch ne l'est PAS : les ids AniList sont uniques entre ANIME et MANGA
+  // (Media(id:30642, type:ANIME) -> Not Found, vérifié le 2026-08-21), donc un
+  // même appel rafraîchit les deux et fetchFranchiseLive marche pour les deux
+  // sans changer de signature.
+  const SEARCH_QUERY = (type) =>
+    `query($q:String){Page(page:1,perPage:12){media(search:$q,type:${type},sort:SEARCH_MATCH){${MEDIA_FIELDS}}}}`;
+  const BATCH_QUERY = `query($ids:[Int]){Page(page:1,perPage:25){media(id_in:$ids){${MEDIA_FIELDS}}}}`;
 
   // File d'attente : 1 requête / 700 ms mini, retry x2 sur 429 (Retry-After).
   let lastCall = 0;
@@ -136,14 +146,16 @@
   }
 
   const searchCache = new Map();
-  async function searchAnime(q) {
-    const key = q.trim().toLowerCase();
+  async function search(q, type) {
+    const key = type + ":" + q.trim().toLowerCase();
     if (searchCache.has(key)) return searchCache.get(key);
-    const data = await gql(SEARCH_QUERY, { q });
+    const data = await gql(SEARCH_QUERY(type), { q });
     const results = (data.Page && data.Page.media) || [];
     searchCache.set(key, results);
     return results;
   }
+  async function searchAnime(q) { return search(q, "ANIME"); }
+  async function searchManga(q) { return search(q, "MANGA"); }
 
   async function fetchMediaBatch(ids) {
     const out = {};
@@ -204,7 +216,7 @@
   function toFranchiseRow(built, mediaById) {
     const root = mediaById[built.root_id];
     return {
-      media_type: "anime",
+      media_type: root.type === "MANGA" ? "manga" : "anime",
       source: "anilist",
       source_root_id: built.root_id,
       title_romaji: (root.title && root.title.romaji) || null,
@@ -232,7 +244,12 @@
         title_native: (m.title && m.title.native) || null,
         format: m.format || null,
         airing_status: m.status || null,
-        episodes_total: m.episodes != null ? m.episodes : (m.format === "MOVIE" ? 1 : null),
+        // Un manga se compte en TOMES. `chapters` n'est jamais un repli : 224
+        // chapitres à la place de 29 tomes rendrait le compteur ininterprétable
+        // pour quelqu'un qui achète des volumes reliés.
+        episodes_total: m.type === "MANGA"
+          ? (m.volumes != null ? m.volumes : null)
+          : (m.episodes != null ? m.episodes : (m.format === "MOVIE" ? 1 : null)),
         // Durée d'UN épisode (ou du film). Alimente le filtrage par budget de
         // pickTonight(). null si AniList ne la connaît pas — jamais 0, qui
         // ferait passer l'entrée pour instantanée.
@@ -248,7 +265,7 @@
     });
   }
 
-  const api = { chainIds, missingIds, buildFranchise, gql, searchAnime,
+  const api = { chainIds, missingIds, buildFranchise, gql, searchAnime, searchManga,
     fetchFranchiseLive, pruneDanglingEdges, fuzzyDate, toFranchiseRow, toEntryRows };
   if (typeof window !== "undefined") window.anilist = Object.assign(window.anilist || {}, api);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
