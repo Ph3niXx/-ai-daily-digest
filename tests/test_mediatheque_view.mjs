@@ -463,5 +463,62 @@ check("invariant: les sections partitionnent la bibliotheque, aucune carte perdu
   SECTION_IDS.reduce((n, s) => n + V.cardsOfSection(SEC_CARDS, s).length, 0),
   SEC_CARDS.length);
 
+// ── Manga : released() / unitOf() / libelles ──────────────────
+// Le piege central : un manga RELEASING n'a pas de nextAiringEpisode, donc
+// next_episode_number est null, donc la branche RELEASING de released()
+// renverrait 0 -> max=0 dans MdtStepper -> stepper DESACTIVE. Un manga en
+// cours de publication serait integralement non declarable.
+// `in_main_chain` et `sort_order` ne sont pas decoratifs : currentEntryOf()
+// fait `entries.filter((e) => e.in_main_chain)` et rendrait null sans eux.
+// toEntryRows ecrit toujours ces deux champs, la fixture colle donc au reel.
+const mangaOngoing = { id: "mg1", kind: "manga", airing_status: "RELEASING",
+  episodes_total: 37, next_episode_number: null, season_number: null,
+  in_main_chain: true, sort_order: 0 };
+const mangaDone = { id: "mg2", kind: "manga", airing_status: "FINISHED",
+  episodes_total: 29, next_episode_number: null, season_number: null,
+  in_main_chain: true, sort_order: 0 };
+const mangaUnknown = { id: "mg3", kind: "manga", airing_status: "RELEASING",
+  episodes_total: null, next_episode_number: null, season_number: null,
+  in_main_chain: true, sort_order: 0 };
+
+check("released: manga RELEASING => ses tomes, PAS 0 (sinon stepper mort)",
+  V.released(mangaOngoing), 37);
+check("released: manga FINISHED => ses tomes", V.released(mangaDone), 29);
+// Jamais null : status() fait `s + released(e)` (que null traverse) mais
+// currentEntryOf() fait `watched < released(e)`, et `5 < null` est FAUX —
+// le manga ne serait alors jamais l'entree courante, sans aucune erreur.
+check("released: manga sans volumes => 0, jamais null", V.released(mangaUnknown), 0);
+check("released: le type de retour reste un nombre",
+  typeof V.released(mangaUnknown), "number");
+
+// unitOf rend la forme EMPLOYEE DANS LES LIBELLES (« ep. » abrege, « tome »
+// non), pas un nom canonique : c'est nextEpLabel qui la consomme telle quelle.
+check("unitOf: manga => tome", V.unitOf(mangaOngoing), "tome");
+check("unitOf: saison => ep.", V.unitOf({ kind: "season" }), "ép.");
+check("unitOf: film => ep.", V.unitOf({ kind: "movie" }), "ép.");
+check("unitOf: entree sans kind => ep. (defaut historique)",
+  V.unitOf({}), "ép.");
+
+check("nextEpLabel: manga => « tome N sur M », pas « ep. »",
+  V.nextEpLabel(mangaOngoing, 11), "tome 12 sur 37");
+check("nextEpLabel: manga sans volumes => denominateur inconnu",
+  V.nextEpLabel(mangaUnknown, 4), "tome 5");
+check("curLabel: manga => « 11/37 » sans etiquette de saison",
+  V.curLabel(mangaOngoing, new Map([["mg1", 11]])), "11/37");
+check("curLabel: manga jamais lu", V.curLabel(mangaDone, new Map()), "0/29");
+
+// Non-regression : les libelles anime ne bougent pas d'un caractere.
+check("nextEpLabel: anime inchange",
+  V.nextEpLabel({ kind: "season", season_number: 2, airing_status: "FINISHED", episodes_total: 24 }, 15),
+  "S2 · ép. 16 sur 24");
+
+// status() et currentEntryOf() doivent continuer de fonctionner sur un manga.
+check("status: manga entame => En cours",
+  V.status([mangaOngoing], new Map([["mg1", 11]])).id, "watching");
+check("status: manga tout lu et termine => Vu",
+  V.status([mangaDone], new Map([["mg2", 29]])).id, "seen");
+check("currentEntryOf: le manga entame est bien l'entree courante",
+  (V.currentEntryOf([mangaOngoing], new Map([["mg1", 11]])) || {}).id, "mg1");
+
 console.log(failures ? `\n${failures} test(s) en echec` : "\nTous les tests passent");
 process.exit(failures ? 1 : 0);

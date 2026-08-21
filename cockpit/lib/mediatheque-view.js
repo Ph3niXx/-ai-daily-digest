@@ -17,9 +17,29 @@
   // Épisodes réellement sortis pour une entrée. Source de vérité unique :
   // panel-mediatheque.jsx::mdtReleased() délègue ici.
   function released(e) {
+    // Un manga n'a AUCUN calendrier de diffusion : AniList ne renvoie pas de
+    // nextAiringEpisode pour le type MANGA, donc next_episode_number est null
+    // et la branche RELEASING ci-dessous rendrait 0 — soit max=0 dans
+    // MdtStepper, soit un manga en cours intégralement non déclarable.
+    // Ses tomes parus SONT son total connu.
+    //
+    // `|| 0` et pas `?? null` : le contrat de retour est un NOMBRE. status()
+    // fait `s + released(e)` (que null traverserait sans bruit) mais
+    // currentEntryOf() fait `watched < released(e)`, et `5 < null` est faux —
+    // le manga ne serait jamais l'entrée courante, sans la moindre erreur.
+    if (e.kind === "manga") return e.episodes_total || 0;
     if (e.airing_status === "FINISHED" || e.airing_status === "CANCELLED") return e.episodes_total || 0;
     if (e.airing_status === "RELEASING") return Math.max(0, (e.next_episode_number || 1) - 1);
     return 0;
+  }
+
+  // Unité de progression, dans LA FORME employée par les libellés (« ép. »
+  // abrégé, « tome » non) — nextEpLabel la consomme telle quelle plutôt que
+  // d'écrire l'unité en dur dans deux branches qui divergeraient. Un manga se
+  // compte en tomes, jamais en chapitres : l'utilisateur achète des volumes
+  // reliés, et 224 chapitres à la place de 29 tomes serait ininterprétable.
+  function unitOf(e) {
+    return e && e.kind === "manga" ? "tome" : "ép.";
   }
 
   // Étiquette de saison partagée par les deux libellés (rail et hero/carte).
@@ -33,12 +53,20 @@
   // Libellé du rail : « S2 · ép. 16 sur 24 » — le numéro affiché est le
   // PROCHAIN à voir (watched + 1), pas le dernier vu. Dénominateur =
   // episodes_total si connu, sinon les épisodes sortis à date.
+  // Un manga n'a pas d'étiquette de saison : « tome 12 sur 37 » se suffit.
   function nextEpLabel(cur, watched) {
     if (!cur) return null;
     const rel = released(cur);
     const total = cur.episodes_total != null ? cur.episodes_total : rel;
     if (cur.kind === "movie") return watched > 0 ? "Film · vu" : "Film · non vu";
-    return `${kindTag(cur)} · ép. ${watched + 1} sur ${total || "?"}`;
+    const unit = unitOf(cur);
+    // Un manga n'a pas d'étiquette de saison, et pas de « sur ? » non plus :
+    // un dénominateur inconnu suggère une donnée manquante réparable, alors
+    // qu'AniList ne comptera les tomes que quand l'éditeur les publiera.
+    if (cur.kind === "manga") {
+      return total ? `${unit} ${watched + 1} sur ${total}` : `${unit} ${watched + 1}`;
+    }
+    return `${kindTag(cur)} · ${unit} ${watched + 1} sur ${total || "?"}`;
   }
 
   // Libellé court de la saison courante pour hero/carte : « S2 · 12/28 ».
@@ -46,6 +74,7 @@
     if (!cur) return null;
     const w = progressById.get(cur.id) || 0;
     const rel = released(cur);
+    if (cur.kind === "manga") return `${w}/${rel || "?"}`;
     return `${kindTag(cur)} · ${w}/${rel || "?"}`;
   }
 
@@ -405,7 +434,7 @@
     released, kindTag, nextEpLabel, curLabel, status, currentEntryOf,
     nextAiringOf, pickHero, normalize, matchesQuery, pickRail, buildWeek,
     isEvening, pickTonight, tonightHeadline, fitsBudget, airedToday,
-    typeOf, cardsOfSection, countBySection,
+    typeOf, cardsOfSection, countBySection, unitOf,
   };
   if (typeof window !== "undefined") window.mdtView = Object.assign(window.mdtView || {}, api);
   if (typeof module !== "undefined" && module.exports) module.exports = api;
