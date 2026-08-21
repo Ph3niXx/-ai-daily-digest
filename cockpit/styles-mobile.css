@@ -9,9 +9,15 @@
       identifiés par audit le 2026-05-22 et ciblés sur leurs VRAIES
       classes (audit précédent : ~38 sélecteurs devinés étaient morts).
 
-   PANELS RÉELLEMENT AUDITÉS pour le mobile, au 2026-08-17 :
-     Médiathèque (styles-mediatheque.css, 17 @media, paliers 720/760/480)
-     Jobs Radar  (bloc en fin de ce fichier + @media 760 dans son CSS)
+   PANELS RÉELLEMENT AUDITÉS pour le mobile, au 2026-08-21 :
+     Médiathèque    (styles-mediatheque.css, 17 @media, paliers 720/760/480)
+     Jobs Radar     (bloc en fin de ce fichier + @media 760 dans son CSS)
+     Miroir du soir (audit 2026-08-21, lecture seule — pas d'accès appareil) :
+                     pas de débordement horizontal (aucun bloc à largeur fixe,
+                     `.evening-foot` en flex-wrap) ; corps de texte déjà ≥15px
+                     via le palier 720px existant de styles-evening.css ; seul
+                     défaut réel = `.evening-foot .btn` sous 44px de haut,
+                     corrigé ci-dessous (section « Miroir du soir »).
    Tous les autres n'ont PAS été vérifiés sous 760 px et se replient au
    mieux à 900-920 px, une largeur de tablette. Ne pas lire l'absence de
    règle ici comme « ce panel va bien » — c'est ce silence qui avait rendu
@@ -247,6 +253,16 @@
   .card-action--ask {
     width: 44px !important;
     height: 44px !important;
+  }
+
+  /* ─── Miroir du soir : bouton de pied — audit 2026-08-21 ───
+     `.evening-foot .btn` (styles-evening.css) ne fixe que font-size: 13px ;
+     il hérite padding: 10px 16px et line-height: 1.55 (body) de `.btn`
+     (styles.css) — soit ~40px de haut, sous la cible tactile de 44px.
+     Scopé à `.evening-foot .btn`, pas à `.btn` globalement (toucherait
+     tous les boutons ghost du cockpit, desktop compris). */
+  .evening-foot .btn {
+    min-height: 44px;
   }
 
   /* ─── Repli progressif (PanelSection) ─────────────────────
