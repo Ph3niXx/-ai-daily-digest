@@ -22,7 +22,7 @@ layers:
     sublabel: Navigateur
     boxes:
       - id: panels
-        title: "29 onglets React"
+        title: "31 onglets React"
         subtitle: "Brief · Veille · Radar · Jarvis · Perf · Musique…"
         meta:
           - "Router hash + thèmes Dawn/Obsidian/Atlas"

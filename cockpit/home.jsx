@@ -543,6 +543,20 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
     if (n) window.track && window.track("games_brief_shown", { count: n });
   }, [data.game_releases]);
 
+  // Extraites pour être passées à la fois à `head` (desktop) et `actions`
+  // (repli mobile, cf. components-mobile.jsx) : même élément, pas de JSX
+  // dupliqué qui pourrait diverger.
+  const topAction = (
+    <button className="link-more" onClick={() => onNavigate("top")}>
+      Tous les incontournables <Icon name="arrow_right" size={12} stroke={2} />
+    </button>
+  );
+  const weekAction = (
+    <button className="link-more" onClick={() => onNavigate("week")}>
+      Ouvrir ma semaine <Icon name="arrow_right" size={12} stroke={2} />
+    </button>
+  );
+
   return (
     <div className="home" data-theme-vibe={theme.id}>
       {/* PAGE HEADER */}
@@ -757,17 +771,21 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
           </div>
         </section>
       ) : (
-      <section className="block">
-        <div className="block-head">
-          <div>
-            <div className="section-kicker">Top du jour</div>
-            <h2 className="section-title">3 incontournables, classés par l'agent</h2>
+      <PanelSection
+        sectionClass="block"
+        summary="Top du jour"
+        hint={`${top.length} incontournable${top.length > 1 ? "s" : ""}`}
+        head={
+          <div className="block-head">
+            <div>
+              <div className="section-kicker">Top du jour</div>
+              <h2 className="section-title">3 incontournables, classés par l'agent</h2>
+            </div>
+            {topAction}
           </div>
-          <button className="link-more" onClick={() => onNavigate("top")}>
-            Tous les incontournables <Icon name="arrow_right" size={12} stroke={2} />
-          </button>
-        </div>
-
+        }
+        actions={topAction}
+      >
         <div className="top-grid">
           {top.map((t) => {
             const openArticle = () => {
@@ -896,11 +914,15 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
             );
           })}
         </div>
-      </section>
+      </PanelSection>
       )}
 
       {/* ── 2-COL : Signaux + Radar gap ─────────────────────── */}
-      <section className="block block--two">
+      <PanelSection
+        sectionClass="block block--two"
+        summary="Signaux faibles · Radar"
+        hint={`${signals.length} signal${signals.length > 1 ? "s" : ""}`}
+      >
         <div className="col col--signals">
           <div className="block-head">
             <div>
@@ -946,19 +968,24 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
             </div>
           </div>
         </div>
-      </section>
+      </PanelSection>
 
       {/* ── Ma semaine strip ─────────────────────────────────── */}
-      <section className="block">
-        <div className="block-head">
-          <div>
-            <div className="section-kicker">Ma semaine</div>
-            <h2 className="section-title">{week.total_read} articles lus, {week.streak} jours d'affilée</h2>
+      <PanelSection
+        sectionClass="block"
+        summary="Ma semaine"
+        hint={`${week.total_read} article${week.total_read > 1 ? "s" : ""} lu${week.total_read > 1 ? "s" : ""}`}
+        head={
+          <div className="block-head">
+            <div>
+              <div className="section-kicker">Ma semaine</div>
+              <h2 className="section-title">{week.total_read} articles lus, {week.streak} jours d'affilée</h2>
+            </div>
+            {weekAction}
           </div>
-          <button className="link-more" onClick={() => onNavigate("week")}>
-            Ouvrir ma semaine <Icon name="arrow_right" size={12} stroke={2} />
-          </button>
-        </div>
+        }
+        actions={weekAction}
+      >
         <div className="hwk-wrap">
           <div className="hwk">
             <div className="hwk-head">
@@ -1006,7 +1033,7 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
             </div>
           </div>
         </div>
-      </section>
+      </PanelSection>
 
       </>)}
 

@@ -65,7 +65,30 @@ class MdtErrorBoundary extends React.Component {
   loader.innerHTML = "<div>Chargement de la médiathèque…</div>";
   document.body.appendChild(loader);
 
+  // Delai de garde — miroir de celui de bootstrap.js (ADR-47). Sans lui,
+  // « Chargement de la médiathèque… » reste affiché indéfiniment sur une
+  // panne d'auth ou de réseau : c'est exactement le silence qui rendait
+  // « PWA non utilisée » et « PWA cassée » indiscernables pendant trois
+  // semaines, et cette PWA est la surface qui a motivé ADR-47.
+  //
+  // 8 s : meme valeur que bootstrap.js, meme raisonnement (assez large pour
+  // ne pas alarmer sur un demarrage lent en 4G, assez court pour qu'on ne
+  // referme pas l'app avant de voir le message).
+  let bootStage = "libs";
+  const bootGuard = setTimeout(() => {
+    const l = document.getElementById("mdt-loader");
+    if (!l) return;
+    const label = (window.mobileView && window.mobileView.bootStageLabel(bootStage))
+      || "Le demarrage est bloque. Recharge la page.";
+    l.innerHTML =
+      '<div style="max-width:320px;padding:0 24px;text-align:center;line-height:1.6;'
+      + 'text-transform:none;letter-spacing:0;font-size:14px">'
+      + '<div style="font-weight:600;margin-bottom:10px">La médiathèque ne démarre pas</div>'
+      + '<div style="color:#8A7B6E">' + label + '</div></div>';
+  }, 8000);
+
   const removeLoader = () => {
+    clearTimeout(bootGuard);
     const l = document.getElementById("mdt-loader");
     if (l) l.remove();
   };
@@ -144,7 +167,9 @@ class MdtErrorBoundary extends React.Component {
       document.getElementById("root").textContent = "Échec du chargement.";
       return;
     }
+    bootStage = "auth";
     await window.cockpitAuth.waitForAuth();
+    bootStage = "tier2";
     await loadData();
   } catch (e) {
     console.error("[boot-mdt]", e);
@@ -152,6 +177,7 @@ class MdtErrorBoundary extends React.Component {
 
   // Babel standalone compile les scripts type="text/babel" de facon asynchrone,
   // APRES les scripts classiques : window.PanelMediatheque n'existe pas encore.
+  bootStage = "mount";
   let waited = 0;
   while (!window.PanelMediatheque && waited < 15000) {
     await new Promise((r) => setTimeout(r, 50));

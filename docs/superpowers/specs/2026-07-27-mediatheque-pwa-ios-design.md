@@ -274,17 +274,28 @@ vers `accounts.google.com` peut sortir vers Safari et perdre son contexte au ret
 comportement s'est amélioré depuis iOS 16.4 mais reste le point de rupture possible de
 toute la spec.
 
-*À tester en premier, avant toute ligne de CSS* : une `mediatheque.html` réduite à
-`waitForAuth()` suivi de l'affichage de « connecté », installée sur l'écran d'accueil.
-Replis dans l'ordre si l'authentification échoue : `display: "minimal-ui"` (même stockage,
-conserve une barre d'URL minimale) puis flow PKCE côté Supabase.
+**Résultat, 2026-08-21.** Testé sur l'appareil : `mediatheque.html` ouverte dans Safari sur
+iPhone fonctionne ; installée sur l'écran d'accueil et lancée depuis son icône, Safari
+fermé, elle démarre, s'authentifie et affiche son contenu. **L'OAuth Google survit au mode
+`standalone` sur iOS** — aucun des deux replis prévus (`display: "minimal-ui"`, puis flow
+PKCE) n'est nécessaire. Le cockpit complet a été vérifié dans la foulée : il s'ouvre et se
+navigue sur le même appareil. Le seul défaut remonté est la mise en page, traité par
+`docs/superpowers/specs/2026-08-21-cockpit-mobile-design.md`.
 
 **Données figées à la reprise.** iOS suspend une PWA plutôt que de la fermer. Rouverte le
 lendemain soir, elle reprend l'état de la veille, et `loadPanel` étant mémoïsé par
 `once()`, rien ne se recharge. Le problème n'existe pas sur desktop parce que la page y est
 rechargée. Correctif : écouteur `visibilitychange` qui invalide la mémoïsation et refetch
-au-delà de quelques minutes d'absence. C'est spécifique au mobile — `bootstrap.js` n'en a
-pas besoin.
+au-delà de quelques minutes d'absence.
+
+> **Mise à jour 2026-08-21 — la phrase suivante n'est plus vraie.** Elle disait :
+> « C'est spécifique au mobile — `bootstrap.js` n'en a pas besoin. » ADR-46 fait de
+> `index.html` l'entrée installée sur l'écran d'accueil pour le cockpit mobile complet, pas
+> seulement pour la Médiathèque : le même figement iOS s'applique donc désormais à
+> l'entrée cockpit, et `bootstrap.js` n'a **pas** l'écouteur `visibilitychange` qui le
+> couvrirait. Le correctif (invalidation + refetch Tier 1) n'est **pas implémenté** dans ce
+> lot — portée neuve, distincte, consignée comme limite connue dans
+> `docs/superpowers/specs/2026-08-21-cockpit-mobile-design.md` (« Questions ouvertes »).
 
 **Stockage cloisonné.** La PWA installée dispose de son propre bac à sable, distinct de
 Safari : la première ouverture impose un nouveau login Google. L'ITP de Safari peut par

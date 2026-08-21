@@ -58,6 +58,8 @@ Structure DOM :
 
 Route id = `"jarvis"`. **Panel Tier 2**.
 
+**Repli mobile (sous 760 px).** Pas de `PanelSection` ici : la colonne mémoire (`.jv-memory`) est déjà masquée sous 880px par le palier existant de `styles-jarvis.css`, il ne restait donc qu'une colonne chat à corriger, pas des sections à replier. C'est le seul onglet de la vague 1 qui reçoit de la saisie, et l'audit du 2026-08-21 (lecture de code, pas d'accès appareil) a trouvé quatre défauts réels dans `.jv-wrap`, corrigés dans `cockpit/styles-mobile.css` : `min-height: 720px` dépassait la hauteur utile d'un iPhone et `100vh` ignorait la barre d'adresse rétractable de Safari — remplacé par `height: calc(100dvh - 52px)` (les 52px sont le padding-top que `.main` reçoit sous 760px pour dégager le hamburger flottant ; couplage à surveiller si cette valeur bouge) ; la bordure droite de `.jv-chat` devenait un trait orphelin en colonne unique ; le textarea du composer était à 15px, un pixel sous le seuil où Safari zoome sur un champ de saisie et ne dézoome jamais ensuite — remonté à 16px ; `.jv-iconbtn` et `.jv-send` faisaient 32×32, sous la cible tactile — remontés à 44×44. Le padding du composer intègre `env(safe-area-inset-bottom)`, mais la règle est **inerte en l'état** : `env(safe-area-inset-*)` ne résout une valeur non nulle que si le viewport meta porte `viewport-fit=cover`, ce que `index.html` n'a pas (contrairement à `mediatheque.html`, qui ne charge pas ce composer). L'inset vaut donc toujours 0 aujourd'hui — la règle ne fait rien de mal, et deviendra correcte si `viewport-fit=cover` est un jour adopté sur `index.html`, ce qui reste une décision séparée (impact edge-to-edge sous l'encoche pour tout le cockpit, pas seulement Jarvis) et n'est pas fait ici.
+
 ## Front — fonctions JS
 | Fonction | Rôle | Fichier/ligne |
 |----------|------|---------------|
@@ -184,6 +186,10 @@ Volumétrie (2026-04-24) : 94 conversations, 87 facts actifs (88 au total, 1 sof
 - [ ] **`citations` trop verbeuses en mode deep** : k=5 retourne jusqu'à 5 chips par réponse, pas de dédup si plusieurs chunks pointent vers le même `source_id`.
 
 ## Dernière MAJ
+2026-08-21 — **portage mobile (vague 1), audit lecture seule.** Pas de repli `PanelSection` (la colonne mémoire est déjà masquée sous 880px). Quatre correctifs dans `cockpit/styles-mobile.css` : `.jv-wrap` en `calc(100dvh - 52px)` au lieu de `100vh` + `min-height: 720px` (débordait la hauteur utile iPhone et ignorait la barre d'adresse Safari), textarea du composer remonté à 16px (seuil de zoom Safari), `.jv-iconbtn`/`.jv-send` remontés à 44×44 (cible tactile), padding composer avec `env(safe-area-inset-bottom)`. Voir « Front — structure UI » et ADR-46.
+
+2026-08-21 — **correction de spec, fix wave.** « Front — structure UI » surcorrigeait l'effet du padding `env(safe-area-inset-bottom)` : il était présenté comme actif, alors qu'il est inerte tant que `index.html` n'a pas `viewport-fit=cover` dans son viewport meta (`mediatheque.html` l'a, mais ne charge pas ce composer). Non fonctionnel — pas de changement de comportement, seule la description était fausse.
+
 2026-04-25 — switch backend LM Studio sur modèle unique Qwen3.5 9B Instruct (chat Rapide/Deep + extraction nightly_learner). Suppression de la dual-stack 4B Thinking + 4B Instruct pour éliminer la slot contention LM Studio et les timeouts cockpit 120s sur les chats Deep.
 2026-04-24 — réécriture Parcours utilisateur en vocabulaire produit.
 2026-04-24 — réécriture Fonctionnalités en vocabulaire produit.

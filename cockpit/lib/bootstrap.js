@@ -21,7 +21,30 @@ window.__cockpitBootstrapPending = true;
   loader.innerHTML = '<div>Chargement du cockpit…</div>';
   document.body.appendChild(loader);
 
+  // Delai de garde. Sans lui, une panne d'authentification ou de reseau laisse
+  // « Chargement du cockpit… » a l'ecran indefiniment : c'est exactement le
+  // silence qui a rendu indiscernables « PWA non utilisee » et « PWA cassee »
+  // pendant trois semaines (cf. spec 2026-08-21). La telemetrie ne peut pas
+  // couvrir ce cas — usage_events exige une session — donc le diagnostic doit
+  // s'afficher sur l'appareil.
+  //
+  // 8 s : assez large pour ne pas alarmer sur un demarrage lent en 4G, assez
+  // court pour qu'on ne referme pas l'app avant de voir le message.
+  let bootStage = "libs";
+  const bootGuard = setTimeout(() => {
+    const l = document.getElementById("cockpit-loader");
+    if (!l) return;
+    const label = (window.mobileView && window.mobileView.bootStageLabel(bootStage))
+      || "Le demarrage est bloque. Recharge la page.";
+    l.innerHTML =
+      '<div style="max-width:320px;padding:0 24px;text-align:center;line-height:1.6;'
+      + 'text-transform:none;letter-spacing:0;font-size:14px">'
+      + '<div style="font-weight:600;margin-bottom:10px">Le cockpit ne demarre pas</div>'
+      + '<div style="color:#8A7B6E">' + label + '</div></div>';
+  }, 8000);
+
   function removeLoader(){
+    clearTimeout(bootGuard);
     const l = document.getElementById("cockpit-loader");
     if (l) l.remove();
   }
@@ -36,9 +59,11 @@ window.__cockpitBootstrapPending = true;
     }
 
     // Phase 2: block on Google OAuth session.
+    bootStage = "auth";
     await window.cockpitAuth.waitForAuth();
 
     // Phase 2: run Tier 1 loader — overrides window.COCKPIT_DATA with real data.
+    bootStage = "tier1";
     try {
       await window.cockpitDataLoader.bootTier1();
       // Propagate Tier 1 rows into globals used by panels (APPRENTISSAGE_DATA.radar, etc.)
@@ -56,6 +81,7 @@ window.__cockpitBootstrapPending = true;
       const initialPanel = (window.location.hash || "").replace(/^#/, "").trim();
       const dl = window.cockpitDataLoader;
       if (initialPanel && dl?.TIER2_PANELS?.has(initialPanel)) {
+        bootStage = "tier2";
         await dl.loadPanel(initialPanel);
         // Flag consumed by App on first render so it skips the loader.
         window.__cockpitInitialPanelReady = initialPanel;
@@ -70,6 +96,7 @@ window.__cockpitBootstrapPending = true;
 
   // Wait for app.jsx to finish parsing (Babel standalone compiles
   // type="text/babel" scripts asynchronously AFTER classic scripts).
+  bootStage = "mount";
   let waited = 0;
   while (!window.__cockpitMount && waited < 15000) {
     await new Promise(r => setTimeout(r, 50));

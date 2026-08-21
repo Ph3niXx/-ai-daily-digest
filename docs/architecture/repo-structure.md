@@ -10,7 +10,7 @@ Vue lisible du repo. Source de vérité fonctionnelle : `docs/architecture/pipel
 | `weekly_analysis.py` | Pipeline hebdomadaire Claude (wiki, signaux, recos, challenges, opps, RTE) |
 | `tft_pipeline.py` | Pipeline TFT (Riot API → Supabase) |
 | `index.html` | Coquille React — charge React/Babel + `cockpit/*` |
-| `mediatheque.html` | Deuxième page d'entrée — médiathèque seule, PWA installable iOS (pas de sidebar, 2 scripts Babel contre 30 pour `index.html`) |
+| `mediatheque.html` | Deuxième page d'entrée — médiathèque seule, PWA installable iOS (pas de sidebar, 2 scripts Babel contre 32 pour `index.html`) |
 | `requirements.txt` | feedparser, google-generativeai, openai, requests |
 | `manifest.json` | PWA manifest (theme rouille Dawn) |
 | `manifest-mediatheque.json` | PWA manifest dédié à `mediatheque.html` (`start_url`, icône, `theme_color` propres) |
@@ -26,7 +26,8 @@ Vue lisible du repo. Source de vérité fonctionnelle : `docs/architecture/pipel
 | `app.jsx` | Router + theme switcher + panel keys |
 | `sidebar.jsx` | Sidebar collapsible + 6 groupes |
 | `home.jsx` | Brief du jour (hero + top 3 + signaux + radar + week) |
-| `panel-*.jsx` | 23 panels dédiés (panel-veille mutualisé sur 6 corpus → 29 onglets visibles) |
+| `panel-*.jsx` | 23 panels dédiés (panel-veille mutualisé sur 6 corpus → 31 onglets visibles) |
+| `components-mobile.jsx` | `window.PanelSection` + `window.useIsMobile` — repli `<details>` sous 760px, passe-plat exact au-dessus (portage mobile, ADR-46) |
 | `styles.css` + `styles-*.css` | Shell + stylesheets par domaine |
 | `themes.js` | `THEMES = {dawn, obsidian, atlas}` |
 | `icons.jsx` | `<Icon name=... />` système commun |
@@ -38,6 +39,7 @@ Vue lisible du repo. Source de vérité fonctionnelle : `docs/architecture/pipel
 | Fichier | Rôle |
 |---|---|
 | `supabase.js` | Client + REST wrappers + JWT rotation |
+| `mobile-view.js` | Logique pure du portage mobile — palier 760px, libellés du délai de garde du loader (`window.mobileView`, testé par `tests/test_mobile_view.mjs`) |
 | `auth.js` | Google OAuth overlay + `waitForAuth()` |
 | `telemetry.js` | `track()` best-effort → `usage_events` |
 | `data-loader.js` | `bootTier1` (Home sync) + `loadPanel` (Tier 2 lazy) |
