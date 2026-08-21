@@ -1091,7 +1091,30 @@ Dans `docs/architecture/decisions.md`, à la suite du dernier ADR :
 Run: `grep -n "30 onglets" CLAUDE.md`
 Expected après correction : aucune occurrence.
 
-- [ ] **Step 6 : Lancer les linters bloquants**
+- [ ] **Step 6 : Balayage des cache-busters — le lot ne parvient pas à l'utilisateur sans lui**
+
+`sw.js` sert en cache-first (`sw.js:121-144`) et son `STATIC[]` référence les fichiers **avec leur query `?v=N`**. Un fichier dont le contenu change mais dont la query ne bouge pas garde la même clé de cache : un client qui a déjà le service worker installé continue de recevoir l'ancienne version.
+
+`node scripts/sync-sw.mjs` bump bien la constante `CACHE` tout seul (`scripts/sync-sw.mjs:52-58`), ce qui provoque la purge des anciens caches à l'`activate` — mais la query `?v=N`, elle, n'est bumpée par personne. Le cache HTTP du navigateur peut alors resservir l'ancien fichier au moment où le service worker re-remplit son cache. Le plan couvrait `home.jsx` (tâche 7) et oubliait les trois autres.
+
+Bumper, dans **les deux pages d'entrée là où la ligne existe** :
+
+| Fichier modifié par ce lot | `index.html` | `mediatheque.html` |
+|---|---|---|
+| `cockpit/lib/telemetry.js` (tâche 4) | `?v=1` → `?v=2` (l.61) | `?v=1` → `?v=2` (l.36) |
+| `cockpit/lib/bootstrap.js` (tâche 5) | `?v=2` → `?v=3` (l.125) | *non chargé* |
+| `cockpit/styles-mobile.css` (tâches 6, 8, 9) | `?v=3` → `?v=4` (l.39) | `?v=3` → `?v=4` (l.19) |
+| `cockpit/home.jsx` (tâche 7) | déjà bumpé en tâche 7 | *non chargé* |
+
+Puis relancer `node scripts/sync-sw.mjs` une dernière fois — il doit venir **après** tous les bumps, puisqu'il lit les deux HTML pour reconstruire `STATIC[]`.
+
+Run: `grep -n "styles-mobile.css\|lib/bootstrap.js\|lib/telemetry.js\|home.jsx" index.html mediatheque.html`
+Expected : plus aucune des versions d'origine (`telemetry.js?v=1`, `bootstrap.js?v=2`, `styles-mobile.css?v=3`, `home.jsx?v=11`).
+
+Run: `node tests/test_sw_static.mjs`
+Expected : PASS — `STATIC[]` cohérent avec les deux HTML.
+
+- [ ] **Step 7 : Lancer les linters bloquants**
 
 ```bash
 python scripts/validate_spec.py
@@ -1110,11 +1133,13 @@ Expected : tous en succès. **Attention** : sous Windows, ces scripts plantent e
 PYTHONIOENCODING=utf-8 python scripts/validate_spec.py
 ```
 
-- [ ] **Step 7 : Commit**
+- [ ] **Step 8 : Commit**
+
+Le balayage du Step 6 touche du code, pas seulement de la doc — d'où les deux entrées HTML et `sw.js` dans le commit :
 
 ```bash
-git add docs/ CLAUDE.md
-git commit -m "docs(mobile): specs des trois onglets, deux ADR, 31 onglets"
+git add docs/ CLAUDE.md index.html mediatheque.html sw.js
+git commit -m "docs(mobile): specs des trois onglets, deux ADR, 31 onglets, cache-busters"
 ```
 
 ---
