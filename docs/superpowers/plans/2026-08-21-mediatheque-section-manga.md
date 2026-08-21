@@ -119,12 +119,18 @@ Append dans `tests/test_mediatheque_view.mjs`, juste avant la ligne `console.log
 // next_episode_number est null, donc la branche RELEASING de released()
 // renverrait 0 -> max=0 dans MdtStepper -> stepper DESACTIVE. Un manga en
 // cours de publication serait integralement non declarable.
+// `in_main_chain` et `sort_order` ne sont pas decoratifs : currentEntryOf()
+// fait `entries.filter((e) => e.in_main_chain)` et rendrait null sans eux.
+// toEntryRows ecrit toujours ces deux champs, la fixture colle donc au reel.
 const mangaOngoing = { id: "mg1", kind: "manga", airing_status: "RELEASING",
-  episodes_total: 37, next_episode_number: null, season_number: null };
+  episodes_total: 37, next_episode_number: null, season_number: null,
+  in_main_chain: true, sort_order: 0 };
 const mangaDone = { id: "mg2", kind: "manga", airing_status: "FINISHED",
-  episodes_total: 29, next_episode_number: null, season_number: null };
+  episodes_total: 29, next_episode_number: null, season_number: null,
+  in_main_chain: true, sort_order: 0 };
 const mangaUnknown = { id: "mg3", kind: "manga", airing_status: "RELEASING",
-  episodes_total: null, next_episode_number: null, season_number: null };
+  episodes_total: null, next_episode_number: null, season_number: null,
+  in_main_chain: true, sort_order: 0 };
 
 check("released: manga RELEASING => ses tomes, PAS 0 (sinon stepper mort)",
   V.released(mangaOngoing), 37);
@@ -271,7 +277,12 @@ La bande lit **toutes** les cartes, sans filtre de section — c'est sa décisio
 - Test: `tests/test_mediatheque_view.mjs`
 
 **Interfaces:**
-- Consumes: `typeOf(franchise)` (existant, ADR-42).
+- Consumes: `typeOf(franchise)` (existant, ADR-42) ; **`released()` corrige par la tache 2**.
+  Cette dependance est reelle et silencieuse : la fixture `mgEntry` ci-dessous est `RELEASING`
+  sans `next_episode_number`. Sans le correctif de la tache 2, `released()` rendrait 0,
+  `currentEntryOf` rendrait `null`, la carte manga ne produirait aucune entree, et le test
+  « le manga n'est jamais propose » passerait **pour la mauvaise raison** — un vert qui ne
+  prouve rien. Verifier que la tache 2 est commitee avant de commencer celle-ci.
 - Produces: `WATCHABLE_TYPES` (Set interne, non exporté) ; `pickTonight` conserve exactement sa signature `(cards, progressById, ctx, nowMs) -> Array<{role, card, entry}>`.
 
 - [ ] **Step 1: Écrire le test qui échoue**
@@ -379,7 +390,7 @@ Les ids AniList ne collisionnent pas entre ANIME et MANGA (`Media(id:30642, type
 
 **Files:**
 - Modify: `cockpit/lib/anilist.js` — `MEDIA_FIELDS`, `SEARCH_QUERY`, `BATCH_QUERY`, `relTargets` (~ligne 20), `kindOf` (ligne 53), `toFranchiseRow` (ligne 204), `toEntryRows` (ligne 220), bloc `api`
-- Test: `tests/test_anilist_map.mjs` (existant), `tests/test_franchise_walk.mjs` (existant)
+- Test: `tests/test_anilist_map.mjs` (existant — accueille aussi les tests de walk manga, voir ci-dessous)
 
 **Interfaces:**
 - Consumes: rien.
@@ -442,7 +453,7 @@ check("toFranchiseRow: un anime reste media_type anime",
   "anime");
 ```
 
-Append dans `tests/test_franchise_walk.mjs`, avant son bloc final :
+Append dans `tests/test_anilist_map.mjs` (et **pas** dans `test_franchise_walk.mjs` : ce fichier n'a pas de helper `check()` — il compare en ligne avec `deepEq` — et il déstructure ses imports sans importer `chainIds`. Le miroir Python de ces mêmes règles vit dans `test_anime_tracker_sync.py`, tâche 5) :
 
 ```javascript
 // ── Walk d'un manga ───────────────────────────────────────────
@@ -471,7 +482,7 @@ check("walk manga: buildFranchise produit des entrees kind manga",
 
 - [ ] **Step 2: Lancer les tests pour vérifier qu'ils échouent**
 
-Run: `node tests/test_anilist_map.mjs && node tests/test_franchise_walk.mjs`
+Run: `node tests/test_anilist_map.mjs`
 Expected: FAIL — `media_type` vaut `"anime"`, `episodes_total` vaut `null` (car `m.episodes` est null), et `chainIds` rend `[100]` seul.
 
 - [ ] **Step 3: Implémenter — requêtes et walk**
@@ -570,7 +581,7 @@ Expected: tous PASS. `test_mediatheque_entry.mjs` doit rester vert (il vérifie 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add cockpit/lib/anilist.js tests/test_anilist_map.mjs tests/test_franchise_walk.mjs
+git add cockpit/lib/anilist.js tests/test_anilist_map.mjs
 git commit -m "feat(mediatheque): le client AniList sait lire un manga"
 ```
 
