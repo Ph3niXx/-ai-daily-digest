@@ -27,6 +27,7 @@ Vue lisible du repo. Source de vérité fonctionnelle : `docs/architecture/pipel
 | `sidebar.jsx` | Sidebar collapsible + 6 groupes |
 | `home.jsx` | Brief du jour (hero + top 3 + signaux + radar + week) |
 | `panel-*.jsx` | 23 panels dédiés (panel-veille mutualisé sur 6 corpus → 29 onglets visibles) |
+| `components-mobile.jsx` | `window.PanelSection` + `window.useIsMobile` — repli `<details>` sous 760px, passe-plat exact au-dessus (portage mobile, ADR-46) |
 | `styles.css` + `styles-*.css` | Shell + stylesheets par domaine |
 | `themes.js` | `THEMES = {dawn, obsidian, atlas}` |
 | `icons.jsx` | `<Icon name=... />` système commun |
@@ -38,6 +39,7 @@ Vue lisible du repo. Source de vérité fonctionnelle : `docs/architecture/pipel
 | Fichier | Rôle |
 |---|---|
 | `supabase.js` | Client + REST wrappers + JWT rotation |
+| `mobile-view.js` | Logique pure du portage mobile — palier 760px, libellés du délai de garde du loader (`window.mobileView`, testé par `tests/test_mobile_view.mjs`) |
 | `auth.js` | Google OAuth overlay + `waitForAuth()` |
 | `telemetry.js` | `track()` best-effort → `usage_events` |
 | `data-loader.js` | `bootTier1` (Home sync) + `loadPanel` (Tier 2 lazy) |

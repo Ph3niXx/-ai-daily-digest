@@ -34,6 +34,8 @@ Classes-racines :
 
 Le panel est Tier 1 (fetch direct dans `useEffect` au mount, pas via le data-loader).
 
+**Repli mobile (sous 760 px).** Ce panel ne se replie pas — c'est un récap court (3-4 paragraphes) sans section secondaire à masquer, donc rien à confier à `PanelSection`. L'audit du 2026-08-21 (lecture de code, pas d'accès appareil) n'a trouvé aucun débordement horizontal à corriger : aucun bloc à largeur fixe, `.evening-foot` déjà en `flex-wrap`, corps de texte déjà ≥15px via le palier 720px existant de `styles-evening.css`. Seul défaut réel : `.evening-foot .btn` restait sous 44px de haut (hérite `padding: 10px 16px` de `.btn` global, ~40px), sous la cible tactile — corrigé dans `cockpit/styles-mobile.css` (`min-height: 44px`, scopé à `.evening-foot .btn`).
+
 ## Front — fonctions JS
 | Fonction | Rôle | Fichier/ligne |
 |----------|------|---------------|
@@ -78,4 +80,6 @@ RLS : SELECT pour `authenticated`, INSERT/UPDATE pour `service_role` uniquement 
 - [ ] Si la routine Cowork tombe plusieurs jours d'affilée, aucune alerte — il faut ouvrir Cowork pour le voir.
 
 ## Dernière MAJ
+2026-08-21 — **portage mobile (vague 1), audit lecture seule.** Aucune section à replier (pas de `PanelSection` ici). Seul correctif : `.evening-foot .btn` remonté à 44px de haut sous 760px (cible tactile WCAG 2.1 AAA), dans `cockpit/styles-mobile.css`. Voir « Front — structure UI » et ADR-46.
+
 2026-04-26 — création initiale (panel + route + entrée sidebar Aujourd'hui, table `daily_mirror`, doc routine Cowork) ; alignement groupe sur le runtime suite au refacto NAV en source unique.
