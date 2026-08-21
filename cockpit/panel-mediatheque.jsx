@@ -60,10 +60,15 @@ function mdtWriteBudget(b, nowMs) {
 }
 
 // kicker + libellé du CTA primaire + affichage du bouton +1 selon le cas.
-function heroCopy(kind) {
+// `unit` vient de window.mdtView.unitLongOf(cur) : le hero « prochain » se
+// lit sur un manga aussi, et « Prochain épisode » sur un tome est faux dans
+// l'état le plus courant d'une série qu'on achète — tous les tomes parus lus,
+// on attend le suivant. pickHero règle 3 y mène pour toute franchise « à jour »
+// sans date de diffusion, ce qu'un manga est par construction.
+function heroCopy(kind, unit) {
   switch (kind) {
     case "resume":   return { kicker: "Reprendre", cta: "▶ Reprendre", quick: true };
-    case "next_ep":  return { kicker: "Prochain épisode", cta: "Voir la fiche", quick: false };
+    case "next_ep":  return { kicker: `Prochain ${unit}`, cta: "Voir la fiche", quick: false };
     case "discover": return { kicker: "À découvrir", cta: "▶ Commencer", quick: false };
     case "seen":     return { kicker: "Déjà vu", cta: "Revoir la fiche", quick: false };
     default:         return { kicker: "", cta: "Voir la fiche", quick: false };
@@ -124,7 +129,7 @@ function MdtStepper({ entry, progressById, onProgress }) {
       </span>
       <button disabled={disabled || (!uncapped && watched >= max)} onClick={() => onProgress(entry, clamp(watched + 1))} aria-label={`Un ${window.mdtView.unitLongOf(entry)} de plus`}>+</button>
       <button disabled={disabled || watched >= max} className="mdt-chip" style={{ marginLeft: 4 }}
-        onClick={() => onProgress(entry, max)} title={`Marquer tous les ${window.mdtView.unitLongOf(entry)}s sortis comme vus`}>✓ vue</button>
+        onClick={() => onProgress(entry, max)} title={`Marquer tous les ${window.mdtView.unitLongOf(entry)}s sortis comme ${entry.kind === "manga" ? "lus" : "vus"}`}>✓ {entry.kind === "manga" ? "lue" : "vue"}</button>
     </div>
   );
 }
@@ -227,6 +232,15 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
   const bonus = rows.filter((r) => !r.in_main_chain);
   const rowLabel = (r) => r.kind === "season" ? `S${r.season_number}` : (r.kind === "movie" ? "Film" : r.kind.toUpperCase());
   const STATUS_FR = { FINISHED: "Terminée", RELEASING: "En diffusion", NOT_YET_RELEASED: "Annoncée", CANCELLED: "Annulée", HIATUS: "En pause" };
+  // "Saisons & films canon" est faux pour un manga (ni saison, ni film) --
+  // determine via la premiere ligne connue, chain ou bonus, jamais rows[0] au
+  // hasard puisque chain est ce que ce titre introduit juste en dessous.
+  const chainLabel = (chain[0] || bonus[0]) && (chain[0] || bonus[0]).kind === "manga" ? "Tomes" : "Saisons & films canon";
+  // RELEASING vaut specifiquement "diffusion" (calendrier de chaine/streaming) :
+  // faux sur un manga, qui parait, ne diffuse pas. Les quatre autres statuts
+  // (terminee/annoncee/annulee/en pause) s'appliquent tels quels a un tome
+  // comme a une saison, aucune branche necessaire.
+  const statusLabel = (r) => (r.kind === "manga" && r.status === "RELEASING") ? "En publication" : (STATUS_FR[r.status] || r.status);
 
   return (
     <div className="mdt-modal-backdrop" onClick={onClose}>
@@ -244,13 +258,17 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
         </div>
         {head.synopsis && <p className="mdt-fiche-synopsis">{head.synopsis}</p>}
 
-        <div className="mdt-section-label">Saisons & films canon</div>
+        <div className="mdt-section-label">{chainLabel}</div>
         {chain.map((r) => (
           <div key={r.key} className="mdt-entry">
             <div className="mdt-entry-info">
               <strong>{rowLabel(r)}</strong> · {r.title}
               <div className="mdt-entry-sub">
-                {r.start_date ? r.start_date.slice(0, 4) : "date ?"} · {r.episodes_total != null ? `${r.episodes_total} ép.` : "ép. ?"} · {STATUS_FR[r.status] || r.status}
+                {r.start_date ? r.start_date.slice(0, 4) : "date ?"} · {r.episodes_total != null ? `${r.episodes_total} ${window.mdtView.unitOf(r)}` : `${window.mdtView.unitOf(r)} ?`} · {statusLabel(r)}
+                {/* r.next_episode_number est toujours null pour un manga : AniList ne
+                    renvoie pas de nextAiringEpisode pour le type MANGA (fait cite dans
+                    mediatheque-view.js::released()). Cette branche ne peut donc jamais
+                    s'afficher sur un tome -- pas de garde kind necessaire ici. */}
                 {r.status === "RELEASING" && r.next_episode_number
                   ? ` · ép. ${r.next_episode_number} le ${mdtFmtDate(r.next_episode_airing_at)}` : ""}
               </div>
@@ -266,7 +284,7 @@ function FicheFranchise({ fiche, D, progressById, ratingById, onClose, onAdd, on
             <div key={r.key} className="mdt-entry">
               <div className="mdt-entry-info">
                 <strong>{rowLabel(r)}</strong> · {r.title}
-                <div className="mdt-entry-sub">{r.start_date ? r.start_date.slice(0, 4) : "date ?"} · {r.episodes_total != null ? `${r.episodes_total} ép.` : "ép. ?"}</div>
+                <div className="mdt-entry-sub">{r.start_date ? r.start_date.slice(0, 4) : "date ?"} · {r.episodes_total != null ? `${r.episodes_total} ${window.mdtView.unitOf(r)}` : `${window.mdtView.unitOf(r)} ?`}</div>
               </div>
               {r.entry && onProgress && <MdtStepper entry={r.entry} progressById={progressById} onProgress={onProgress} />}
               {r.entry && onRating && <MdtRating entry={r.entry} ratingById={ratingById} onRating={onRating} />}
@@ -430,7 +448,11 @@ function MdtHero({ hero, progressById, onOpen, onProgress }) {
   const fr = card.f;
   const cur = currentEntryOf(card.entries, progressById);
   const st = card.st;
-  const copy = heroCopy(kind);
+  // cur peut être null si tout est rattrapé (currentEntryOf) -- exactement le
+  // cas manga "à jour" que ce correctif cible. On retombe sur card.entries[0]
+  // pour connaître le kind même sans entrée "courante" ; unitLongOf gère déjà
+  // un argument absent (retombe sur "épisode"), donc ceci ne peut pas planter.
+  const copy = heroCopy(kind, window.mdtView.unitLongOf(cur || card.entries[0]));
   const nextAt = nextAiringOf(card);
   const meta = [
     mdtCurLabel(cur, progressById),
