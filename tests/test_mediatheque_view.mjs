@@ -526,6 +526,16 @@ check("status: manga entame => En cours",
   V.status([mangaOngoing], new Map([["mg1", 11]])).id, "watching");
 check("status: manga tout lu et termine => Vu",
   V.status([mangaDone], new Map([["mg2", 29]])).id, "seen");
+
+// Meme forme que "status: libelles" plus haut, sur des fixtures manga :
+// seuls les deux poles (rien lu / tout lu et non-diffuse) changent de mot ;
+// "En cours" et "En cours · a jour" restent identiques aux deux mediums.
+check("status: libelles manga",
+  [V.status([mangaOngoing], new Map()).label,
+   V.status([mangaOngoing], new Map([["mg1", 11]])).label,
+   V.status([mangaOngoing], new Map([["mg1", 37]])).label,
+   V.status([mangaDone], new Map([["mg2", 29]])).label],
+  ["À lire", "En cours", "En cours · à jour", "Lu"]);
 check("currentEntryOf: le manga entame est bien l'entree courante",
   (V.currentEntryOf([mangaOngoing], new Map([["mg1", 11]])) || {}).id, "mg1");
 

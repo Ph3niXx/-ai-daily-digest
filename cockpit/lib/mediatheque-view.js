@@ -97,11 +97,18 @@
     const watched = chainEntries.reduce((s, e) => s + (progressById.get(e.id) || 0), 0);
     const rel = chainEntries.reduce((s, e) => s + released(e), 0);
     const anyReleasing = chainEntries.some((e) => e.airing_status === "RELEASING");
-    if (watched === 0) return { id: "to_watch", label: "À voir", watched, released: rel };
+    // Un manga se LIT, il ne se REGARDE pas : seuls "À voir"/"Vu" (les bornes
+    // de la progression, watched=0 ou watched=rel-sans-diffusion) portent le
+    // verbe. "En cours"/"En cours · à jour" restent tels quels pour les deux
+    // -- déjà médium-neutres, aucune branche n'y ferait sens. `id` NE CHANGE
+    // JAMAIS ici : ce sont des clés de filtre, des valeurs de télémétrie et
+    // des ancres de test, contrairement à `label`, pur affichage.
+    const manga = chainEntries.length > 0 && chainEntries[0].kind === "manga";
+    if (watched === 0) return { id: "to_watch", label: manga ? "À lire" : "À voir", watched, released: rel };
     if (watched < rel) return { id: "watching", label: "En cours", watched, released: rel };
     return anyReleasing
       ? { id: "up_to_date", label: "En cours · à jour", watched, released: rel }
-      : { id: "seen", label: "Vu", watched, released: rel };
+      : { id: "seen", label: manga ? "Lu" : "Vu", watched, released: rel };
   }
 
   // Première entrée de la chaîne principale qui n'est pas rattrapée.

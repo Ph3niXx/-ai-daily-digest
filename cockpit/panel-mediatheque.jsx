@@ -770,7 +770,7 @@ function MdtCard({ f, entries, st, cur, progressById, onOpen }) {
 // Les chips de type ont quitté cet en-tête pour devenir les onglets du panel
 // (ADR-42) ; ne restent ici que le statut et le tri, qui sont propres au rayon.
 function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusFilter,
-                         sort, onSort, progressById, onOpen, queryActive, query, emptyHint }) {
+                         sort, onSort, progressById, onOpen, queryActive, query, emptyHint, manga }) {
   return (
     <section className="mdt-section" aria-label="Ma collection">
       <div className="mdt-section-head">
@@ -782,7 +782,11 @@ function MdtCollection({ visible, total, open, onToggle, statusFilter, onStatusF
         </button>
         {open && !queryActive && (
           <div className="mdt-filters" role="group" aria-label="Filtrer par statut">
-            {[["all", "Tous"], ["to_watch", "À voir"], ["watching", "En cours"], ["seen", "Vu"], ["shelved", "Mis de côté"]].map(([id, label]) => (
+            {/* "Tous"/"Mis de côté" ne nomment aucune action de visionnage : ils
+                restent tels quels. Les deux autres suivent exactement le même
+                partage que status() (mediatheque-view.js) -- watching/up_to_date
+                n'y sont pas concernés non plus. */}
+            {[["all", "Tous"], ["to_watch", manga ? "À lire" : "À voir"], ["watching", "En cours"], ["seen", manga ? "Lu" : "Vu"], ["shelved", "Mis de côté"]].map(([id, label]) => (
               <button key={id} className={`mdt-chip ${statusFilter === id ? "is-active" : ""}`}
                 onClick={() => onStatusFilter(id)}>{label}</button>
             ))}
@@ -1482,7 +1486,7 @@ function PanelMediatheque({ data, onNavigate }) {
           progressById={progressById}
           onOpen={(fr) => setFiche({ mode: "library", franchiseId: fr.id })}
           queryActive={queryActive} query={q}
-          emptyHint={sectionDef.emptyHint} />
+          emptyHint={sectionDef.emptyHint} manga={sectionDef.id === "manga"} />
       )}
 
       {fiche && (
