@@ -543,6 +543,20 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
     if (n) window.track && window.track("games_brief_shown", { count: n });
   }, [data.game_releases]);
 
+  // Extraites pour être passées à la fois à `head` (desktop) et `actions`
+  // (repli mobile, cf. components-mobile.jsx) : même élément, pas de JSX
+  // dupliqué qui pourrait diverger.
+  const topAction = (
+    <button className="link-more" onClick={() => onNavigate("top")}>
+      Tous les incontournables <Icon name="arrow_right" size={12} stroke={2} />
+    </button>
+  );
+  const weekAction = (
+    <button className="link-more" onClick={() => onNavigate("week")}>
+      Ouvrir ma semaine <Icon name="arrow_right" size={12} stroke={2} />
+    </button>
+  );
+
   return (
     <div className="home" data-theme-vibe={theme.id}>
       {/* PAGE HEADER */}
@@ -767,11 +781,10 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
               <div className="section-kicker">Top du jour</div>
               <h2 className="section-title">3 incontournables, classés par l'agent</h2>
             </div>
-            <button className="link-more" onClick={() => onNavigate("top")}>
-              Tous les incontournables <Icon name="arrow_right" size={12} stroke={2} />
-            </button>
+            {topAction}
           </div>
         }
+        actions={topAction}
       >
         <div className="top-grid">
           {top.map((t) => {
@@ -908,7 +921,7 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
       <PanelSection
         sectionClass="block block--two"
         summary="Signaux faibles · Radar"
-        hint={`${signals.length} signaux`}
+        hint={`${signals.length} signal${signals.length > 1 ? "s" : ""}`}
       >
         <div className="col col--signals">
           <div className="block-head">
@@ -961,18 +974,17 @@ function Home({ theme, data, onNavigate, recentOnly, setRecentOnly }) {
       <PanelSection
         sectionClass="block"
         summary="Ma semaine"
-        hint={`${week.total_read} articles lus`}
+        hint={`${week.total_read} article${week.total_read > 1 ? "s" : ""} lu${week.total_read > 1 ? "s" : ""}`}
         head={
           <div className="block-head">
             <div>
               <div className="section-kicker">Ma semaine</div>
               <h2 className="section-title">{week.total_read} articles lus, {week.streak} jours d'affilée</h2>
             </div>
-            <button className="link-more" onClick={() => onNavigate("week")}>
-              Ouvrir ma semaine <Icon name="arrow_right" size={12} stroke={2} />
-            </button>
+            {weekAction}
           </div>
         }
+        actions={weekAction}
       >
         <div className="hwk-wrap">
           <div className="hwk">

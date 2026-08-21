@@ -39,7 +39,7 @@
 | `mediatheque.html` | **Modifié.** Charge `mobile-view.js` seul (script classique). | 6 |
 | `tests/test_mobile_entry.mjs` | **Créé.** Verrouille l'ordre de chargement et l'exclusion de `components-mobile.jsx` de la PWA. | 6 |
 | `cockpit/home.jsx` | **Modifié.** Trois sections repliables, une tête épinglée. | 7 |
-| `cockpit/panel-jarvis.jsx` | **Modifié.** Zone de saisie mobile. | 9 |
+| `cockpit/panel-jarvis.jsx` | **Non touché.** Prévu conditionnellement (« uniquement si une classe manque pour cibler le composer ») ; la Task 9 s'est terminée CSS-only sur les classes existantes. | 9 |
 | `docs/specs/tab-brief.md`, `tab-evening.md`, `tab-jarvis.md`, `docs/specs/index.json` | **Modifiés.** | 10 |
 | `docs/architecture/decisions.md`, `repo-structure.md`, `CLAUDE.md` | **Modifiés.** Deux ADR, deux fichiers nouveaux, 30 → 31 onglets. | 10 |
 

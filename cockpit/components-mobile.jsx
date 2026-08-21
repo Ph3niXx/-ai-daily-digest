@@ -8,9 +8,32 @@
 // verifiable par lecture plutot qu'esperee : si vous devez ajouter une
 // balise, une classe ou un wrapper dans la branche desktop, la contrainte est
 // rompue et le probleme est ailleurs.
+//
+// REGLE POUR LES 28 ONGLETS A VENIR (vague 2) : sur mobile, `<summary>`
+// REMPLACE `head` — il ne s'ajoute pas a cote. Tout element interactif place
+// dans `head` (un lien "voir tout", un bouton d'action...) disparait donc du
+// DOM mobile a moins d'etre aussi passe en `actions` (rendu dans le repli,
+// apres le hint) ou deplace dans `children`. Quasiment chaque `.block-head`
+// de ce depot porte un lien "voir tout" — attendez-vous a devoir traiter ce
+// cas a chaque nouvel onglet porte, pas seulement pour ceux de cette vague.
+//
+// AUTRE PIEGE : franchir 760 px fait passer le rendu de fragment a <details>
+// (ou l'inverse) — un changement de type d'element React, qui demonte puis
+// remonte le sous-arbre. Tout etat local declare SOUS PanelSection est donc
+// perdu au franchissement du seuil (redimensionnement de fenetre, rotation).
+// La vague 2 inclut le Carnet d'idees, un onglet de saisie : l'etat d'un
+// brouillon doit vivre AU-DESSUS de PanelSection, jamais en dessous.
 
 function useIsMobile(){
-  const query = "(max-width: " + window.mobileView.MOBILE_MAX_WIDTH + "px)";
+  // Repli a 760 si mobile-view.js n'a pas charge (cf. le meme garde-fou dans
+  // telemetry.js et bootstrap.js) : sans lui, l'acces direct a
+  // `window.mobileView.MOBILE_MAX_WIDTH` leve pendant le rendu et l'error
+  // boundary transforme le Brief en ecran d'erreur — y compris sur desktop,
+  // ou aucune media query mobile ne devrait jamais s'appliquer. 760 est un
+  // dernier recours pour un script absent ; mobile-view.js reste la seule
+  // source de verite et les deux valeurs doivent changer ensemble.
+  const maxWidth = (window.mobileView && window.mobileView.MOBILE_MAX_WIDTH) || 760;
+  const query = "(max-width: " + maxWidth + "px)";
   const [matches, setMatches] = React.useState(
     () => window.matchMedia && window.matchMedia(query).matches
   );
@@ -27,7 +50,7 @@ function useIsMobile(){
   return matches;
 }
 
-function PanelSection({ head, summary, hint, pinned = false, sectionClass = "", children }) {
+function PanelSection({ head, summary, hint, pinned = false, sectionClass = "", actions = null, children }) {
   const isMobile = useIsMobile();
 
   // Desktop, ou section epinglee sur mobile : rendu d'origine, intact.
@@ -54,6 +77,16 @@ function PanelSection({ head, summary, hint, pinned = false, sectionClass = "", 
       <summary className="ps-sum">
         <span className="ps-sum-title">{summary}</span>
         {hint ? <span className="ps-sum-hint">{hint}</span> : null}
+        {actions ? (
+          // Un element interactif dans <summary> declenche par defaut le
+          // repli/depli natif au clic (le clic remonte jusqu'au <summary>,
+          // qui bascule <details>). stopPropagation empeche le clic
+          // d'atteindre <summary> : sans ca, "Ouvrir ma semaine" replierait
+          // la section au lieu de naviguer.
+          <span className="ps-sum-actions" onClick={(e) => e.stopPropagation()}>
+            {actions}
+          </span>
+        ) : null}
       </summary>
       <div className="ps-body">{children}</div>
     </details>

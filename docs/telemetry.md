@@ -23,7 +23,11 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 > interdit qu'un event futur y échappe. Un appelant qui fournit explicitement `viewport`
 > garde sa valeur. C'est la mesure d'usage du portage iPhone — elle dit quels onglets sont
 > ouverts depuis le téléphone, et le critère d'arrêt du programme s'y adosse (voir
-> `docs/superpowers/specs/2026-08-21-cockpit-mobile-design.md`).
+> `docs/superpowers/specs/2026-08-21-cockpit-mobile-design.md`). Comme pour `surface`
+> ci-dessus, ce champ n'est **volontairement pas répété** dans la colonne payload de
+> chaque ligne du tableau ci-dessous : `viewport` s'ajoute au payload documenté de
+> **chaque** event, sans exception, même là où la ligne ne le montre pas — sinon ce
+> tableau se lirait à l'envers dès la prochaine ligne éditée.
 >
 > **Limite connue, à ne pas oublier en la lisant :** `usage_events` n'accepte les `INSERT`
 > que du rôle `authenticated`. Un démarrage qui meurt avant l'authentification n'écrit
@@ -33,7 +37,7 @@ Migration : [`jarvis/migrations/005_usage_events.sql`](../jarvis/migrations/005_
 
 | event_type | payload | Point d'instrumentation |
 |---|---|---|
-| `section_opened` | `{section, entry, viewport}` | Effet sur `[activePanel]` dans `cockpit/app.jsx` + `cockpit/lib/boot-mediatheque.js` |
+| `section_opened` | `{section, entry}` | Effet sur `[activePanel]` dans `cockpit/app.jsx` + `cockpit/lib/boot-mediatheque.js` |
 | `search_performed` | `{query_length, results_count}` | `cockpit/panel-search.jsx` après fetch |
 | `link_clicked` | `{url, section}` | Event delegation globale `a[target="_blank"]` dans `app.jsx` |
 | `pipeline_triggered` | `{pipeline, mode}` | `cockpit/panel-jarvis.jsx` avant `jarvisSend()` |

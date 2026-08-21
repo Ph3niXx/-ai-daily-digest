@@ -338,3 +338,16 @@ perdre : à traiter comme un lot propre.
 **Sort de `mediatheque.html` à terme.** Conservée par décision explicite. Si le cockpit
 mobile est adopté, la question de la retirer se reposera — deux icônes, deux manifests et un
 test d'invariant pour la même donnée.
+
+**`bootstrap.js` n'a pas de garde contre les données figées à la reprise iOS (limite
+connue, 2026-08-21).** `docs/superpowers/specs/2026-07-27-mediatheque-pwa-ios-design.md`
+(section « Risques et replis ») documentait un écouteur `visibilitychange` dans
+`boot-mediatheque.js` qui invalide la mémoïsation Tier 2 et refetch après une absence
+prolongée — nécessaire parce qu'iOS suspend une PWA au lieu de la fermer. Cette spec
+concluait que le cockpit complet n'en avait pas besoin ; ADR-46 rend cette conclusion
+caduque en faisant de `index.html` l'entrée installée sur l'écran d'accueil pour le cockpit
+mobile, pas seulement pour la Médiathèque. Le même figement s'applique donc désormais à
+`bootstrap.js`, qui n'a aucun écouteur équivalent : une session cockpit rouverte depuis
+l'icône après une absence longue peut afficher un Tier 1 périmé (brief, radar, signaux…)
+sans le savoir. Non implémenté dans cette vague — le correctif demande une invalidation de
+cache plus un re-run de Tier 1, portée neuve à chiffrer pour une vague ultérieure.

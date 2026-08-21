@@ -95,7 +95,7 @@ Tout nouveau secret GitHub Actions → entrée dans [docs/secrets.md](docs/secre
 | Telemetry events (`usage_events` instrumentés) | [docs/telemetry.md](docs/telemetry.md) |
 | Module Jarvis (vision, stack, observers, tables, phases, troubleshooting) | [jarvis/README.md](jarvis/README.md) |
 | Weekly pipeline (signals/veille/audit, calendrier, fail-safe) | [docs/weekly-pipeline.md](docs/weekly-pipeline.md) |
-| Specs onglets (30 fichiers + index + template) | [docs/specs/](docs/specs/) |
+| Specs onglets (31 fichiers + index + template) | [docs/specs/](docs/specs/) |
 | Règles éditoriales specs + maintenance | [docs/specs/MAINTENANCE.md](docs/specs/MAINTENANCE.md) |
 | Sidebar — source canonique nav (6 groupes, 31 onglets) | [cockpit/nav.js](cockpit/nav.js) |
 | Setup pipelines API perso | [docs/strava-setup.md](docs/strava-setup.md) · [docs/withings-setup.md](docs/withings-setup.md) · [docs/lastfm-setup.md](docs/lastfm-setup.md) · [docs/steam-setup.md](docs/steam-setup.md) |

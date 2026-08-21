@@ -2,7 +2,7 @@
 // Cache-first for static shell (cockpit/* + CDN libs pinned by SRI),
 // network-first for Supabase/API calls — so the app stays installable
 // and fast offline while always preferring fresh data when online.
-const CACHE = "cockpit-v142";
+const CACHE = "cockpit-v143";
 
 const STATIC = [
   "/jarvis-cockpit/",
@@ -10,7 +10,7 @@ const STATIC = [
   "/jarvis-cockpit/assets/icon-mediatheque-180.png",
   "/jarvis-cockpit/cockpit/app.jsx?v=34",
   "/jarvis-cockpit/cockpit/command-palette.jsx?v=1",
-  "/jarvis-cockpit/cockpit/components-mobile.jsx?v=1",
+  "/jarvis-cockpit/cockpit/components-mobile.jsx?v=2",
   "/jarvis-cockpit/cockpit/components-ticket.jsx?v=2",
   "/jarvis-cockpit/cockpit/data-anime.js?v=2",
   "/jarvis-cockpit/cockpit/data-apprentissage.js?v=1",
@@ -33,11 +33,11 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/data-veille.js?v=2",
   "/jarvis-cockpit/cockpit/data-wiki.js?v=1",
   "/jarvis-cockpit/cockpit/data.js",
-  "/jarvis-cockpit/cockpit/home.jsx?v=12",
+  "/jarvis-cockpit/cockpit/home.jsx?v=13",
   "/jarvis-cockpit/cockpit/icons.jsx?v=3",
   "/jarvis-cockpit/cockpit/lib/anilist.js?v=2",
   "/jarvis-cockpit/cockpit/lib/auth.js?v=2",
-  "/jarvis-cockpit/cockpit/lib/boot-mediatheque.js?v=3",
+  "/jarvis-cockpit/cockpit/lib/boot-mediatheque.js?v=4",
   "/jarvis-cockpit/cockpit/lib/bootstrap.js?v=3",
   "/jarvis-cockpit/cockpit/lib/data-loader.js?v=42",
   "/jarvis-cockpit/cockpit/lib/dialog.js?v=1",
@@ -87,7 +87,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/styles-jarvis.css?v=7",
   "/jarvis-cockpit/cockpit/styles-jobs-radar.css?v=5",
   "/jarvis-cockpit/cockpit/styles-mediatheque.css?v=9",
-  "/jarvis-cockpit/cockpit/styles-mobile.css?v=4",
+  "/jarvis-cockpit/cockpit/styles-mobile.css?v=5",
   "/jarvis-cockpit/cockpit/styles-musique.css?v=2",
   "/jarvis-cockpit/cockpit/styles-opportunities.css?v=5",
   "/jarvis-cockpit/cockpit/styles-profile.css?v=5",

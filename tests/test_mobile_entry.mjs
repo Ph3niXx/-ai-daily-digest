@@ -43,9 +43,14 @@ check("components-mobile.jsx precede home.jsx",
 // ── mediatheque.html ─────────────────────────────────────────
 // mobile-view.js est un script CLASSIQUE : il ne compte pas dans le budget
 // Babel, et telemetry.js le lit ici aussi.
+const mvPwaIdx = iPwa.indexOf("cockpit/lib/mobile-view.js");
+const telPwaIdx = iPwa.indexOf("cockpit/lib/telemetry.js");
 check("mediatheque.html charge mobile-view.js",
-  iPwa.includes("cockpit/lib/mobile-view.js"),
+  mvPwaIdx !== -1,
   "sans lui, track() y perd son champ viewport (le garde evite le crash, pas la perte)");
+check("mobile-view.js precede telemetry.js dans mediatheque.html",
+  mvPwaIdx !== -1 && telPwaIdx !== -1 && mvPwaIdx < telPwaIdx,
+  `mobile-view a l'index ${mvPwaIdx}, telemetry a l'index ${telPwaIdx} — track() lit window.mobileView`);
 
 check("mediatheque.html ne charge PAS components-mobile.jsx",
   !iPwa.includes("cockpit/components-mobile.jsx"),
