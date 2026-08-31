@@ -1,9 +1,29 @@
 name: Strava — Activity Sync
 
 on:
-  schedule:
-    # Quotidien à 4h30 UTC (6h30 Paris), après le pipeline RSS
-    - cron: '30 4 * * *'
+  # Cron retiré le 2026-08-25. NE PAS LE REMETTRE SANS ABONNEMENT STRAVA.
+  #
+  # Pourquoi : les appels à l'API Strava sont devenus réservés aux abonnés
+  # payants. L'application du dépôt est passée `Inactive` côté portail et
+  # chaque appel `/api/v3/*` répond
+  #   403 {"errors":[{"resource":"Application","field":"Status","code":"Inactive"}]}
+  # depuis le 2026-07-01 — 15 runs rouges d'affilée pour rien au 25/08.
+  #
+  # Ce n'est PAS un problème d'OAuth : `refresh_access_token()` renvoie
+  # toujours HTTP 200 et Strava émet encore des access_tokens. Le grant est
+  # intact, les trois secrets GitHub restent valides. Rejouer
+  # `scripts/strava_oauth_init.py` ne répare donc rien — c'est l'accès API
+  # lui-même qui a été retiré, hors du dépôt.
+  #
+  # Pour reprendre : souscrire l'abonnement, réactiver l'application sur
+  # strava.com/settings/api, lancer un `workflow_dispatch` et vérifier qu'il
+  # passe au vert — le lookback de 365 jours rattrape tout le trou en un run.
+  # Alors seulement restaurer :
+  #   schedule:
+  #     # Quotidien à 4h30 UTC (6h30 Paris), après le pipeline RSS
+  #     - cron: '30 4 * * *'
+  #
+  # En attendant, le pipeline reste lançable à la main.
   workflow_dispatch:  # Lancement manuel
 
 jobs:

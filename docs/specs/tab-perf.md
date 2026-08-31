@@ -34,6 +34,7 @@ Fichier : [cockpit/panel-forme.jsx](cockpit/panel-forme.jsx) — monté à [app.
 
 Structure DOM :
 - `<div class="fm-wrap" data-screen-label="Forme">`
+  - `.phb` — **bandeau « source en pause »** (`<FormeSourcesPausedBanner>`), rendu uniquement si `FORME_DATA._sources_paused` est non vide. Réutilise les classes du bandeau de santé global (`.phb*`, définies dans `styles.css`) : aucun CSS propre. Point neutre (`.is-paused`), pas le rouge `.is-failing` — une pause décidée n'est pas une panne.
   - `.fm-hero` — 2 cols (`.fm-hero-head` titre+lede | `.fm-hero-comp` snapshot Withings 3 cellules avec sparkline + delta 30j)
   - `.fm-week-strip` — bandeau 7 jours multi-discipline (segments empilés colorés par catégorie via `--brand` et `#5b8def`)
   - `.fm-tabs` — bascule Course / Workout (`localStorage forme.tab`)
@@ -47,6 +48,8 @@ Structure DOM :
 | `PanelForme({ data, onNavigate })` | Root — lit `window.FORME_DATA`, branches `_has_weight` / `_has_workouts`, gère l'état `tab` persisté | [panel-forme.jsx](cockpit/panel-forme.jsx) |
 | `CourseTab({ FD, weekLoadKm })` | Rendu sous-onglet Course (KPIs run + charge km + records + journal runs) | [panel-forme.jsx](cockpit/panel-forme.jsx) |
 | `WorkoutTab({ FD, weekLoadMin })` | Rendu sous-onglet Workout (KPIs workout + charge min + placeholder records + journal workouts) | [panel-forme.jsx](cockpit/panel-forme.jsx) |
+| `FormeSourcesPausedBanner({ sources, lastActivityDate })` | Bandeau de tête listant les sources coupées volontairement. Rend `null` si la liste est vide OU absente (donnée en cache d'avant le champ). N'utilise pas `<Icon>` : ce panneau n'en importe aucun et le bandeau ne doit pas dépendre de l'ordre de chargement des `<script>` | [panel-forme.jsx](cockpit/panel-forme.jsx) |
+| `fmFmtDateFr(iso)` | Date ISO → `"30 juin 2026"`, `null` si absente ou invalide | [panel-forme.jsx](cockpit/panel-forme.jsx) |
 | `Sparkline({ data, w, h, color, range })` | SVG mini-courbe avec aire + ligne, range optionnel | [panel-forme.jsx](cockpit/panel-forme.jsx) |
 | `WeekLoadChart({ weeks, valueKey, unit, colorVar })` | SVG 1000×220 — bar chart générique, paramétré sur la clé valeur (km ou min) et la couleur | [panel-forme.jsx](cockpit/panel-forme.jsx) |
 | `LineChart({ series, ySeries, range, height })` | SVG chart multi-séries avec padding 10% + empty state | [panel-forme.jsx](cockpit/panel-forme.jsx) |
@@ -57,7 +60,7 @@ Structure DOM :
 | `categorizeSport(sport_type)` | Classifie un `sport_type` Strava en `"run" \| "workout" \| "other"` (workout = WeightTraining, Workout, Crossfit, Yoga, Pilates, Strength, …) | [data-loader.js](cockpit/lib/data-loader.js) |
 | `T2.strava()` | `GET strava_activities?order=start_date.desc&limit=300` | [data-loader.js](cockpit/lib/data-loader.js) |
 | `T2.withings()` | `GET withings_measurements?order=measure_date.desc&limit=365`, `.catch(() => [])` | [data-loader.js](cockpit/lib/data-loader.js) |
-| `transformForme(activities, withings)` | Build complet du shape panel : tag chaque activité avec `_cat`, calcule KPIs séparés runs/workouts, produit `run_sessions` + `workout_sessions` + `_has_runs` + `_has_workouts` | [data-loader.js](cockpit/lib/data-loader.js) |
+| `transformForme(activities, withings)` | Build complet du shape panel : tag chaque activité avec `_cat`, calcule KPIs séparés runs/workouts, produit `run_sessions` + `workout_sessions` + `_has_runs` + `_has_workouts`, plus `_sources_paused` (constante `FORME_SOURCES_EN_PAUSE`) et `_last_activity_date` | [data-loader.js](cockpit/lib/data-loader.js) |
 | `mapSession(a)` (inline transform) | Mappe une activité en ligne de journal avec `type` (catégorie réelle), `effort` calculé selon le type (pace pour run, durée pour workout) | [data-loader.js](cockpit/lib/data-loader.js) |
 | `loadPanel("perf")` case | Fetch parallèle Strava + Withings + `replaceShape` + expose `_raw` + `_withings` | [data-loader.js](cockpit/lib/data-loader.js) |
 
@@ -74,7 +77,7 @@ Structure DOM :
 Pipeline Strava fait **2 requêtes par activité** : 1 list (30 par page) + 1 detail (fetch complet) avec `time.sleep(1.0)` entre chaque. 57 activités → 57+ appels. Rate limit Strava = 100 req/15min + 1000/jour.
 
 ## Back — pipelines qui alimentent
-- **Strava sync** ([pipelines/strava_sync.py](pipelines/strava_sync.py)) — cron `30 4 * * *` (4h30 UTC quotidien) via [.github/workflows/strava-sync.yml](.github/workflows/strava-sync.yml).
+- **Strava sync** ([pipelines/strava_sync.py](pipelines/strava_sync.py)) — **EN PAUSE depuis le 2026-08-25 (ADR-48)** : cron retiré, `status: paused` dans `pipelines.yaml`, le workflow reste lançable en `workflow_dispatch`. Les appels à l'API Strava sont devenus réservés aux abonnés payants. Les étapes ci-dessous décrivent le pipeline tel qu'il repartira sans modification le jour où l'accès revient.
   - Step 1 : lit `strava_refresh_token` depuis `user_profile` (Supabase) sinon fallback env `STRAVA_REFRESH_TOKEN`.
   - Step 2 : refresh access_token via OAuth, persiste le nouveau refresh_token dans `user_profile` si rotation.
   - Step 3 : `/athlete/activities?after={epoch-365j}` (lightweight list).
@@ -82,7 +85,7 @@ Pipeline Strava fait **2 requêtes par activité** : 1 list (30 par page) + 1 de
   - Step 5 : upsert `strava_activities_raw` (payload jsonb) + `strava_activities` (mapped fields).
   - Idempotent (on_conflict=id).
 - **Withings sync** ([pipelines/withings_sync.py](pipelines/withings_sync.py)) — cron `45 4 * * *` (4h45 UTC quotidien) via [.github/workflows/withings-sync.yml](.github/workflows/withings-sync.yml).
-  - Step 1 : refresh token (NON persisté — TODO).
+  - Step 1 : lit `user_profile.withings_refresh_token` (Supabase), repli sur le secret `WITHINGS_REFRESH_TOKEN` s'il n'y a rien. Refresh, puis persistance du token tourné **avant** la récupération des mesures — Withings rotate à chaque appel sans période de grâce, et l'écriture lève au lieu d'avertir (corrigé le 2026-07-26, doc rectifiée le 2026-08-25, ADR-49).
   - Step 2 : `getmeas?lastupdate={epoch-7j}` en mode incrémental, ou `startdate=0&enddate=now` si `--backfill`.
   - Step 3 : `group_to_daily_row()` extrait les 6 measure types (1/6/8/76/77/88), `merge_daily_rows()` collapse multiple mesures/jour en "latest-per-column wins".
   - Step 4 : upsert `withings_measurements_raw` (par `measure_group_id`) + `withings_measurements` (par `measure_date`).
@@ -119,7 +122,9 @@ Pipeline Strava fait **2 requêtes par activité** : 1 list (30 par page) + 1 de
 - **Aucune pesée sur 180j mais quelques-unes sur 30j** : LineChart range=180j affiche l'empty state "Pas assez de mesures sur 180j pour tracer une courbe."
 - **Activity avec `distance_m = 0`** sans `sport_type` workout : tombe dans `categorizeSport()` → "other". Apparaît dans le bandeau 7j (gris) mais pas dans les onglets Course / Workout.
 - **`gap dans streak`** : si `today` vide + `yesterday` vide → streak = 0. Si `today` vide + `yesterday` OK → streak = 1+.
-- **Withings token rotation non persisté** : la prochaine rotation force un échec silencieux (401 Unauthorized) jusqu'à re-init manuelle via `scripts/withings_oauth_init.py`.
+- **Source déclarée en pause** (`_sources_paused` non vide) : bandeau `.phb` en tête de panneau, et le titre du hero cesse d'annoncer « 0 séance cette semaine » pour afficher « Collecte en pause · dernière activité le <date> ». Motif : les fenêtres glissantes (7 j, 30 j, streak) se calculent contre la date du jour, donc une collecte arrêtée les remplit de zéros **indiscernables d'une vraie inactivité**. Le panneau ne peut pas trancher seul — la fraîcheur de `strava_activities` est mesurée mais jamais sanctionnée (pipeline piloté par l'usage, cf. en-tête de `pipelines.yaml`) — et `pipeline_health` ne peut plus l'aider : une brique `paused` en est élaguée (ADR-45). D'où une déclaration explicite et datée côté front.
+- **Données en cache antérieures au champ** : `_sources_paused` absent ⇒ le bandeau rend `null` et le hero reprend sa formulation normale. Aucun crash.
+- **Refresh token Withings mort** : `RuntimeError ... (status=503): Invalid Params: invalid refresh_token` — un **503**, pas un 401. Le token en base ou dans le secret a été consommé et n'est plus récupérable. Remède : rejouer `scripts/withings_oauth_init.py`, reposer le secret, puis relancer le workflow avec `backfill=true` — `INCREMENTAL_DAYS = 7` fait qu'un run normal sauterait définitivement tout ce qui précède la fenêtre. État au 2026-08-25 : mort depuis le 2026-04-23, `user_profile.withings_refresh_token` absent, en attente d'un OAuth manuel.
 - **Rate limit Strava atteint** : `fetch_activity_detail` throws, compteur `errors` incrémenté, le pipeline continue mais avec trous. Pas de retry.
 - **Backfill Strava** non supporté nativement : `LOOKBACK_DAYS=365` hard-codé, mais override via `--days=N` en CLI (pas via workflow_dispatch input).
 - **Activité supprimée côté Strava** : le pipeline ne la refetche plus, mais elle reste dans `strava_activities` indéfiniment (pas de `soft_delete` ni détection "disparue").
@@ -142,6 +147,13 @@ Pipeline Strava fait **2 requêtes par activité** : 1 list (30 par page) + 1 de
 - [ ] **Pas de graphe de FC** : `average_heartrate` stocké mais affiché seulement en colonne journal.
 
 ## Dernière MAJ
+2026-08-25 — mise en pause honnête de la source Strava :
+- Cron `strava-sync` retiré (`workflow_dispatch` conservé), `status: paused` dans `pipelines.yaml`, ADR-48. Cause hors dépôt : les appels API Strava sont devenus réservés aux abonnés, l'application est `Inactive` et tout `/api/v3/*` répond 403 depuis le 2026-07-01.
+- Ce n'est **pas** un problème d'OAuth : `refresh_access_token()` renvoie toujours HTTP 200 et le grant est intact. Les trois secrets GitHub restent valides ; rejouer `scripts/strava_oauth_init.py` ne répare rien. La remédiation affichée par le cockpit affirmait l'inverse, elle est corrigée.
+- Nouveau `<FormeSourcesPausedBanner>` + titre de hero honnête, alimentés par `_sources_paused` / `_last_activity_date`. Sans ça le panneau affichait des zéros se lisant comme de l'inactivité.
+- Reprise = un commit : retirer l'entrée de `FORME_SOURCES_EN_PAUSE` et restaurer le cron. Le lookback de 365 jours rattrape tout le trou en un seul run.
+- **Non traité ici** : Withings est mort de son côté depuis le 2026-04-23 (3 mesures, token invalide) et n'est PAS déclaré en pause — son pipeline tourne encore et `pipeline_health` le signale toujours.
+
 2026-04-26 — refonte panel Forme en hero global + sous-onglets :
 - Hero intègre le snapshot Withings (composition cross-discipline) + bandeau 7 jours multi-couleur.
 - Sous-onglets Course / Workout persistés dans `localStorage.forme.tab`, chacun avec KPIs / charge hebdo / journal dédiés.

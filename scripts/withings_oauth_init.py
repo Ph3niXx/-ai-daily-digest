@@ -5,7 +5,8 @@ One-shot script to complete the Withings OAuth2 flow.
 Launches a local HTTP server, opens the browser for authorization,
 captures the callback code, and exchanges it for tokens.
 
-Output: WITHINGS_REFRESH_TOKEN and WITHINGS_USER_ID to copy into GitHub Secrets.
+Output: WITHINGS_REFRESH_TOKEN a poser en secret GitHub (WITHINGS_USER_ID est
+affiche a titre informatif : aucun pipeline ne le lit).
 
 Dependencies: stdlib only (no pip install needed).
 
@@ -221,21 +222,47 @@ def main():
 
     print()
     print("=" * 60)
-    print("  Copy these values into GitHub Secrets:")
+    print("  ETAPE 1 — poser ce secret GitHub")
     print("=" * 60)
     print()
-    print(f"  User ID: {user_id}")
-    print(f"  Scopes: user.metrics OK")
+    print(f"  User ID : {user_id}   (informatif — AUCUN secret a creer avec)")
+    print(f"  Scopes  : user.metrics OK")
     print()
     print(f"  WITHINGS_REFRESH_TOKEN={refresh_token}")
-    print(f"  WITHINGS_USER_ID={user_id}")
     print()
-    print("  GitHub Secrets location:")
     print("  Settings > Secrets and variables > Actions > New repository secret")
     print()
-    print("  You also need these secrets (from your Withings developer app):")
+    print("  Ces deux-la doivent deja exister (app developpeur Withings) :")
     print(f"  WITHINGS_CLIENT_ID={client_id}")
-    print(f"  WITHINGS_CLIENT_SECRET=<your_secret>")
+    print(f"  WITHINGS_CLIENT_SECRET=<votre_secret>")
+    print()
+    print("=" * 60)
+    print("  ETAPE 2 — lancer le workflow avec backfill=true")
+    print("=" * 60)
+    print()
+    print("  gh workflow run withings-sync.yml -f backfill=true")
+    print()
+    print("  NE PAS SAUTER, et ne pas se contenter d'attendre le cron : un run")
+    print("  normal n'interroge que les INCREMENTAL_DAYS = 7 derniers jours.")
+    print("  Tout ce qui precede cette fenetre serait saute definitivement,")
+    print("  alors que Withings conserve l'historique cote serveur.")
+    print()
+    print("=" * 60)
+    print("  A SAVOIR — le secret ci-dessus ne sert qu'UNE fois")
+    print("=" * 60)
+    print()
+    print("  Withings fait tourner le refresh_token a CHAQUE appel et invalide")
+    print("  l'ancien aussitot. Le secret GitHub n'est donc valable que pour le")
+    print("  tout premier run ; ensuite la source de verite est la ligne")
+    print("  user_profile.withings_refresh_token dans Supabase, que le pipeline")
+    print("  reecrit a chaque rotation (avant de recuperer les mesures, pour")
+    print("  qu'un echec de recuperation ne l'emporte pas avec lui).")
+    print()
+    print("  Ne pas rejouer ce script tant que la chaine tourne : cela")
+    print("  invaliderait le token en base et rouvrirait la panne.")
+    print()
+    print("  C'est l'absence de cette persistance qui a tue le pipeline du")
+    print("  2026-04-23 au 2026-08-25 — un seul run reussi, puis rien.")
     print()
     print("=" * 60)
 

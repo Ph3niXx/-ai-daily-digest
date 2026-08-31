@@ -48,7 +48,7 @@ Setup : voir [withings-setup.md](withings-setup.md).
 |---|---|
 | `WITHINGS_CLIENT_ID` | Withings API app client ID |
 | `WITHINGS_CLIENT_SECRET` | Withings API app consumer secret |
-| `WITHINGS_REFRESH_TOKEN` | OAuth2 refresh token (obtenu via `scripts/withings_oauth_init.py`) |
+| `WITHINGS_REFRESH_TOKEN` | OAuth2 refresh token (via `scripts/withings_oauth_init.py`). **Usage unique** : le premier run le consomme, ensuite la source de vérité est `user_profile.withings_refresh_token` — il est normal qu'il devienne périmé (ADR-49) |
 
 ## Last.fm (pipeline `pipelines/lastfm_sync.py`)
 

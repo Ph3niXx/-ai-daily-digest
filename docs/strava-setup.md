@@ -1,5 +1,20 @@
 # Strava Integration — Setup Guide
 
+> **⏸ Intégration en pause depuis le 2026-08-25 (ADR-48).** Les appels à l'API
+> Strava sont devenus réservés aux abonnés payants : l'application est `Inactive`
+> côté portail et tout `/api/v3/*` répond `403 resource: Application /
+> field: Status / code: Inactive`. Le cron a été retiré ; le workflow reste
+> lançable en `workflow_dispatch`.
+>
+> **Ne recommencez pas l'étape 1 pour réparer ça.** Le grant OAuth est intact —
+> `refresh_access_token()` renvoie toujours HTTP 200 — et les trois secrets
+> GitHub restent valides. Rejouer `strava_oauth_init.py` ne changera rien tant
+> que l'accès API n'est pas rétabli : il faut un abonnement Strava, puis
+> réactiver l'application sur https://www.strava.com/settings/api.
+>
+> Ce guide reste juste pour une première installation, ou pour la reprise une
+> fois l'accès rétabli.
+
 ## Prerequisites
 
 1. A Strava account with activities

@@ -20,7 +20,7 @@ The script:
 - Reads your Client ID and Client Secret from `Config.txt` (if present) or prompts for them
 - Opens your browser on the Withings consent screen
 - Captures the callback code and exchanges it for a refresh token
-- Prints your `WITHINGS_REFRESH_TOKEN` and `WITHINGS_USER_ID`
+- Prints your `WITHINGS_REFRESH_TOKEN` (et un `WITHINGS_USER_ID` purement informatif : **aucun pipeline ne le lit**, n'en faites pas un secret)
 
 If you want to automate, create `Config.txt` at the repo root:
 ```
@@ -42,7 +42,16 @@ Add these 3 secrets:
 
 The workflow also uses the existing `SUPABASE_URL` + `SUPABASE_SERVICE_KEY`.
 
+⚠️ `WITHINGS_REFRESH_TOKEN` est à **usage unique** : le premier run le consomme
+et bascule la chaîne sur `user_profile.withings_refresh_token`. Voir
+[Token refresh](#token-refresh).
+
 ## Step 3 — Initial backfill
+
+**Obligatoire, et pas seulement à la première installation** : un run normal
+n'interroge que les `INCREMENTAL_DAYS = 7` derniers jours. Après une coupure,
+tout ce qui précède cette fenêtre serait sauté définitivement — alors que
+Withings conserve l'historique côté serveur. Attendre le cron ne suffit pas.
 
 Trigger a full history sync:
 
@@ -93,14 +102,43 @@ python pipelines/withings_sync.py --dry-run
 
 ## Token refresh
 
-Withings rotates the refresh token on every call. The pipeline handles
-this for the current run, but **the new token is NOT automatically written
-back to GitHub Secrets** — Withings keeps the previous token valid for a
-grace period (usually days), and the script uses the latest one it got.
+Withings fait tourner le refresh_token à **chaque** appel et invalide
+l'ancien **immédiatement**. Il n'existe **aucune période de grâce**.
 
-If you see 401 errors for several consecutive runs, re-run
-`python scripts/withings_oauth_init.py` to regenerate a fresh token and
-update the `WITHINGS_REFRESH_TOKEN` secret.
+> ⚠️ Cette page a affirmé le contraire — « Withings keeps the previous token
+> valid for a grace period (usually days) » — et c'est cette phrase qui a tué
+> le pipeline. `withings_sync.py` jetait le token tourné en s'appuyant dessus :
+> un seul run réussi le 2026-04-23, puis `invalid refresh_token` tous les jours
+> jusqu'au 2026-08-25. Corrigé dans le code le 2026-07-26 ; corrigé ici le
+> 2026-08-25. Voir ADR-45 et [ADR-49](architecture/decisions.md).
+
+Fonctionnement réel :
+
+1. Le pipeline lit `user_profile.withings_refresh_token` (Supabase) et se
+   rabat sur le secret `WITHINGS_REFRESH_TOKEN` seulement s'il n'y a rien.
+2. Il échange le token, puis **écrit immédiatement** le nouveau en base —
+   *avant* d'aller chercher les mesures, pour qu'un échec de récupération
+   n'emporte pas le token avec lui.
+3. Si cette écriture échoue, le run **lève** au lieu d'avertir : le token
+   venant d'être consommé, un échec silencieux reproduirait la panne.
+
+**Le secret GitHub ne vaut donc que pour le premier run** suivant une
+(ré)autorisation. Ensuite, la source de vérité est Supabase — il est normal
+et attendu que le secret devienne périmé.
+
+**Ne rejouez pas `withings_oauth_init.py` tant que la chaîne tourne** : cela
+invaliderait le token en base et rouvrirait la panne.
+
+Symptôme d'un token mort — noter le **503**, pas un 401 :
+
+```
+RuntimeError: Withings token refresh failed (status=503):
+{"status": 503, "body": {}, "error": "Invalid Params: invalid refresh_token"}
+```
+
+Remède : rejouer `python scripts/withings_oauth_init.py`, remettre le secret,
+puis **relancer le workflow avec `backfill=true`** (étape 3) — un run normal
+ne regarde que les 7 derniers jours et sauterait tout le trou.
 
 ## Rate limits
 
