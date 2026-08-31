@@ -38,7 +38,7 @@ Vérifiées le 2026-08-31 : les 5 linters passent, les 29 tests passent.
 
 - Fais ce qui est demandé, pas le voisinage. Un problème adjacent se signale en une ligne, il ne se corrige pas dans le même commit.
 - Une instruction porte sur ce qu'elle nomme : ne l'étends pas aux autres onglets, pipelines ou specs sans le dire explicitement.
-- Ce dépôt est **public**. Aucune donnée employeur (exports Jira, xlsx, noms de collègues) n'y entre — le `.gitignore` bloque `*.xlsx`/`*.pptx`/`snapshot_*.json` depuis qu'une branche en a publié le 2026-04-28.
+- **Ce dépôt est public** — tout push y est une publication. Le `.gitignore` bloque les exports bureautiques depuis qu'une branche en a publié deux le 2026-04-28.
 
 ## Règles cardinales (toujours dans le même commit que le code)
 
