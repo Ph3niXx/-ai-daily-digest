@@ -37,11 +37,11 @@ by_id = {p["id"]: p for p in pipes}
 
 print("-- le catalogue")
 
-# 18 et non 19 depuis le 2026-08-21 : tft_sync est passé en `status: paused`
-# (cron retiré, clé Riot de développement non viable — ADR-45), il sort donc du
-# catalogue surveillé. Ce compteur est un inventaire, pas un seuil : il doit
-# bouger quand le catalogue bouge, et c'est précisément ce qu'on veut voir.
-check("18 briques surveillees", len(pipes), 18)
+# 17 depuis le 2026-08-25, après 18 le 2026-08-21 et 19 avant : tft_sync puis
+# strava_sync sont passés en `status: paused` et sortent du catalogue surveillé.
+# Ce compteur est un inventaire, pas un seuil : il doit bouger quand le catalogue
+# bouge, et c'est précisément ce qu'on veut voir.
+check("17 briques surveillees", len(pipes), 17)
 
 EXPECTED = {
     "veille_ia": {"daily_digest", "veille_picks"},
@@ -51,7 +51,12 @@ EXPECTED = {
     # tft_sync retiré le 2026-08-21 : passé en `status: paused` (ADR-45), il ne
     # fait plus partie du catalogue surveillé. Le remettre ici exigerait de
     # remettre son cron, ce qui suppose une clé Riot non expirante.
-    "perso": {"strava_sync", "withings_sync", "lastfm_sync", "steam_sync",
+    #
+    # strava_sync retiré le 2026-08-25 pour la même raison (ADR-48) : les appels
+    # à l'API Strava sont devenus réservés aux abonnés. Le remettre ici suppose
+    # un abonnement et la réactivation de l'application — rien que le dépôt
+    # puisse faire. withings_sync RESTE surveillé : lui est réparable ici.
+    "perso": {"withings_sync", "lastfm_sync", "steam_sync",
               "igdb_tracker_sync"},
     "business": {"jobs_radar_routine"},
     "socle": {"backup_supabase", "pipeline_health"},

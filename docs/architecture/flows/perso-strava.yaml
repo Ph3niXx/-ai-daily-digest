@@ -16,8 +16,8 @@ pipeline:
   id: strava_sync
   workflow: ".github/workflows/strava-sync.yml"
   script: "pipelines/strava_sync.py"
-  cron: "30 4 * * * (quotidien 04:30 UTC)"
-  dispatch_input: "days (défaut 365, backfill manuel)"
+  cron: "aucun — cron retiré le 2026-08-25, voir pipelines.yaml::strava_sync (ADR-48)"
+  dispatch_input: "aucun — le workflow n'expose pas d'input ; le backfill passe par --days=N en CLI"
   steps:
     - "Lit strava_refresh_token depuis user_profile (fallback env secret)"
     - "Refresh access_token via OAuth, persiste nouveau refresh_token si rotation"
@@ -45,3 +45,9 @@ notes:
   - "LOOKBACK_DAYS=365 hard-codé dans strava_sync.py — override via --days=N en CLI."
   - "Activités sans distance (gym) sont incluses dans le journal mais exclues du calcul allure moyenne."
   - "Panel Forme croise ces activités avec withings_measurements pour la vue composition corporelle."
+  - >-
+    EN PAUSE depuis le 2026-08-25 (ADR-48) : les appels à l'API Strava sont devenus
+    réservés aux abonnés payants, l'application est `Inactive` et tout /api/v3/* répond 403.
+    Le flow reste `active` — il décrit une architecture intacte (code, tables, câblage panel),
+    pas un état d'exécution ; celui-ci vit dans pipelines.yaml::strava_sync.status = paused.
+    La dernière activité récoltée date du 2026-06-30.

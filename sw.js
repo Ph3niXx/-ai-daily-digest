@@ -2,7 +2,7 @@
 // Cache-first for static shell (cockpit/* + CDN libs pinned by SRI),
 // network-first for Supabase/API calls — so the app stays installable
 // and fast offline while always preferring fresh data when online.
-const CACHE = "cockpit-v143";
+const CACHE = "cockpit-v146";
 
 const STATIC = [
   "/jarvis-cockpit/",
@@ -39,7 +39,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/lib/auth.js?v=2",
   "/jarvis-cockpit/cockpit/lib/boot-mediatheque.js?v=4",
   "/jarvis-cockpit/cockpit/lib/bootstrap.js?v=3",
-  "/jarvis-cockpit/cockpit/lib/data-loader.js?v=42",
+  "/jarvis-cockpit/cockpit/lib/data-loader.js?v=43",
   "/jarvis-cockpit/cockpit/lib/dialog.js?v=1",
   "/jarvis-cockpit/cockpit/lib/games-view.js?v=3",
   "/jarvis-cockpit/cockpit/lib/mediatheque-view.js?v=3",
@@ -72,7 +72,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/panel-signals.jsx?v=9",
   "/jarvis-cockpit/cockpit/panel-stacks.jsx?v=3",
   "/jarvis-cockpit/cockpit/panel-top.jsx?v=1",
-  "/jarvis-cockpit/cockpit/panel-veille-outils.jsx?v=2",
+  "/jarvis-cockpit/cockpit/panel-veille-outils.jsx?v=3",
   "/jarvis-cockpit/cockpit/panel-veille.jsx?v=11",
   "/jarvis-cockpit/cockpit/panel-week.jsx?v=1",
   "/jarvis-cockpit/cockpit/panel-wiki.jsx?v=6",
@@ -96,7 +96,7 @@ const STATIC = [
   "/jarvis-cockpit/cockpit/styles-sante.css?v=1",
   "/jarvis-cockpit/cockpit/styles-signals.css?v=4",
   "/jarvis-cockpit/cockpit/styles-stacks.css?v=5",
-  "/jarvis-cockpit/cockpit/styles-veille-outils.css?v=3",
+  "/jarvis-cockpit/cockpit/styles-veille-outils.css?v=4",
   "/jarvis-cockpit/cockpit/styles-wiki.css?v=7",
   "/jarvis-cockpit/cockpit/styles.css?v=35",
   "/jarvis-cockpit/cockpit/themes.js?v=2",

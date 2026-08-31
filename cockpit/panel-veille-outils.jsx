@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
-// PANEL VEILLE OUTILS — 2 sous-onglets
+// PANEL VEILLE OUTILS — 3 sous-onglets
 //   1. Veille hebdo : synthèse Cowork classée en 4 buckets
 //   2. Catalogue écosystème : répertoire stable des outils inbound/outbound
+//   3. Panorama : marché IA au sens large, rangé par cas d'usage et par prix
 // ═══════════════════════════════════════════════════════════════
 
 window.VEILLE_OUTILS_DATA = window.VEILLE_OUTILS_DATA || {
@@ -11,6 +12,7 @@ window.VEILLE_OUTILS_DATA = window.VEILLE_OUTILS_DATA || {
   total: 0,
   by_category: {},
   ecosystem: [],
+  panorama: [],
 };
 
 // ── Veille hebdo ───────────────────────────────────────────────
@@ -53,6 +55,37 @@ const VO_ECO_TYPES = [
   { id: "other",           label: "Autre" },
 ];
 const VO_ECO_TYPE_LABEL = Object.fromEntries(VO_ECO_TYPES.map(t => [t.id, t.label]));
+
+// ── Panorama ───────────────────────────────────────────────────
+// Ordre = ordre d'affichage des sections. "core" d'abord, "context" ensuite :
+// l'ordre encode la pertinence, il n'est pas alphabétique par hasard.
+const VO_USE_CASES = [
+  { id: "code",          label: "Agents de code et CLI",      zone: "core",    note: "Le classement d'août 2026 est mené par des agents en ligne de commande, pas par des IDE." },
+  { id: "claude_stack",  label: "L'écosystème Claude payé",   zone: "core",    note: "Tout ce bloc est inclus dans un abonnement Pro à 20 $. Le gâchis courant est de payer Pro et de n'utiliser que le chat." },
+  { id: "mcp",           label: "Serveurs MCP",               zone: "core",    note: "Un set court bat un set long : chaque serveur ajoute ses outils au budget de contexte, chaque credential élargit la surface de confiance." },
+  { id: "veille",        label: "Veille, lecture, recherche", zone: "core",    note: "Le cockpit fait la collecte. Ces outils couvrent l'autre moitié : lire ce qui a été collecté, interroger un corpus fermé sans qu'il invente." },
+  { id: "llm_local",     label: "LLM local sur 8 Go",         zone: "core",    note: "Le critère utile n'est pas le score, c'est « tient-il en VRAM au contexte dont j'ai besoin »." },
+  { id: "orchestration", label: "Orchestration",              zone: "core",    note: "Deux familles : les canevas visuels quand l'IA n'est qu'une étape, les frameworks code quand l'agent est le produit." },
+  { id: "data",          label: "Données et vectoriel",       zone: "core",    note: "La question n'est pas « quelle est la meilleure base vectorielle » mais « ai-je un volume qui justifie une base de plus »." },
+  { id: "metier_rte",    label: "Métier RTE et cérémonies",   zone: "core",    note: "Le clivage décisif n'est pas la qualité du résumé, c'est la présence d'un robot dans la visio." },
+  { id: "carriere",      label: "Carrière et opportunités",   zone: "core",    note: "Jobs Radar couvre le sourcing. Ces outils couvrent l'aval : adapter, passer les ATS, suivre le pipeline." },
+  { id: "image",         label: "Image",                      zone: "context", note: "Le meilleur outil gratuit est aujourd'hui un modèle de frontière, pas un modèle au rabais." },
+  { id: "video",         label: "Vidéo",                      zone: "context", note: "Facturation à la seconde produite. C'est le poste où l'on brûle un budget sans s'en rendre compte." },
+  { id: "voix",          label: "Voix et transcription",      zone: "context", note: "La dictée est devenue un gain de vitesse au clavier. Whisper en local reste le plancher gratuit." },
+  { id: "bureautique",   label: "Bureautique et documents",   zone: "context", note: "Le piège commun : des crédits gratuits en bloc unique, non renouvelés. Lis toujours si le free tier se recharge." },
+  { id: "navigateur",    label: "Navigateur et computer-use", zone: "context", note: "Le cas d'usage réel : ce qui vit derrière un login sans API." },
+  { id: "observabilite", label: "Observabilité et éval",      zone: "context", note: "Dès qu'un pipeline tourne en cron sans personne devant, tu as besoin de traces — sinon la panne se découvre des semaines plus tard." },
+  { id: "agent_perso",   label: "Agents personnels",          zone: "context", note: "La catégorie qui a explosé en 2026, et celle où le rapport risque / bénéfice est le plus mal compris." },
+  { id: "other",         label: "Autre",                      zone: "context", note: "" },
+];
+const VO_USE_CASE_LABEL = Object.fromEntries(VO_USE_CASES.map(u => [u.id, u.label]));
+
+const VO_PRICING = [
+  { id: "free",     label: "Gratuit" },
+  { id: "freemium", label: "Freemium" },
+  { id: "paid",     label: "Payant" },
+];
+const VO_PRICING_LABEL = Object.fromEntries(VO_PRICING.map(p => [p.id, p.label]));
 
 // ── Helpers ────────────────────────────────────────────────────
 function voSafeHtml(md) {
@@ -517,6 +550,274 @@ function CatalogueView({ items, pending, onPatch, onAddManual }) {
 }
 
 // ─── Modal "+ Ajouter une intégration" ─────────────────────────
+// ─── Panorama : pastille prix (pleine / moitié / creuse) ───────
+// La forme porte l'info, pas seulement la couleur : lisible en N&B et
+// sans jugement de valeur (payant n'est pas "rouge = mauvais").
+function VOPricingDot({ tier }) {
+  return (
+    <span
+      className={`vo-pano-dot vo-pano-dot--${tier}`}
+      title={VO_PRICING_LABEL[tier] || tier}
+      aria-hidden="true"
+    />
+  );
+}
+
+function VOPanoCard({ item, onPatch, busy }) {
+  const [notes, setNotes] = React.useState(item.user_notes || "");
+  const [notesDirty, setNotesDirty] = React.useState(false);
+
+  React.useEffect(() => {
+    setNotes(item.user_notes || "");
+    setNotesDirty(false);
+  }, [item.id, item.user_notes]);
+
+  const saveNotes = () => {
+    if (!notesDirty) return;
+    onPatch(item.id, { user_notes: notes });
+    setNotesDirty(false);
+  };
+
+  const togglePin = () => onPatch(item.id, { is_pinned: !item.is_pinned });
+  const setPriority = (p) => onPatch(item.id, { user_priority: p === item.user_priority ? null : p });
+  const setStatus = (s) => onPatch(item.id, { status: s });
+
+  return (
+    <article className={`vo-pano-card vo-pano-card--${item.status} ${item.is_pinned ? "vo-pano-card--pinned" : ""} ${busy ? "is-busy" : ""}`}>
+      <div className="vo-pano-card-head">
+        <h4 className="vo-pano-card-title">
+          {item.source_url ? (
+            <a href={item.source_url} target="_blank" rel="noopener noreferrer">{item.name}</a>
+          ) : item.name}
+        </h4>
+        <button
+          className={`vo-eco-pin ${item.is_pinned ? "is-active" : ""}`}
+          onClick={togglePin}
+          disabled={busy}
+          title={item.is_pinned ? "Désépingler" : "Épingler en haut"}
+          aria-label="Épingler"
+        >
+          {item.is_pinned ? "★" : "☆"}
+        </button>
+      </div>
+
+      <div className="vo-pano-price">
+        <VOPricingDot tier={item.pricing_tier} />
+        <span>{item.pricing_note || VO_PRICING_LABEL[item.pricing_tier]}</span>
+      </div>
+
+      {item.description && <p className="vo-pano-card-desc">{item.description}</p>}
+
+      {item.meta_note && <div className="vo-pano-card-meta">{item.meta_note}</div>}
+
+      {item.applicability && (
+        <p className="vo-pano-card-why">
+          <b>Chez toi&nbsp;:</b> {item.applicability}
+        </p>
+      )}
+
+      {Array.isArray(item.tags) && item.tags.length > 0 && (
+        <div className="vo-eco-card-tags">
+          {item.tags.slice(0, 6).map(t => (
+            <span key={t} className="vo-eco-tag">#{t}</span>
+          ))}
+        </div>
+      )}
+
+      <div className="vo-eco-card-foot">
+        <div className="vo-eco-card-priority">
+          <span className="vo-eco-card-priority-label">Priorité</span>
+          {["high", "medium", "low"].map(p => (
+            <button
+              key={p}
+              className={`vo-eco-pri-btn vo-eco-pri-btn--${p} ${item.user_priority === p ? "is-active" : ""}`}
+              onClick={() => setPriority(p)}
+              disabled={busy}
+            >{p === "high" ? "haute" : p === "medium" ? "moy." : "basse"}</button>
+          ))}
+        </div>
+
+        <div className="vo-eco-card-status">
+          {item.status === "active" ? (
+            <button className="vo-eco-card-status-btn" onClick={() => setStatus("dismissed")} disabled={busy}>
+              Écarter
+            </button>
+          ) : (
+            <button className="vo-eco-card-status-btn" onClick={() => setStatus("active")} disabled={busy}>
+              Réactiver
+            </button>
+          )}
+          {item.status !== "active" && (
+            <span className={`vo-eco-card-status-tag vo-eco-card-status-tag--${item.status}`}>
+              {item.status === "dismissed" ? "écarté" : "archivé"}
+            </span>
+          )}
+        </div>
+
+        <textarea
+          className="vo-eco-card-notes"
+          placeholder="Note perso (save on blur)"
+          value={notes}
+          onChange={(e) => { setNotes(e.target.value); setNotesDirty(true); }}
+          onBlur={saveNotes}
+          disabled={busy}
+          rows={1}
+        />
+      </div>
+    </article>
+  );
+}
+
+// ─── Panorama : vue par cas d'usage ────────────────────────────
+function PanoramaView({ items, pending, onPatch }) {
+  const [priceFilter, setPriceFilter] = React.useState(() => {
+    try { return localStorage.getItem("vo.pano.price") || "all"; } catch { return "all"; }
+  });
+  const [zoneFilter, setZoneFilter] = React.useState(() => {
+    try { return localStorage.getItem("vo.pano.zone") || "all"; } catch { return "all"; }
+  });
+  const [useCaseFilter, setUseCaseFilter] = React.useState(() => {
+    try { return localStorage.getItem("vo.pano.useCase") || "all"; } catch { return "all"; }
+  });
+  const [hideDismissed, setHideDismissed] = React.useState(() => {
+    try { return localStorage.getItem("vo.pano.hideDismissed") !== "0"; } catch { return true; }
+  });
+  const [query, setQuery] = React.useState("");
+
+  React.useEffect(() => { try { localStorage.setItem("vo.pano.price", priceFilter); } catch {} }, [priceFilter]);
+  React.useEffect(() => { try { localStorage.setItem("vo.pano.zone", zoneFilter); } catch {} }, [zoneFilter]);
+  React.useEffect(() => { try { localStorage.setItem("vo.pano.useCase", useCaseFilter); } catch {} }, [useCaseFilter]);
+  React.useEffect(() => { try { localStorage.setItem("vo.pano.hideDismissed", hideDismissed ? "1" : "0"); } catch {} }, [hideDismissed]);
+
+  const q = query.trim().toLowerCase();
+
+  const filtered = React.useMemo(() => items.filter(it => {
+    if (hideDismissed && it.status !== "active") return false;
+    if (priceFilter !== "all" && it.pricing_tier !== priceFilter) return false;
+    if (zoneFilter !== "all" && it.relevance !== zoneFilter) return false;
+    if (useCaseFilter !== "all" && it.use_case !== useCaseFilter) return false;
+    if (q) {
+      const hay = `${it.name} ${it.description || ""} ${it.pricing_note || ""} ${it.meta_note || ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }), [items, hideDismissed, priceFilter, zoneFilter, useCaseFilter, q]);
+
+  const grouped = React.useMemo(() => {
+    const out = {};
+    VO_USE_CASES.forEach(u => out[u.id] = []);
+    filtered.forEach(it => { (out[it.use_case] || (out[it.use_case] = [])).push(it); });
+    Object.values(out).forEach(list => list.sort((a, b) => {
+      if (!!b.is_pinned !== !!a.is_pinned) return b.is_pinned ? 1 : -1;
+      return String(a.name).localeCompare(String(b.name));
+    }));
+    return out;
+  }, [filtered]);
+
+  // Les cas d'usage présents dans les données, pour ne pas proposer un filtre vide
+  const presentUseCases = React.useMemo(
+    () => VO_USE_CASES.filter(u => items.some(i => i.use_case === u.id)),
+    [items]
+  );
+
+  return (
+    <>
+      <div className="vo-filters vo-filters--pano">
+        <div className="vo-filters-group">
+          <span className="vo-filters-label">Prix</span>
+          <button className={`pill ${priceFilter === "all" ? "is-active" : ""}`} onClick={() => setPriceFilter("all")}>Tous</button>
+          {VO_PRICING.map(p => (
+            <button
+              key={p.id}
+              className={`pill pill--dot ${priceFilter === p.id ? "is-active" : ""}`}
+              onClick={() => setPriceFilter(p.id)}
+            ><VOPricingDot tier={p.id} />{p.label}</button>
+          ))}
+        </div>
+
+        <div className="vo-filters-group">
+          <span className="vo-filters-label">Terrain</span>
+          {[
+            { id: "all",     label: "Tout" },
+            { id: "core",    label: "Le tien" },
+            { id: "context", label: "Au-delà" },
+          ].map(z => (
+            <button
+              key={z.id}
+              className={`pill ${zoneFilter === z.id ? "is-active" : ""}`}
+              onClick={() => setZoneFilter(z.id)}
+            >{z.label}</button>
+          ))}
+        </div>
+
+        <div className="vo-filters-group">
+          <span className="vo-filters-label">Usage</span>
+          <select
+            className="vo-pano-select"
+            value={useCaseFilter}
+            onChange={(e) => setUseCaseFilter(e.target.value)}
+            aria-label="Filtrer par cas d'usage"
+          >
+            <option value="all">Tous les cas d'usage</option>
+            {presentUseCases.map(u => (
+              <option key={u.id} value={u.id}>{u.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <input
+          className="vo-pano-search"
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Chercher un outil…"
+          aria-label="Chercher un outil"
+        />
+
+        <label className="vo-filters-toggle">
+          <input
+            type="checkbox"
+            checked={hideDismissed}
+            onChange={(e) => setHideDismissed(e.target.checked)}
+          />
+          <span>Masquer écartés + archivés</span>
+        </label>
+      </div>
+
+      {filtered.length === 0 ? (
+        <div className="vo-empty">
+          <p>Aucun outil ne matche les filtres.</p>
+          <p className="vo-empty-sub">
+            Élargis le prix ou le terrain. Le panorama est rafraîchi par la passe 2 de la routine mensuelle « Catalogue écosystème Claude ».
+          </p>
+        </div>
+      ) : (
+        VO_USE_CASES.map(uc => {
+          const list = grouped[uc.id] || [];
+          if (!list.length) return null;
+          return (
+            <section key={uc.id} className={`vo-pano-section vo-pano-section--${uc.zone}`}>
+              <div className="vo-pano-section-head">
+                <h3>{uc.label}</h3>
+                <span className="vo-pano-section-count">{list.length}</span>
+                <span className={`vo-pano-zone vo-pano-zone--${uc.zone}`}>
+                  {uc.zone === "core" ? "ton terrain" : "au-delà"}
+                </span>
+              </div>
+              {uc.note && <p className="vo-pano-section-note">{uc.note}</p>}
+              <div className="vo-pano-grid">
+                {list.map(it => (
+                  <VOPanoCard key={it.id} item={it} onPatch={onPatch} busy={!!pending[it.id]} />
+                ))}
+              </div>
+            </section>
+          );
+        })
+      )}
+    </>
+  );
+}
+
 function AddIntegrationModal({ open, onClose, onSave, busy, errMsg }) {
   const [name, setName] = React.useState("");
   const [direction, setDirection] = React.useState("inbound");
@@ -647,9 +948,10 @@ function AddIntegrationModal({ open, onClose, onSave, busy, errMsg }) {
 // MAIN PANEL
 // ═══════════════════════════════════════════════════════════════
 function PanelVeilleOutils({ data, onNavigate }) {
-  const VO = window.VEILLE_OUTILS_DATA || { items: [], summary: null, ecosystem: [] };
+  const VO = window.VEILLE_OUTILS_DATA || { items: [], summary: null, ecosystem: [], panorama: [] };
   const allItems = Array.isArray(VO.items) ? VO.items : [];
   const allEco = Array.isArray(VO.ecosystem) ? VO.ecosystem : [];
+  const allPano = Array.isArray(VO.panorama) ? VO.panorama : [];
 
   const [tab, setTab] = React.useState(() => {
     try { return localStorage.getItem("vo.tab") || "veille"; } catch { return "veille"; }
@@ -716,6 +1018,17 @@ function PanelVeilleOutils({ data, onNavigate }) {
     return { total: active.length, inboundCount, outboundCount, pinnedCount, dismissedCount };
   }, [allEco]);
 
+  const panoStats = React.useMemo(() => {
+    const active = allPano.filter(i => i.status === "active");
+    return {
+      total: active.length,
+      freeCount: active.filter(i => i.pricing_tier === "free").length,
+      coreCount: active.filter(i => i.relevance === "core").length,
+      pinnedCount: active.filter(i => i.is_pinned).length,
+      lastSeen: active.reduce((max, r) => (r.last_seen && r.last_seen > max ? r.last_seen : max), ""),
+    };
+  }, [allPano]);
+
   // ── PATCH veille item ────────────────────────────────────────
   const patchItem = async (id, patch) => {
     if (pending[id]) return;
@@ -772,6 +1085,36 @@ function PanelVeilleOutils({ data, onNavigate }) {
     }
   };
 
+  // ── PATCH panorama item ──────────────────────────────────────
+  const patchPanoItem = async (id, patch) => {
+    if (pending[id]) return;
+    if (!window.sb || !window.SUPABASE_URL) return;
+    setPending(p => ({ ...p, [id]: true }));
+    try {
+      const url = `${window.SUPABASE_URL}/rest/v1/ai_landscape?id=eq.${encodeURIComponent(id)}`;
+      const r = await window.sb.patchJSON(url, patch);
+      if (!r.ok) throw new Error("patch " + r.status);
+      const idx = allPano.findIndex(i => i.id === id);
+      if (idx >= 0) {
+        allPano[idx] = { ...allPano[idx], ...patch };
+        window.VEILLE_OUTILS_DATA.panorama = allPano;
+      }
+      try {
+        const evt = patch.is_pinned !== undefined ? "panorama_pin_toggled"
+                  : patch.status ? "panorama_status_changed"
+                  : patch.user_priority !== undefined ? "panorama_priority_set"
+                  : patch.user_notes !== undefined ? "panorama_notes_saved"
+                  : "panorama_patched";
+        window.track && window.track(evt, { id });
+      } catch {}
+      force(v => v + 1);
+    } catch (e) {
+      console.error("[veille-outils] panorama patch failed", e);
+    } finally {
+      setPending(p => { const n = { ...p }; delete n[id]; return n; });
+    }
+  };
+
   // ── INSERT manual ecosystem item ─────────────────────────────
   const addEcoManual = async (payload) => {
     if (!window.sb || !window.SUPABASE_URL) {
@@ -815,21 +1158,25 @@ function PanelVeilleOutils({ data, onNavigate }) {
       {/* HERO */}
       <div className="panel-hero">
         <div className="panel-hero-eyebrow">
-          {tab === "veille"
-            ? <>Veille outils Claude · dernière exécution {voFormatDate(VO.last_run)}</>
-            : <>Catalogue écosystème · {ecoStats.total} intégrations actives</>}
+          {tab === "veille" && <>Veille outils Claude · dernière exécution {voFormatDate(VO.last_run)}</>}
+          {tab === "catalogue" && <>Catalogue écosystème · {ecoStats.total} intégrations actives</>}
+          {tab === "panorama" && <>Panorama IA · {panoStats.total} outils · relevé du {voFormatDate(panoStats.lastSeen)}</>}
         </div>
         <h1 className="panel-hero-title">
-          {tab === "veille" ? (
+          {tab === "veille" && (
             <>Ce qui bouge côté <em>Claude</em>.<br/>Trié pour toi, pas pour le bruit.</>
-          ) : (
+          )}
+          {tab === "catalogue" && (
             <>L'<em>écosystème</em> qui se branche à Claude.<br/>Et où Claude se branche.</>
+          )}
+          {tab === "panorama" && (
+            <>Le marché, rangé par <em>usage</em>.<br/>Et par ce qu'il coûte vraiment.</>
           )}
         </h1>
         <p className="panel-hero-sub">
-          {tab === "veille"
-            ? "Synthèse hebdo d'une routine Cowork : nouveautés Claude Code / Cowork, skills, MCP, retours d'expérience. 4 buckets pour décider vite ce que tu appliques."
-            : "Catalogue stable des outils inbound (qui se pluggent dans Claude) et outbound (où Claude est utilisé comme moteur). Mis à jour mensuellement par une routine Cowork dédiée + ajouts manuels."}
+          {tab === "veille" && "Synthèse hebdo d'une routine Cowork : nouveautés Claude Code / Cowork, skills, MCP, retours d'expérience. 4 buckets pour décider vite ce que tu appliques."}
+          {tab === "catalogue" && "Catalogue stable des outils inbound (qui se pluggent dans Claude) et outbound (où Claude est utilisé comme moteur). Mis à jour mensuellement par une routine Cowork dédiée + ajouts manuels."}
+          {tab === "panorama" && "Panorama du marché IA au-delà de Claude, rangé par cas d'usage et par modèle économique. Chaque outil porte son prix en clair, et la distinction entre ton terrain direct et ce qu'il faut simplement savoir situer."}
         </p>
 
         {/* Tab toggle */}
@@ -847,6 +1194,13 @@ function PanelVeilleOutils({ data, onNavigate }) {
           >
             Catalogue écosystème
             <span className="vo-tab-count">{ecoStats.total}</span>
+          </button>
+          <button
+            className={`vo-tab ${tab === "panorama" ? "is-active" : ""}`}
+            onClick={() => setTab("panorama")}
+          >
+            Panorama
+            <span className="vo-tab-count">{panoStats.total}</span>
           </button>
         </div>
 
@@ -870,7 +1224,7 @@ function PanelVeilleOutils({ data, onNavigate }) {
               <span>appliqués</span>
             </div>
           </div>
-        ) : (
+        ) : tab === "catalogue" ? (
           <div className="vo-herometa">
             <div className="vo-herometa-stat">
               <span className="vo-herometa-val">{ecoStats.total}</span>
@@ -886,6 +1240,25 @@ function PanelVeilleOutils({ data, onNavigate }) {
             </div>
             <div className="vo-herometa-stat">
               <span className="vo-herometa-val">{ecoStats.pinnedCount}</span>
+              <span>épinglés</span>
+            </div>
+          </div>
+        ) : (
+          <div className="vo-herometa">
+            <div className="vo-herometa-stat">
+              <span className="vo-herometa-val">{panoStats.total}</span>
+              <span>outils recensés</span>
+            </div>
+            <div className="vo-herometa-stat">
+              <span className="vo-herometa-val vo-herometa-val--new">{panoStats.freeCount}</span>
+              <span>gratuits sans réserve</span>
+            </div>
+            <div className="vo-herometa-stat">
+              <span className="vo-herometa-val vo-herometa-val--high">{panoStats.coreCount}</span>
+              <span>sur ton terrain</span>
+            </div>
+            <div className="vo-herometa-stat">
+              <span className="vo-herometa-val">{panoStats.pinnedCount}</span>
               <span>épinglés</span>
             </div>
           </div>
@@ -942,12 +1315,18 @@ function PanelVeilleOutils({ data, onNavigate }) {
             ))
           )}
         </>
-      ) : (
+      ) : tab === "catalogue" ? (
         <CatalogueView
           items={allEco}
           pending={pending}
           onPatch={patchEcoItem}
           onAddManual={() => { setModalErr(null); setModalOpen(true); }}
+        />
+      ) : (
+        <PanoramaView
+          items={allPano}
+          pending={pending}
+          onPatch={patchPanoItem}
         />
       )}
 

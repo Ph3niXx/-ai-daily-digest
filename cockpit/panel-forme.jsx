@@ -471,6 +471,55 @@ function WorkoutTab({ FD, weekLoadMin }) {
   );
 }
 
+// ── Bandeau « source en pause » ─────────────────────────────
+// Ne double PAS PipelineHealthBanner : celui-ci lit pipeline_health, or une
+// brique en `status: paused` en est ÉLAGUÉE au contrôle suivant (ADR-45).
+// La source cesse donc d'être signalée où que ce soit — pendant que ses zéros,
+// eux, restent affichés en grand. C'est exactement le trou que ce bandeau ferme.
+//
+// Point neutre et non `is-failing` : une pause décidée n'est pas une panne.
+// Pas d'<Icon> non plus — ce panneau n'en importe aucun, et le bandeau ne doit
+// pas dépendre de l'ordre de chargement des <script>.
+function fmFmtDateFr(iso) {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" });
+}
+
+function FormeSourcesPausedBanner({ sources, lastActivityDate }) {
+  if (!sources || !sources.length) return null;
+  const n = sources.length;
+  const pl = n > 1 ? "s" : "";
+  const derniere = fmFmtDateFr(lastActivityDate);
+  return (
+    <aside className="phb" role="status" aria-label="Sources en pause">
+      <div className="phb-head">
+        <span className="phb-kicker">{n} source{pl} en pause</span>
+      </div>
+      <p className="phb-lede">
+        Les compteurs ci-dessous sont à zéro par absence de collecte, pas par
+        inactivité — l'historique déjà récolté, lui, reste intact.
+        {derniere ? ` Dernière activité connue : ${derniere}.` : ""}
+      </p>
+      <ul className="phb-list">
+        {sources.map((src) => {
+          const depuis = fmFmtDateFr(src.depuis);
+          return (
+            <li key={src.source} className="phb-row is-paused">
+              <span className="phb-dot" aria-hidden="true" />
+              <span className="phb-name">{src.source}</span>
+              <span className="phb-cause">{src.raison}</span>
+              <span className="phb-age">{depuis ? `depuis le ${depuis}` : `depuis ${src.depuis}`}</span>
+              <span className="phb-link is-empty" aria-hidden="true" />
+            </li>
+          );
+        })}
+      </ul>
+    </aside>
+  );
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MAIN
 // ═══════════════════════════════════════════════════════════════
@@ -478,6 +527,9 @@ function PanelForme({ data, onNavigate }) {
   const FD = window.FORME_DATA;
   const hasWeight = !!FD._has_weight;
   const hasWorkouts = !!FD._has_workouts || (FD.month && FD.month.workouts > 0);
+  const sourcesPaused = FD._sources_paused || [];
+  const collecteEnPause = sourcesPaused.length > 0;
+  const derniereActivite = fmFmtDateFr(FD._last_activity_date);
 
   const [tab, setTab] = useFmState(() => {
     try { return localStorage.getItem(FORME_TAB_KEY) || "course"; } catch { return "course"; }
@@ -596,6 +648,7 @@ function PanelForme({ data, onNavigate }) {
 
   return (
     <div className="fm-wrap" data-screen-label="Forme">
+      <FormeSourcesPausedBanner sources={sourcesPaused} lastActivityDate={FD._last_activity_date} />
       {/* ═══════ HERO GLOBAL — composition + cross-discipline ═══════ */}
       <header className="fm-hero">
         <div className="fm-hero-head">
@@ -603,7 +656,12 @@ function PanelForme({ data, onNavigate }) {
             forme · {hasWeight ? "withings + strava" : "strava"} · {FD.today.date}
           </div>
           <h1 className="fm-hero-title">
-            {hasWeight && FD.today.weight != null ? (
+            {/* Collecte à l'arrêt : le hero ne titre pas « 0 séance cette semaine ».
+                Ce serait le seul chiffre du panneau à affirmer quelque chose de faux,
+                et le plus gros de la page. Il dit alors ce qu'il sait réellement. */}
+            {collecteEnPause && weekSessTotal === 0 ? (
+              <>Collecte <em>en pause</em>{derniereActivite ? ` · dernière activité le ${derniereActivite}` : ""}</>
+            ) : hasWeight && FD.today.weight != null ? (
               <>{FD.today.weight.toFixed(1)} kg · <em>{weekSessTotal} séance{weekSessTotal > 1 ? "s" : ""}</em> cette semaine</>
             ) : (
               <>{weekSessTotal} <em>séance{weekSessTotal > 1 ? "s" : ""}</em> cette semaine · {fmtMinAsHour(weekMinTotal + weekKmTotal * 5)} actif</>

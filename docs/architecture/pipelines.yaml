@@ -193,8 +193,8 @@ pipelines:
 
   - id: strava_sync
     name: "Strava activités"
-    cron: "30 4 * * *"
-    human_time: "Quotidien 04:30 UTC"
+    cron: ""                      # cron retiré le 2026-08-25 — voir notes
+    human_time: "Manuel (workflow_dispatch)"
     workflow_file: ".github/workflows/strava-sync.yml"
     health:
       domain: perso
@@ -204,10 +204,10 @@ pipelines:
       table: strava_activities
       date_column: start_date
       remediation: >-
-        Réactiver l'application dans le portail développeur Strava, puis
-        régénérer le refresh token avec scripts/strava_oauth_init.py
-        (cf. docs/strava-setup.md). Le token seul ne suffit pas si l'app est
-        désactivée.
+        Souscrire un abonnement Strava, puis réactiver l'application sur
+        strava.com/settings/api. Les trois secrets GitHub restent valides :
+        le grant OAuth est intact, rejouer scripts/strava_oauth_init.py ne
+        répare rien.
     script: "pipelines/strava_sync.py"
     input_api: "Strava API (OAuth2)"
     output_tables:
@@ -218,8 +218,24 @@ pipelines:
       - user_profile
     avg_duration_s: 90
     budget_usd: 0
-    status: active
-    notes: "Input workflow_dispatch 'days' pour backfill manuel (défaut 365). Écrit user_profile.strava_refresh_token après rotation OAuth. PANNE EN COURS depuis le 2026-06-30 : l'APPLICATION Strava elle-même est désactivée côté portail développeur (réponse API `resource: Application / field: Status / code: Inactive`). Le refresh de token RÉUSSIT — Strava émet toujours des access_tokens — c'est l'appel API qui est refusé, donc rejouer l'OAuth ne peut rien y changer tant que l'app n'est pas réactivée sur strava.com/settings/api. Ce contexte daté vit ici et non dans le message d'erreur du script, qui ne doit porter que l'instruction (nettoyé le 2026-08-21)."
+    status: paused
+    notes: >-
+      Cron retiré le 2026-08-25 (ADR-48). Les appels à l'API Strava sont devenus
+      réservés aux abonnés payants : l'application est passée `Inactive` côté portail
+      et tout appel `/api/v3/*` répond 403
+      `resource: Application / field: Status / code: Inactive` depuis le 2026-07-01,
+      soit 15 runs rouges d'affilée au 25/08. Ce n'est PAS un problème d'OAuth —
+      `refresh_access_token()` renvoie toujours HTTP 200, Strava émet encore des
+      access_tokens, le grant est intact et les trois secrets restent valides. Seul
+      l'accès API a été retiré, hors du dépôt ; aucune ligne de code ne le rend.
+      Écrit user_profile.strava_refresh_token après rotation OAuth (vérifié sain le
+      2026-08-25 : `user_profile.key` est la PK, donc l'upsert PostgREST
+      `merge-duplicates` vise la bonne cible, et la fonction lève au lieu de warner).
+      Pour reprendre : abonnement, réactivation de l'app, `workflow_dispatch`, vérifier
+      le vert — le lookback de 365 jours rattrape tout le trou en un seul run — puis
+      restaurer le cron `30 4 * * *` et repasser status à active. Le script accepte
+      `--days=N` en ligne de commande, mais le workflow n'expose AUCUN input
+      `workflow_dispatch` (le catalogue l'a affirmé à tort jusqu'au 2026-08-25).
 
   - id: withings_sync
     name: "Withings composition corporelle"
@@ -233,8 +249,10 @@ pipelines:
       table: withings_measurements
       date_column: measure_date
       remediation: >-
-        Régénérer le refresh token avec scripts/withings_oauth_init.py
-        (cf. docs/withings-setup.md) et mettre à jour le secret GitHub.
+        Rejouer scripts/withings_oauth_init.py, poser le token dans le secret
+        WITHINGS_REFRESH_TOKEN, puis lancer `gh workflow run withings-sync.yml
+        -f backfill=true`. Le backfill n'est pas optionnel : un run normal ne
+        demande que 7 jours et sauterait tout le trou (cf. docs/withings-setup.md).
     script: "pipelines/withings_sync.py"
     input_api: "Withings API (OAuth2)"
     output_tables:
@@ -246,7 +264,7 @@ pipelines:
     avg_duration_s: 30
     budget_usd: 0
     status: active
-    notes: "Mode --backfill via workflow_dispatch pour réimporter depuis l'epoch. Écrit user_profile.withings_refresh_token après rotation OAuth — corrigé le 2026-07-26 : le token tourné était jusque-là jeté dans une variable `_new_refresh` au motif d'une « période de grâce » qui n'existe pas. Withings rotant à chaque appel et invalidant l'ancien immédiatement, le pipeline n'a réussi qu'une fois (2026-04-23) puis a échoué 3 mois sur invalid refresh_token. Le secret GitHub n'est valable que pour le premier run après (ré)autorisation ; ensuite la source de vérité est user_profile. ATTENTION — ce correctif est INERTE tant qu'un OAuth manuel n'a pas été rejoué : il ne s'arme qu'APRÈS un refresh réussi, or le seul token disponible est mort depuis le 2026-04-23. Séquence obligatoire : scripts/withings_oauth_init.py, poser le refresh_token dans le secret WITHINGS_REFRESH_TOKEN, puis déclencher le workflow À LA MAIN dans la foulée — le premier run consomme le secret et écrit user_profile.withings_refresh_token, après quoi la boucle s'auto-entretient. Depuis le 2026-08-21 le log distingue « aucun token en base » (repli nominal sur le secret) de « lecture Supabase refusée » (anomalie d'accès) : les deux rendaient None en silence."
+    notes: "Mode --backfill via workflow_dispatch pour réimporter depuis l'epoch. Écrit user_profile.withings_refresh_token après rotation OAuth — corrigé le 2026-07-26 : le token tourné était jusque-là jeté dans une variable `_new_refresh` au motif d'une « période de grâce » qui n'existe pas. Withings rotant à chaque appel et invalidant l'ancien immédiatement, le pipeline n'a réussi qu'une fois (2026-04-23) puis a échoué 3 mois sur invalid refresh_token. Le secret GitHub n'est valable que pour le premier run après (ré)autorisation ; ensuite la source de vérité est user_profile. ATTENTION — ce correctif est INERTE tant qu'un OAuth manuel n'a pas été rejoué : il ne s'arme qu'APRÈS un refresh réussi, or le seul token disponible est mort depuis le 2026-04-23. Séquence obligatoire : scripts/withings_oauth_init.py, poser le refresh_token dans le secret WITHINGS_REFRESH_TOKEN, puis déclencher le workflow À LA MAIN dans la foulée — le premier run consomme le secret et écrit user_profile.withings_refresh_token, après quoi la boucle s'auto-entretient. Depuis le 2026-08-21 le log distingue « aucun token en base » (repli nominal sur le secret) de « lecture Supabase refusée » (anomalie d'accès) : les deux rendaient None en silence. RE-VÉRIFIÉ LE 2026-08-25 (ADR-49) : toujours mort (`status=503 Invalid Params: invalid refresh_token`), et `user_profile` ne contient toujours AUCUNE clé `withings_refresh_token` — le correctif n'a jamais pu s'armer. Les cinq points où l'unique essai d'OAuth pouvait être gaspillé ont été audités et sont sains (persistance avant fetch, lève au lieu d'avertir, non court-circuitée par --dry-run, `key` est la PK, et le test de withings_oauth_init.py utilise l'access_token donc ne brûle pas le refresh). La doc de setup, elle, affirmait ENCORE la « période de grâce » inexistante qui a causé la panne — corrigée le 2026-08-25. INCREMENTAL_DAYS=7 impose un premier run en backfill, sans quoi le 2026-04-24 → 2026-08-18 est sauté définitivement."
 
   - id: lastfm_sync
     name: "Last.fm scrobbles (+ enrichissement lundi)"
@@ -754,7 +772,7 @@ external_routines:
     name: "Jobs Radar (JSearch + Sonnet, routine distante)"
     trigger: "claude.ai routine trig_01JtTsMm27eTAGxR5po5KmMQ — cron 0 6 * * 1,3,5 (lun/mer/ven 08:00 Paris, 3×/sem ; réduit depuis 1,3,5,0 — ADR-27)"
     model: "claude-sonnet-4-6"
-    input_api: "JSearch (RapidAPI, tier gratuit, quota 200 req/mois, reset le 27 de chaque mois) — fetch via curl, 8 req/run (socle 5 + rotation 3) × 13 runs ≈ 104 req/mois, soit 52% du quota (ADR-31 ; les 11 req/run d'ADR-27 ≈143 ont re-saturé le quota → raw_count 0 du 10 au 27/07). Le fetch cloud fonctionne (HTTP 200 vérifié le 2026-07-28) : le 403 Host not in allowlist d'ADR-21 ne s'applique plus. Diagnostic d'une panne : job_scans.tendances->'fetch' (codes HTTP, quota restant, aborted_reason)"
+    input_api: "JSearch (RapidAPI, tier gratuit, quota 200 req/mois ; la date de reset ne se devine pas — seul l en-tete X-RateLimit-Requests-Reset fait foi, mesure du 2026-08-27 : fin de fenetre 22:22 UTC avec 60 req restantes, pas 200 — ADR-50) — fetch via curl, 10 req/run (socle 6 + rotation 4) × 13 runs ≈ 130 req/mois, soit 65% du quota (ADR-50 ; ADR-31 ; les 11 req/run d'ADR-27 ≈143 ont re-saturé le quota → raw_count 0 du 10 au 27/07). Le fetch cloud fonctionne (HTTP 200 vérifié le 2026-07-28) : le 403 Host not in allowlist d'ADR-21 ne s'applique plus. Diagnostic d'une panne : job_scans.tendances->'fetch' (codes HTTP, quota restant, aborted_reason)"
     mcp: "Supabase (execute_sql, service_role)"
     output_tables:
       - jobs
@@ -775,6 +793,7 @@ external_routines:
       max_age_hours: 96
       remediation: >-
         Lire job_scans.tendances->'fetch' (codes HTTP, quota restant) : le quota
-        JSearch est de 200 req/mois et se réinitialise le 27. Puis vérifier la
+        JSearch est de 200 req/mois ; sa date de reset se lit dans l en-tête
+        X-RateLimit-Requests-Reset, elle ne se devine pas (ADR-50). Puis vérifier la
         routine trig_01JtTsMm27eTAGxR5po5KmMQ sur claude.ai.
-    notes: "Remplace la routine Cowork LinkedIn (ADR-19). 11 requêtes validées (5 IA + 2 EM/delivery, ADR-22 ; requête complète sans suffixe 'in France', ADR-21), dédup logique (employeur+titre normalisé, fallback linkedin_job_id=id JSearch ; ADR-25), scoring rubric /10 + skills on_cv + salaire. v2.1 (ADR-20) : filtre FULLTIME pré-scoring, skills depuis job_highlights, colonne is_remote, logo employeur. v2.2 (ADR-21) : requêtes réorientées IA + job_pref_rules de Jean ; JSearch 403 en cloud (IP datacenter) → fetch local de secours. v2.3 (ADR-22) : Engagement/Delivery Manager = rôle cible (scope tech/IA, exclusion conseil/ESN maintenue), valeur role_category 'em'. v2.4 (ADR-25) : dédup logique (employeur+titre) anti-doublons-syndiqués + sélection d'URL durable (apply_options.is_direct → ATS/officiel → linkedin, rejet des endpoints jsearch.p.rapidapi.com), tracé dans intel.link_source. v2.5 (ADR-26) : ÉTAPE 6 vieillissement = auto-archive des leads 'new' non revus >30j (annonce fermée), gardé contre les échecs de fetch (total_fetche>0), jamais applied/snoozed/décisions user. v2.6 (ADR-27) : fréquence ramenée à 3×/sem (lun/mer/ven) pour tenir sous le quota JSearch 200/mois (4×/sem ≈191 saturait → 429 le 2026-06-26, raw_count 110→0). v2.7 (ADR-31) : 2e panne quota (10→27/07, 3 semaines à raw_count 0, non détectée) → santé du fetch journalisée dans job_scans.tendances->'fetch' (une panne n'est plus indiscernable d'un jour calme), discipline quota (zéro retry, arrêt sur 429, lecture de X-RateLimit dès la 1re requête), 8 requêtes/run en socle+rotation A/B/C par jour_de_l_année mod 3 (couverture 14 requêtes distinctes contre 11, conso ≈104/mois), ÉTAPE 6 comptée en scans réussis et non en jours calendaires (la panne aurait auto-archivé 38 leads vivants), ÉTAPE 7 recalibrage hebdo de user_profile.job_pref_observed (lundi, seuil ≥3 nouveaux verdicts ; job_pref_rules jamais touché), intel.source_query pour mesurer le rendement par requête, intel.link_source reverrouillé sur son vocabulaire fermé. v2.8 (ADR-32, migration sql/026) : fin des offres mortes qui ressortent — la dédup passe par la colonne générée indexée jobs.logical_key (fonction IMMUTABLE jobs_logical_key, source unique partagée avec le trigger) et n'a PLUS de fenêtre temporelle (les 45j rataient Postman d'un jour) ; le trigger jobs_inherit_user_status hérite closed_at sans péremption et applied, et exclut les auto-archivages via le marqueur user_notes ; la routine ne recalcule plus la clé et ne ressuscite jamais une offre déjà jugée. v2.9 (ADR-33) : la calibration tournait (27/27 offres avec clé calibrage) mais ne mordait pas — un TPM Défense chez Cohere portait « résonne avec rejet Mistral TPM. Score ajusté » et sortait à 8.0 en new. user_profile.job_pref_observed devient une TABLE DE PÉNALITÉS CHIFFRÉES dérivée des 17 verdicts (tous commentés), avec VETO sur expertise verticale absente ; l'ÉTAPE 3 l'applique en cumulant et doit nommer chaque montant dans rubric_justif.calibrage ; l'ÉTAPE 7 doit préserver ce format. Intel warm + reco CV abandonnés. Clé RapidAPI inline dans le prompt (pas un secret GitHub). Doc : docs/cowork-routines/jobs-radar.md."
+    notes: "Remplace la routine Cowork LinkedIn (ADR-19). 11 requêtes validées (5 IA + 2 EM/delivery, ADR-22 ; requête complète sans suffixe 'in France', ADR-21), dédup logique (employeur+titre normalisé, fallback linkedin_job_id=id JSearch ; ADR-25), scoring rubric /10 + skills on_cv + salaire. v2.1 (ADR-20) : filtre FULLTIME pré-scoring, skills depuis job_highlights, colonne is_remote, logo employeur. v2.2 (ADR-21) : requêtes réorientées IA + job_pref_rules de Jean ; JSearch 403 en cloud (IP datacenter) → fetch local de secours. v2.3 (ADR-22) : Engagement/Delivery Manager = rôle cible (scope tech/IA, exclusion conseil/ESN maintenue), valeur role_category 'em'. v2.4 (ADR-25) : dédup logique (employeur+titre) anti-doublons-syndiqués + sélection d'URL durable (apply_options.is_direct → ATS/officiel → linkedin, rejet des endpoints jsearch.p.rapidapi.com), tracé dans intel.link_source. v2.5 (ADR-26) : ÉTAPE 6 vieillissement = auto-archive des leads 'new' non revus >30j (annonce fermée), gardé contre les échecs de fetch (total_fetche>0), jamais applied/snoozed/décisions user. v2.6 (ADR-27) : fréquence ramenée à 3×/sem (lun/mer/ven) pour tenir sous le quota JSearch 200/mois (4×/sem ≈191 saturait → 429 le 2026-06-26, raw_count 110→0). v2.7 (ADR-31) : 2e panne quota (10→27/07, 3 semaines à raw_count 0, non détectée) → santé du fetch journalisée dans job_scans.tendances->'fetch' (une panne n'est plus indiscernable d'un jour calme), discipline quota (zéro retry, arrêt sur 429, lecture de X-RateLimit dès la 1re requête), 8 requêtes/run en socle+rotation A/B/C par jour_de_l_année mod 3 (couverture 14 requêtes distinctes contre 11, conso ≈104/mois), ÉTAPE 6 comptée en scans réussis et non en jours calendaires (la panne aurait auto-archivé 38 leads vivants), ÉTAPE 7 recalibrage hebdo de user_profile.job_pref_observed (lundi, seuil ≥3 nouveaux verdicts ; job_pref_rules jamais touché), intel.source_query pour mesurer le rendement par requête, intel.link_source reverrouillé sur son vocabulaire fermé. v2.8 (ADR-32, migration sql/026) : fin des offres mortes qui ressortent — la dédup passe par la colonne générée indexée jobs.logical_key (fonction IMMUTABLE jobs_logical_key, source unique partagée avec le trigger) et n'a PLUS de fenêtre temporelle (les 45j rataient Postman d'un jour) ; le trigger jobs_inherit_user_status hérite closed_at sans péremption et applied, et exclut les auto-archivages via le marqueur user_notes ; la routine ne recalcule plus la clé et ne ressuscite jamais une offre déjà jugée. v2.9 (ADR-33) : la calibration tournait (27/27 offres avec clé calibrage) mais ne mordait pas — un TPM Défense chez Cohere portait « résonne avec rejet Mistral TPM. Score ajusté » et sortait à 8.0 en new. user_profile.job_pref_observed devient une TABLE DE PÉNALITÉS CHIFFRÉES dérivée des 17 verdicts (tous commentés), avec VETO sur expertise verticale absente ; l'ÉTAPE 3 l'applique en cumulant et doit nommer chaque montant dans rubric_justif.calibrage ; l'ÉTAPE 7 doit préserver ce format. Intel warm + reco CV abandonnés. Clé RapidAPI inline dans le prompt (pas un secret GitHub). v3.0 (ADR-50) : le pilotage cesse d etre une exception toleree. Mesure sur 60j : pgm 91 offres → 12 new, em 63 → 3, pjm 30 → 0, alimentes par Safran/Capgemini/Wavestone/Accenture/MBDA (zero licorne, zero GAFAM). Deux causes traitees separement — sourcing (le suffixe 'in France' ramene des employeurs nationaux : senior program manager in France = 0 retenue sur 10, la variante Paris ramene Criteo/Databricks/Parloa) et rubric (l IA au coeur etait exigee sur score_sector). Passage a 10 req/run (socle 6 + rotation 4), 18 requetes distinctes contre 14, les 8 nouvelles validees contre JSearch le 2026-08-27 avant ecriture. Scoring : deux rangs de roles cibles (le pilotage en boite tech desirable devient premier rang), definition ecrite de 'boite tech desirable' dans job_pref_rules (anti-critere prestation intellectuelle + 2 criteres sur 4 + liste d ancrage), bonus +1.5 non cumulable avec le +1.0 de job_pref_observed, plafond 6.9 pour un pilotage sans angle IA (visible, jamais hot lead), score_seniority sur DEUX compteurs (8 ans pilotage / 3 ans produit) a chiffrer dans rubric_justif.seniority, penalite TPM relue sur la substance et non sur le titre. Aucun re-scoring retroactif : jobs ne stocke pas la description de l annonce. Doc : docs/cowork-routines/jobs-radar.md."

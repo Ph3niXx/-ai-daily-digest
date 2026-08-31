@@ -1492,6 +1492,7 @@
     },
     async veille_outils(){ return once("veille_outils", () => q("claude_veille", "order=created_at.desc&limit=200")); },
     async claude_ecosystem(){ return once("claude_ecosystem", () => q("claude_ecosystem", "order=is_pinned.desc.nullslast,name.asc&limit=500")); },
+    async ai_landscape(){ return once("ai_landscape", () => q("ai_landscape", "order=is_pinned.desc.nullslast,name.asc&limit=1000")); },
     async jarvis_messages(){ return once("jarvis_messages", () => q("jarvis_conversations", "order=created_at.desc&limit=200")); },
     async jarvis_facts(){ return once("jarvis_facts", () => q("profile_facts", "superseded_by=is.null&order=created_at.desc&limit=200")); },
     async jobs_scan_today(){
@@ -2400,6 +2401,29 @@
     return "other";
   }
 
+  // Sources coupées, déclarées explicitement et datées.
+  //
+  // Le panneau ne PEUT PAS déduire ça des activités : « plus rien depuis huit
+  // semaines » se lit aussi bien comme « il ne s'est pas entraîné » — nominal
+  // pour un pipeline piloté par l'usage, cf. l'en-tête de pipelines.yaml, où
+  // la fraîcheur de strava_activities est mesurée mais jamais sanctionnée —
+  // que comme « le capteur est aveugle ». Les deux produisent exactement les
+  // mêmes zéros.
+  //
+  // Et la piste pipeline_health est fermée : un pipeline en `status: paused`
+  // voit sa ligne ÉLAGUÉE de la table au contrôle suivant (ADR-45), donc le
+  // front n'a plus ce signal non plus. D'où cette déclaration en dur.
+  //
+  // POUR REPRENDRE UNE SOURCE : retirer son entrée ici et restaurer son cron.
+  // Un commit, rien d'autre — les données historiques n'ont jamais bougé.
+  const FORME_SOURCES_EN_PAUSE = [
+    {
+      source: "Strava",
+      depuis: "2026-06-30",
+      raison: "les appels à l'API Strava sont devenus réservés aux abonnés",
+    },
+  ];
+
   // Build FORME_DATA shape from strava_activities + withings_measurements.
   // The panel consumes: today, week, month, weight_series, sessions,
   // records, goals. Withings fields stay null until a sync exists —
@@ -2711,6 +2735,11 @@
       _has_weight: hasWeight,
       _has_runs: runs.length > 0,
       _has_workouts: workouts.length > 0,
+      _sources_paused: FORME_SOURCES_EN_PAUSE,
+      // Dernière activité réellement récoltée, quelle que soit sa date.
+      // Sert à dater le bandeau sans le coder en dur : si la source repart,
+      // il redevient juste tout seul.
+      _last_activity_date: acts.length ? (acts[0].start_date || null) : null,
     };
   }
 
@@ -4745,9 +4774,10 @@
         return { ideas };
       }
       case "veille-outils": {
-        const [rows, ecoRows] = await Promise.all([
+        const [rows, ecoRows, panoRows] = await Promise.all([
           T2.veille_outils(),
           T2.claude_ecosystem().catch(() => []),
+          T2.ai_landscape().catch(() => []),
         ]);
         if (!window.VEILLE_OUTILS_DATA) window.VEILLE_OUTILS_DATA = {};
         const all = Array.isArray(rows) ? rows : [];
@@ -4768,7 +4798,8 @@
         window.VEILLE_OUTILS_DATA.total = items.length;
         window.VEILLE_OUTILS_DATA.by_category = byCategory;
         window.VEILLE_OUTILS_DATA.ecosystem = Array.isArray(ecoRows) ? ecoRows : [];
-        return { items: rows, ecosystem: ecoRows };
+        window.VEILLE_OUTILS_DATA.panorama = Array.isArray(panoRows) ? panoRows : [];
+        return { items: rows, ecosystem: ecoRows, panorama: panoRows };
       }
       case "profile": {
         const [rows, facts, entitiesRows, history, commitments, uqs] = await Promise.all([

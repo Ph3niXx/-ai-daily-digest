@@ -892,3 +892,188 @@
   border-top: 1px solid var(--bd);
 }
 
+
+/* ═══════════════════════════════════════════════════════════════
+   PANORAMA — 3e sous-onglet
+   Marché IA rangé par cas d'usage et par modèle économique.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Pastille prix : la FORME porte l'info (pleine / moitié / creuse),
+   pas la couleur — lisible en N&B, et "payant" n'est pas un rouge
+   de reproche. currentColor pour que la pastille suive la couleur
+   du conteneur (pill active incluse). */
+.vo-pano-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid currentColor;
+  color: var(--brand);
+  flex: none;
+  display: inline-block;
+}
+.vo-pano-dot--free     { background: currentColor; }
+.vo-pano-dot--freemium { background: linear-gradient(90deg, currentColor 0 50%, transparent 50% 100%); }
+.vo-pano-dot--paid     { background: transparent; }
+
+.pill--dot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.pill.is-active .vo-pano-dot { color: inherit; }
+
+/* ── Filtres ─────────────────────────────────────────────────── */
+.vo-filters--pano { gap: 14px 18px; }
+
+.vo-pano-select,
+.vo-pano-search {
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--tx);
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: 3px;
+  padding: 5px 9px;
+}
+.vo-pano-search { width: 190px; }
+.vo-pano-search::placeholder { color: var(--tx3); }
+.vo-pano-select:focus-visible,
+.vo-pano-search:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+/* ── Sections par cas d'usage ────────────────────────────────── */
+.vo-pano-section { margin: 0 0 30px; }
+
+.vo-pano-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--bd);
+  margin-bottom: 6px;
+}
+.vo-pano-section-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tx);
+}
+.vo-pano-section-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--tx3);
+  font-variant-numeric: tabular-nums;
+}
+/* Volontairement collée au titre plutôt que poussée à droite : le cockpit
+   n'a pas de max-width, un margin-left:auto éloignerait l'étiquette de
+   plusieurs milliers de pixels du groupe qu'elle qualifie. */
+.vo-pano-zone {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 2px;
+}
+.vo-pano-zone--core {
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 14%, transparent);
+}
+.vo-pano-zone--context {
+  color: var(--tx3);
+  background: var(--bg3);
+}
+
+.vo-pano-section-note {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--tx2);
+  max-width: 90ch;
+}
+
+.vo-pano-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+}
+
+/* ── Carte outil ─────────────────────────────────────────────── */
+.vo-pano-card {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 13px 15px 14px;
+  background: var(--bg2);
+  border: 1px solid var(--bd);
+  border-radius: 4px;
+  transition: border-color 0.15s, opacity 0.15s;
+}
+.vo-pano-card.is-busy { opacity: 0.55; pointer-events: none; }
+.vo-pano-card--dismissed { opacity: 0.45; }
+.vo-pano-card--archived { opacity: 0.35; border-style: dashed; }
+.vo-pano-card--pinned { border-color: var(--brand); }
+
+.vo-pano-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.vo-pano-card-title {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: var(--tx);
+}
+.vo-pano-card-title a { color: inherit; text-decoration: none; }
+.vo-pano-card-title a:hover { color: var(--brand); text-decoration: underline; }
+
+.vo-pano-price {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--tx2);
+}
+.vo-pano-price .vo-pano-dot { position: relative; top: 3px; }
+
+.vo-pano-card-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--tx2);
+}
+
+.vo-pano-card-meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--tx3);
+}
+
+/* La ligne « chez toi » : le seul champ qui demande du jugement sur
+   ce dépôt précis, donc le seul qui reçoit un fond. */
+.vo-pano-card-why {
+  margin: 1px 0 0;
+  padding: 7px 9px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  border-radius: 3px;
+  color: var(--tx);
+  background: color-mix(in srgb, var(--brand) 12%, var(--bg3));
+}
+.vo-pano-card-why b { font-weight: 600; color: var(--brand); }
+
+@media (max-width: 640px) {
+  .vo-pano-grid { grid-template-columns: 1fr; }
+  .vo-pano-search { width: 100%; }
+  .vo-pano-zone { margin-left: 0; }
+}
