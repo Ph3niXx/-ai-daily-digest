@@ -28,3 +28,12 @@ symphony/dist/
 symphony/workspaces/
 symphony/.env
 symphony/*.log
+
+# Exports bureautiques — ce depot est PUBLIC.
+# Pose le 2026-08-31 apres decouverte de 2 exports Jira employeur pousses
+# sur une branche le 2026-04-28 (branche supprimee depuis).
+*.xlsx
+*.xls
+*.pptx
+*.docx
+snapshot_*.json
