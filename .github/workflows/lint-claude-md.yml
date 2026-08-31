@@ -4,24 +4,26 @@ name: lint-claude-md
 #
 # Contexte : CLAUDE.md a derive de 100 a 611 lignes entre la creation du
 # projet et le slim down du 2026-05-18 par accumulation incrementale
-# (tables, secrets, events telemetrie, arborescence). A 611 lignes,
-# le cout etait de ~14k tokens recharges a chaque tour Claude, plus
-# cache 5min casse a chaque edition.
+# (tables, secrets, events telemetrie, arborescence).
+#
+# Le plafond de 200 lignes est la cible officielle Anthropic ("target under
+# 200 lines per CLAUDE.md file", code.claude.com/docs/en/memory, verifie le
+# 2026-08-31). Le rationale d'origine ("~14k tokens par tour", "cache 5min
+# casse a chaque edition") etait faux : voir la docstring de
+# scripts/lint_claude_md.py.
 #
 # Ce workflow lance scripts/lint_claude_md.py qui verifie :
 #   - taille <= 200 lignes
 #   - pas d'arborescence ASCII (├──, └──)
 #   - pas de run de 5+ lignes type "- `xxx` — ..." (inventaire)
 #   - pas de tableau "Secret" ou "event_type"
-#   - presence de la section "## Pointeurs vers la doc longue"
+#   - presence d'une section "## Pointeurs ..." (regle DOUCE : warning seul)
 #
-# Phase 1 (actuelle) : continue-on-error: true, warning-only. Permet
-# de mesurer le bruit pendant ~2-3 semaines et de calibrer les regles
-# sans bloquer le travail.
-#
-# Phase 2 (apres mesure) : retirer continue-on-error pour passer
-# bloquant. Cf. progression de spec-drift-check / arch-drift-check
-# qui suivent le meme pattern.
+# Phase 2 depuis le 2026-08-31 : BLOQUANT. La phase 1 warning-only devait
+# durer 2-3 semaines ; elle a dure 15 semaines sans qu'aucune mesure ne soit
+# faite. Deux bugs du script ont ete corriges au prealable (secret_table
+# matchait les lignes de donnees et pas seulement les headers ; la regle
+# pointeurs, documentee comme douce, etait implementee comme bloquante).
 
 on:
   push:
@@ -41,9 +43,8 @@ permissions:
 
 jobs:
   lint:
-    name: CLAUDE.md size + structure (warning only)
+    name: CLAUDE.md size + structure
     runs-on: ubuntu-latest
-    continue-on-error: true  # Phase 1 : warning-only, durcir apres 2-3 semaines
     steps:
       - uses: actions/checkout@v4
 
@@ -53,7 +54,7 @@ jobs:
           python-version: '3.11'
 
       - name: Lint CLAUDE.md
-        # Si cette etape fail :
+        # Bloquant. Si cette etape fail :
         #   1. lis le warning et identifie la section incriminee
         #   2. deplace son contenu vers le fichier docs/ adequat (voir
         #      la suggestion emise par le script)

@@ -35,8 +35,8 @@ prompts:
     - Si tu touches sql/, pipelines/, .github/workflows/*-sync.yml, ou cockpit/lib/{bootstrap,data-loader,supabase,auth}.js : mets à jour `docs/architecture/` (pipelines.yaml, dependencies.yaml, flows/) dans le même commit
     - Si tu ajoutes un nouveau secret GitHub Actions : mets à jour `docs/secrets.md` (section domaine + règle de maintenance)
     - Si tu instrumentes un nouvel event télémétrie (`track('xxx', payload)`) : ajoute l'entrée dans `docs/telemetry.md` AVANT le commit
-    - Si tu ajoutes un nouveau fichier de doc longue, garde `CLAUDE.md` ≤ 200 lignes (règles + pointeurs uniquement, jamais d'inventaires) — sinon CI `lint-claude-md` (warning au départ, bloquant après mesure)
-    - CI bloquantes à respecter : `validate-spec`, `validate-arch`, `lint-specs` (les autres sont warning-only mais à regarder — `lint-claude-md` y rejoindra `arch-drift-check`, `spec-drift-check`, `sw-sync`)
+    - Si tu ajoutes un nouveau fichier de doc longue, garde `CLAUDE.md` ≤ 200 lignes (règles + pointeurs uniquement, jamais d'inventaires) — CI `lint-claude-md`, **bloquante depuis le 2026-08-31**
+    - CI bloquantes à respecter : `validate-spec`, `validate-arch`, `lint-specs`, `lint-known-sections`, `lint-claude-md`, `tests` (warning-only : `arch-drift-check`, `spec-drift-check`)
     - Commit clair (`feat(US-XXX): …` ou `fix(US-XXX): …`)
 ---
 
@@ -82,10 +82,13 @@ CLAUDE.md fait **~100 lignes** depuis le slim down 2026-05-18 — tu peux le lir
 
 ## Tests et validation
 
-- **CI bloquantes** : `validate-spec`, `validate-arch`, `lint-specs`. Si tu les casses, la PR sera rouge — fixe avant de finir.
-- **CI warning-only** : `spec-drift-check`, `arch-drift-check`, `sw-sync`. À regarder mais non-bloquantes.
+- **CI bloquantes** (6) : `validate-spec`, `validate-arch`, `lint-specs`, `lint-known-sections`, `lint-claude-md`, `tests`. Si tu les casses, la PR sera rouge — fixe avant de finir.
+  - `lint-known-sections` est celle qui casse le plus souvent et la moins connue : tout nouvel onglet doit voir son id ajouté à `KNOWN_SECTIONS` dans `scripts/extract_signals.py`, sinon la CI est rouge.
+- **CI warning-only** : `spec-drift-check`, `arch-drift-check`.
+- **`sw-sync`** n'est pas une CI de validation : c'est un job qui régénère `sw.js` et le committe. Il tourne sur push vers `main` et sur PR.
 - **Pipelines Python** : pas de test unitaires obligatoires, mais si tu touches `main.py`, `weekly_analysis.py`, `tft_pipeline.py` ou un `pipelines/*.py`, fais tourner le script avec un `--dry-run` ou un mode test si dispo.
-- **Front** : pas de test runner. Si tu peux ouvrir `index.html` localement et vérifier le panel concerné, fais-le. Sinon, dis-le explicitement dans la PR plutôt que de prétendre que ça marche.
+- **Tests** : `tests/` contient 29 fichiers (12 `test_*.mjs`, 17 `test_*.py`) et `tests.yml` est **bloquant**. Lance-les avant de finir.
+- **Front** : en plus des tests, si tu peux ouvrir `index.html` localement et vérifier le panel concerné, fais-le. Sinon, dis-le explicitement dans la PR plutôt que de prétendre que ça marche.
 
 ## Workflow attendu
 

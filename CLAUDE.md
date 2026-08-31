@@ -1,6 +1,6 @@
 # AI Cockpit — CLAUDE.md
 
-> **Maintenance de ce fichier** — 200 lignes max. Contient uniquement des **règles** et des **pointeurs**, jamais d'inventaires (tables, pipelines, secrets, events) qui vivent dans `docs/`. Avant d'ajouter une section : "est-ce que ça pourrait vivre dans un fichier de `docs/` ?" Si oui, déplace-le et garde ici une ligne `Sujet → docs/x.md`. CI `lint-claude-md` ([scripts/lint_claude_md.py](scripts/lint_claude_md.py), [workflow](.github/workflows/lint-claude-md.yml)) — warning-only au départ, bloquant après ~2-3 semaines de mesure. Slim down initial : 611 → 100 lignes (2026-05-18).
+> **Maintenance de ce fichier** — 200 lignes max. Contient uniquement des **règles** et des **pointeurs**, jamais d'inventaires (tables, pipelines, secrets, events) qui vivent dans `docs/`. Avant d'ajouter une section : "est-ce que ça pourrait vivre dans un fichier de `docs/` ?" Si oui, déplace-le et garde ici une ligne `Sujet → docs/x.md`. CI `lint-claude-md` ([scripts/lint_claude_md.py](scripts/lint_claude_md.py), [workflow](.github/workflows/lint-claude-md.yml)) — **bloquante** depuis le 2026-08-31. Slim down initial : 611 → 100 lignes (2026-05-18).
 
 ## Vue d'ensemble
 
@@ -23,6 +23,23 @@ Cockpit IA personnel pour un manager en transformation digitale :
 
 Front React 18 + Babel standalone via CDN (no build step), GitHub Pages → Supabase Postgres (RLS `authenticated`) + Gemini Flash-Lite (volume, gratuit) + Claude Haiku (intelligence, hebdo) + Jarvis local (LM Studio sur RTX 5070 8 Go VRAM). 31 onglets côté cockpit. Arborescence détaillée : [docs/architecture/repo-structure.md](docs/architecture/repo-structure.md). Topologie déclarative : [docs/architecture/layers.yaml](docs/architecture/layers.yaml). Sidebar canonique : [cockpit/nav.js](cockpit/nav.js).
 
+## Commandes
+
+Vérifiées le 2026-08-31 : les 5 linters passent, les 29 tests passent.
+
+- **Les 5 linters bloquants**, avant tout push :
+  `PYTHONUTF8=1 sh -c 'for s in lint_claude_md lint_known_sections lint_specs_produit validate_architecture validate_spec; do python scripts/$s.py || exit 1; done'`
+  `PYTHONUTF8=1` n'est pas décoratif : sans lui, un `UnicodeEncodeError` cp1252 sur un emoji tue le script **avant** qu'il n'imprime son verdict — ça a masqué un vrai échec le 2026-08-20.
+- **Tests** (29 fichiers, CI `tests` bloquante). Pas de pytest, pas de runner : chaque fichier est un script qui sort en 1 si un check échoue.
+  `for f in tests/test_*.mjs; do node "$f" || break; done` puis `for f in tests/test_*.py; do PYTHONUTF8=1 python "$f" || break; done`
+- **Service worker** : `node scripts/sync-sw.mjs` (voir règle cardinale plus bas).
+
+## Périmètre de travail
+
+- Fais ce qui est demandé, pas le voisinage. Un problème adjacent se signale en une ligne, il ne se corrige pas dans le même commit.
+- Une instruction porte sur ce qu'elle nomme : ne l'étends pas aux autres onglets, pipelines ou specs sans le dire explicitement.
+- Ce dépôt est **public**. Aucune donnée employeur (exports Jira, xlsx, noms de collègues) n'y entre — le `.gitignore` bloque `*.xlsx`/`*.pptx`/`snapshot_*.json` depuis qu'une branche en a publié le 2026-04-28.
+
 ## Règles cardinales (toujours dans le même commit que le code)
 
 ### Maintenance specs Jarvis Lab
@@ -32,6 +49,9 @@ Détails (mapping panel↔spec, règles éditoriales Fonctionnalités/Parcours, 
 ### Maintenance archi
 Toute PR touchant pipeline/panel/migration SQL/cron/composant Jarvis → MAJ correspondante dans `docs/architecture/` (`pipelines.yaml`, `dependencies.yaml`, `layers.yaml`, `flows/`, `decisions.md`).
 Checklist par type de modif + garde-fous CI (`validate-arch` bloquant, `arch-drift-check` warning) : [docs/architecture/README.md](docs/architecture/README.md).
+
+### Ajout d'un onglet
+Au-delà des emplacements évidents (nav.js, panel, spec), l'id du panel doit être ajouté à `KNOWN_SECTIONS` dans [jarvis/scripts/extract_signals.py](jarvis/scripts/extract_signals.py) — sinon la CI `lint-known-sections`, **bloquante**, passe au rouge. C'est l'étape la plus souvent oubliée.
 
 ### Service worker
 Après modif `index.html`, `mediatheque.html`, `cockpit/**`, `manifest*.json` ou `assets/**` → `node scripts/sync-sw.mjs` (ou auto via [.github/workflows/sw-sync.yml](.github/workflows/sw-sync.yml)). Ne jamais éditer `STATIC[]` ou `CACHE` à la main.

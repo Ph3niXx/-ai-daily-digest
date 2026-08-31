@@ -21,7 +21,7 @@ C'est tout. Une fois la description mise à jour, tu termines.
 Avant de rédiger, lis (avec `Grep` ciblé, pas en entier) :
 
 1. **`CLAUDE.md`** — conventions, contraintes, règles cardinales (specs, archi, sw.js, sécurité, CSP).
-2. **`docs/specs/index.json`** — la liste des 29 onglets avec leur `last_updated` et leur statut.
+2. **`docs/specs/index.json`** — la liste des 31 onglets avec leur `last_updated` et leur statut.
 3. **`docs/specs/tab-<slug>.md`** — si l'US concerne un onglet existant, lis son spec produit.
 4. **`docs/architecture/dependencies.yaml`** — mapping panel↔tables↔pipelines, écritures front (panels[].writes).
 5. **`docs/architecture/pipelines.yaml`** — si l'US touche un pipeline.

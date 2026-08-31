@@ -37,3 +37,6 @@ symphony/*.log
 *.pptx
 *.docx
 snapshot_*.json
+
+# Captures de session (debris de travail, pas du contenu)
+screenshots/

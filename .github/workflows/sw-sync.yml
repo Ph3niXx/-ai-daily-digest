@@ -1,5 +1,17 @@
 name: sw-sync
+# Declenche sur push ET pull_request : 97 % des commits de ce depot arrivent
+# en push direct sur main (6 merges sur 215), donc un filet limite aux PR ne
+# s'est jamais declenche — 77 commits ont touche sw.js pour 3 auto-sync.
+# sw.js n'est pas dans `paths`, le commit de retour ne se re-declenche donc pas.
 on:
+  push:
+    branches: [main]
+    paths:
+      - "index.html"
+      - "mediatheque.html"
+      - "cockpit/**"
+      - "manifest*.json"
+      - "assets/**"
   pull_request:
     paths:
       - "index.html"

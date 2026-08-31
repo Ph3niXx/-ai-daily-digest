@@ -5,8 +5,21 @@ Lint pour CLAUDE.md — garantit la stabilité du slim down.
 Contexte : CLAUDE.md a été slim down de 611 à 100 lignes le 2026-05-18. Sans
 garde-fou, l'experience montre que ce fichier re-gonfle par accumulation
 incrementale (ajout d'une table ici, d'un secret la, d'un event telemetrie).
-A 600 lignes, le cout est de ~14k tokens par tour Claude — recharge a chaque
-tour, cache 5min casse a chaque modif.
+
+Le plafond de 200 lignes est la cible officielle Anthropic (verifiee le
+2026-08-31 sur code.claude.com/docs/en/memory : "target under 200 lines per
+CLAUDE.md file"), et /doctor >= v2.1.206 propose les memes coupes : il retire
+ce qui est derivable du code (arborescences, listes de dependances, vues
+d'ensemble) et garde pieges, rationale et conventions.
+
+NB : le rationale d'origine de ce script avancait "~14k tokens par tour" et
+"cache 5min casse a chaque modif". Les deux sont faux. Le TTL du cache est
+d'1 h sur abonnement et editer CLAUDE.md en cours de session ne l'invalide pas
+(en revanche l'edition ne s'applique pas avant un /clear) ; le contexte est
+relu a 0,1x le prix input. Et "un CLAUDE.md long degrade l'adherence" n'est
+pas mesure : arXiv 2605.10039 (1 650 sessions Claude Code, tailles 25 a 500
+lignes) ne detecte aucun effet des variables de structure. La regle tient pour
+la discipline de budget contexte et la surface de derive, pas pour l'adherence.
 
 Ce script applique 5 regles :
 
@@ -149,14 +162,28 @@ def check_no_inventory_run(lines: list[str]) -> list[Violation]:
     return violations
 
 
+# Ligne de separation d'un tableau markdown : |---|:--:|---|
+TABLE_SEPARATOR = re.compile(r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
+
+
+def is_table_header(lines: list[str], idx: int) -> bool:
+    """Vrai si lines[idx] est le HEADER d'un tableau, pas une ligne de donnees.
+
+    Un header markdown est toujours suivi d'une ligne de separation. Sans ce
+    test, `| ANTHROPIC_API_KEY | Secret utilise par ... |` — une ligne de
+    donnees parfaitement legitime — declenchait un faux positif.
+    """
+    return idx + 1 < len(lines) and bool(TABLE_SEPARATOR.match(lines[idx + 1]))
+
+
 def check_no_secret_table(lines: list[str]) -> list[Violation]:
     violations = []
-    header_re = re.compile(r"^\|.*\b(?:Secret|GitHub\s+Secret)\b", re.IGNORECASE)
-    for i, line in enumerate(lines, start=1):
-        if header_re.match(line):
+    header_re = re.compile(r"^\|.*\bsecrets?\b", re.IGNORECASE)
+    for i, line in enumerate(lines):
+        if header_re.match(line) and is_table_header(lines, i):
             violations.append(Violation(
                 rule="secret_table",
-                line=i,
+                line=i + 1,
                 excerpt=line.rstrip()[:100],
                 suggestion="Tableau de secrets -> docs/secrets.md",
             ))
@@ -167,29 +194,34 @@ def check_no_event_table(lines: list[str]) -> list[Violation]:
     violations = []
     # Tableau qui a "event_type" dans son header.
     header_re = re.compile(r"^\|.*event_type", re.IGNORECASE)
-    for i, line in enumerate(lines, start=1):
-        if header_re.match(line):
+    for i, line in enumerate(lines):
+        if header_re.match(line) and is_table_header(lines, i):
             violations.append(Violation(
                 rule="event_table",
-                line=i,
+                line=i + 1,
                 excerpt=line.rstrip()[:100],
                 suggestion="Tableau d'events telemetrie -> docs/telemetry.md",
             ))
     return violations
 
 
+# Titres acceptes pour la section d'index. L'egalite de chaine exacte faisait
+# echouer des CLAUDE.md par ailleurs impeccables dont le titre differait d'un mot.
+POINTER_SECTION = re.compile(r"^#{2,3}\s+.*\bpointeurs?\b", re.IGNORECASE)
+
+
 def check_pointer_section(lines: list[str]) -> list[Violation]:
-    content = "\n".join(lines)
-    if "## Pointeurs vers la doc longue" not in content:
-        return [Violation(
-            rule="missing_pointer_section",
-            line=len(lines),
-            excerpt="Section '## Pointeurs vers la doc longue' absente",
-            suggestion=(
-                "Reintroduire cette section : c'est l'index qui permet a Claude (et au PO-agent "
-                "Symphony) de savoir ou trouver les fichiers docs/ externalises."
-            ),
-        )]
+    """Regle DOUCE : avertit sans faire echouer (cf. docstring du module).
+
+    Elle etait declaree douce et implementee comme bloquante — une divergence
+    qui fait echouer la CI sur un fichier sain.
+    """
+    if not any(POINTER_SECTION.match(line) for line in lines):
+        print(
+            "WARN: aucune section '## Pointeurs ...' trouvee. C'est l'index qui "
+            "permet de savoir ou vivent les fichiers docs/ externalises.",
+            file=sys.stderr,
+        )
     return []
 
 
