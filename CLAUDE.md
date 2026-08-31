@@ -51,7 +51,7 @@ Toute PR touchant pipeline/panel/migration SQL/cron/composant Jarvis → MAJ cor
 Checklist par type de modif + garde-fous CI (`validate-arch` bloquant, `arch-drift-check` warning) : [docs/architecture/README.md](docs/architecture/README.md).
 
 ### Ajout d'un onglet
-Au-delà des emplacements évidents (nav.js, panel, spec), l'id du panel doit être ajouté à `KNOWN_SECTIONS` dans [jarvis/scripts/extract_signals.py](jarvis/scripts/extract_signals.py) — sinon la CI `lint-known-sections`, **bloquante**, passe au rouge. C'est l'étape la plus souvent oubliée.
+La checklist des 7 emplacements fait foi en tête de [cockpit/nav.js](cockpit/nav.js) — la lire avant de commencer, pas après. L'étape 7 (`KNOWN_SECTIONS` dans `jarvis/scripts/extract_signals.py`) est celle qu'on oublie et elle rend la CI rouge.
 
 ### Service worker
 Après modif `index.html`, `mediatheque.html`, `cockpit/**`, `manifest*.json` ou `assets/**` → `node scripts/sync-sw.mjs` (ou auto via [.github/workflows/sw-sync.yml](.github/workflows/sw-sync.yml)). Ne jamais éditer `STATIC[]` ou `CACHE` à la main.
