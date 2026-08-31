@@ -121,10 +121,11 @@ panels:
 
   - id: veille-outils
     file: cockpit/panel-veille-outils.jsx
-    reads: [claude_veille, claude_ecosystem]
+    reads: [claude_veille, claude_ecosystem, ai_landscape]
     writes:
       - claude_veille      # status + notes via authenticated UPDATE (INSERT réservé routine Cowork via service_role)
       - claude_ecosystem   # status + user_priority + is_pinned + user_notes via UPDATE, ajout manuel via INSERT (authenticated)
+      - ai_landscape       # status + user_priority + is_pinned + user_notes via UPDATE (pas d'ajout manuel en v1 — ADR-51)
 
   - id: jobs
     file: cockpit/panel-jobs-radar.jsx
@@ -272,8 +273,13 @@ tables:
     domain: veille
 
   - name: claude_ecosystem
-    owner_pipeline: cowork_external  # routine Cowork mensuelle "Catalogue écosystème" + ajouts manuels front
+    owner_pipeline: cowork_external  # routine Cowork mensuelle "Catalogue écosystème" passe 1 + ajouts manuels front
     rls: authenticated  # SELECT + INSERT + UPDATE pour authenticated (le user peut ajouter une intégration manuellement)
+    domain: veille
+
+  - name: ai_landscape
+    owner_pipeline: cowork_external  # routine Cowork mensuelle "Catalogue écosystème" passe 2 (panorama marché) — ADR-51
+    rls: authenticated  # SELECT + INSERT + UPDATE pour authenticated
     domain: veille
 
   - name: challenge_attempts
